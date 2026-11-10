@@ -551,6 +551,11 @@ func _test_match_next_oni_is_loser() -> void:
 		var target_seat := s.drop_target_seat
 		_check(s.next_round(), "次のラウンドに進める")
 		_check(s.round_index == 1 and s.item_name() == Items.name_of(1), "2ラウンド目は %s" % Items.name_of(1))
+		var forced := s.forced_oni_id
+		if forced >= 0:
+			# お手つきが多い人がいれば、その人が強制的に鬼になる
+			_check(s.oni_id == forced, "お手つきの多い人が強制的に鬼")
+			continue
 		_check(s.oni_id == e["loser"], "負けた人が次の鬼(%s)" % reason)
 		var seated := 0
 		for a in s.actors:
