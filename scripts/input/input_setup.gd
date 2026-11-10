@@ -12,6 +12,10 @@ const KEYS := {
 	"debug_top_camera": [KEY_F1],
 	"restart": [KEY_R],
 	"sound_test": [KEY_T],
+	"stamp_0": [KEY_1],
+	"stamp_1": [KEY_2],
+	"stamp_2": [KEY_3],
+	"stamp_3": [KEY_4],
 	"quit": [KEY_ESCAPE],
 }
 

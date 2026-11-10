@@ -7,6 +7,8 @@ var state: GameState
 var bots := BotBrain.new()
 ## 確認用: 最後に鳴った物音が本物かニセか
 var _last_sound := ""
+## スタンプを送る相手(画面でタップして選ぶ。-1 は未選択)
+var _stamp_target := -1
 
 @onready var view: WorldView = $WorldView
 @onready var hud: Hud = $Hud
@@ -22,6 +24,8 @@ func _start_round() -> void:
 	state.start_round()
 	bots.reset()
 	_last_sound = ""
+	_stamp_target = -1
+	hud.show_stamp("", Color.WHITE)
 	hud.hide_message()
 	view.build(state)
 	_update_help()
@@ -33,8 +37,12 @@ func _physics_process(delta: float) -> void:
 	state.tick(delta)
 	for e in state.take_events():
 		view.on_event(e)
+		bots.on_event(state, e)
 		_show_event(e)
 		_update_help()
+	if state.get_actor(_stamp_target) == null or state.get_actor(_stamp_target).role != GameState.Role.SEATED:
+		_stamp_target = -1
+	view.set_stamp_target(state, _stamp_target)
 
 
 func _process(delta: float) -> void:
@@ -49,13 +57,51 @@ func _unhandled_input(event: InputEvent) -> void:
 		_start_round()
 	elif event.is_action_pressed("sound_test"):
 		view.play_test_beep()
+	else:
+		for i in Stamps.ALL.size():
+			if event.is_action_pressed("stamp_%d" % i):
+				_send_stamp(Stamps.ALL[i])
+				return
+		# 画面に映っている人をタップ/クリックすると、スタンプを送る相手になる
+		var pos := Vector2(-1, -1)
+		if event is InputEventScreenTouch and event.pressed:
+			pos = event.position
+		elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			pos = event.position
+		if pos.x >= 0.0:
+			var id := view.pick_actor_at(state, pos)
+			if id >= 0:
+				_stamp_target = id
+				_update_help()
 	elif event.is_action_pressed("quit"):
 		get_tree().quit()
+
+
+func _send_stamp(kind: String) -> void:
+	if _stamp_target < 0:
+		hud.show_message("先に相手をタップ", Color(0.3, 0.3, 0.3), 1.0)
+		return
+	if state.get_local_player().stamps_left <= 0:
+		hud.show_message("スタンプは使い切った", Color(0.3, 0.3, 0.3), 1.0)
+		return
+	state.send_stamp(state.local_player_id, _stamp_target, kind)
 
 
 func _show_event(e: Dictionary) -> void:
 	var me := state.local_player_id
 	match e.get("type"):
+		"stamp":
+			if e["target"] == me:
+				var text: String = Stamps.LABELS[e["kind"]]
+				if GameConfig.SHOW_STAMP_SENDER:
+					text += " (%s)" % _name(e["sender"])
+				hud.show_stamp(text, WorldView.STAMP_COLORS[e["kind"]])
+		"stamp_end":
+			if e["target"] == me:
+				hud.show_stamp("", Color.WHITE)
+		"stamp_blocked":
+			if e["sender"] == me:
+				hud.show_message("先に別のスタンプが届いていた", Color(0.3, 0.3, 0.3), 1.2)
 		"dropped":
 			_last_sound = "本物"
 		"rustle":
@@ -107,9 +153,11 @@ func _name(id: int) -> String:
 
 
 func _update_help() -> void:
-	var lines := PackedStringArray(["段階4: 拾って追いかける・勝敗"])
+	var lines := PackedStringArray(["ステップ3: スタンプで教える/だます"])
 	var me := state.get_local_player()
-	lines.append("お手つき: %d 回" % me.otetsuki_count)
+	lines.append("お手つき: %d 回 / スタンプ残り: %d" % [me.otetsuki_count, me.stamps_left])
+	if _stamp_target >= 0:
+		lines.append("スタンプを送る相手: %s" % _name(_stamp_target))
 	if view.is_top_camera():
 		lines.append("今のカメラ: 上から見る(確認用)")
 		# 確認用カメラのときだけ答えを出す
@@ -125,5 +173,6 @@ func _update_help() -> void:
 	else:
 		lines.append("スペース /「振り向く」(押している間): 振り向く")
 		lines.append("E /「拾う」: 後ろのハンカチを拾う")
+		lines.append("人をタップ → スタンプ(1〜4キー)で送る")
 	lines.append("F1: 上から見る / R: やり直し / T: 音テスト / Esc: 終了")
 	hud.set_help("\n".join(lines))

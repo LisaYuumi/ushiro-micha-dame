@@ -27,6 +27,9 @@ func _initialize() -> void:
 	_test_chaser_cannot_run_backward_or_inside()
 	_test_no_otetsuki_during_chase()
 	_test_rounds_with_bots_always_finish()
+	_test_stamp_rules()
+	_test_stamp_truthfulness()
+	_test_bots_send_and_trust_stamps()
 
 	_main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(_main)
@@ -51,6 +54,12 @@ func _process(_delta: float) -> bool:
 	elif _frames == 120:
 		_press("sound_test", true)
 		_press("sound_test", false)
+		# 相手を選ばずにスタンプ → 相手を選んでスタンプ
+		_press("stamp_0", true)
+		_press("stamp_0", false)
+		_main._stamp_target = 1
+		_press("stamp_1", true)
+		_press("stamp_1", false)
 		_press("restart", true)
 		_press("restart", false)
 	if _frames < MAIN_SCENE_FRAMES:
@@ -281,6 +290,71 @@ func _test_rounds_with_bots_always_finish() -> void:
 	_check(reasons.has("missed"), "ボットが見逃すことがある")
 	_check(reasons.has("touched") or reasons.has("sat"), "ボットが追いかけることがある")
 	print("bot round results: ", reasons.keys())
+
+
+func _test_stamp_rules() -> void:
+	var s := GameState.new()
+	s.start_round(41)
+	_check(s.send_stamp(1, 2, Stamps.SAFE), "座っている人どうしでスタンプが届く")
+	_check(_has(s.take_events(), "stamp"), "届いたお知らせが出る")
+	_check(s.get_actor(1).stamps_left == GameConfig.STAMPS_PER_ROUND - 1, "送ると残りが減る")
+	_check(not s.send_stamp(3, 2, Stamps.DROPPED), "表示中の人には届かない(早い者勝ち)")
+	_check(_has(s.take_events(), "stamp_blocked"), "届かなかったお知らせが出る")
+	_check(s.get_actor(3).stamps_left == GameConfig.STAMPS_PER_ROUND, "届かなかったら回数は減らない")
+	_check(not s.send_stamp(1, 1, Stamps.SAFE), "自分には送れない")
+	_check(not s.send_stamp(s.oni_id, 2, Stamps.SAFE), "鬼は送れない")
+	_check(not s.send_stamp(1, 3, "unknown"), "知らない種類は送れない")
+	for i in int((GameConfig.STAMP_SHOW_TIME + 0.1) / STEP):
+		s.tick(STEP)
+	_check(_has(s.take_events(), "stamp_end"), "3秒で消える")
+	_check(not s.active_stamps.has(2), "消えたら表示中ではない")
+	_check(s.send_stamp(3, 2, Stamps.DROPPED), "消えたあとはまた届く")
+	_check(s.send_stamp(1, 4, Stamps.NOW), "2つ目も送れる")
+	_check(not s.send_stamp(1, 0, Stamps.NOW), "1ラウンド2回まで")
+	s.start_round(41)
+	_check(s.get_actor(1).stamps_left == GameConfig.STAMPS_PER_ROUND, "次のラウンドで回数が戻る")
+
+
+func _test_stamp_truthfulness() -> void:
+	var s := _dropped_state(43)
+	var target := s.get_actor_at_seat(s.drop_target_seat)
+	var other := s.get_actor_at_seat((s.drop_target_seat + 1) % GameConfig.SEAT_COUNT)
+	var sender := s.get_actor_at_seat((s.drop_target_seat + 2) % GameConfig.SEAT_COUNT)
+	var sender2 := s.get_actor_at_seat((s.drop_target_seat + 3) % GameConfig.SEAT_COUNT)
+	s.send_stamp(sender.id, target.id, Stamps.DROPPED)
+	_check(s.active_stamps[target.id]["truthful"], "落とされた人に『落ちてる!』は本当")
+	s.send_stamp(sender2.id, other.id, Stamps.DROPPED)
+	_check(not s.active_stamps[other.id]["truthful"], "落とされていない人に『落ちてる!』は嘘")
+	s.set_looking_back(target.id, true)
+	s.pick_up(target.id)
+	_check(s.active_stamps.is_empty(), "追いかけっこが始まるとスタンプは消える")
+	_check(not s.send_stamp(sender.id, other.id, Stamps.SAFE), "追いかけっこ中は送れない")
+
+
+func _test_bots_send_and_trust_stamps() -> void:
+	var sent := 0
+	var otetsuki_after_stamp := 0
+	for seed_value in 30:
+		var s := GameState.new()
+		s.start_round(seed_value)
+		var b := BotBrain.new()
+		b.reset(seed_value)
+		for i in int(40.0 / STEP):
+			b.update(s, STEP)
+			s.tick(STEP)
+			for e in s.take_events():
+				b.on_event(s, e)
+				if e["type"] == "stamp":
+					sent += 1
+				elif e["type"] == "otetsuki":
+					otetsuki_after_stamp += 1
+			if s.phase == GameState.Phase.RESULT:
+				break
+		for a in s.actors:
+			_check(a.stamps_left >= 0, "スタンプの残りがマイナスにならない")
+	_check(sent > 0, "ボットがスタンプを送る")
+	_check(otetsuki_after_stamp > 0, "ボットがスタンプを信じて振り向き、お手つきすることがある")
+	print("bot stamps sent: %d, otetsuki: %d" % [sent, otetsuki_after_stamp])
 
 
 # --- 道具 ---

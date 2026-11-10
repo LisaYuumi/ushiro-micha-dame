@@ -18,6 +18,7 @@ func _input(event: InputEvent) -> void:
 		if t.pressed and _touch_index == -1 and get_global_rect().has_point(t.position):
 			_touch_index = t.index
 			_update_knob(t.position)
+			get_viewport().set_input_as_handled()
 		elif not t.pressed and t.index == _touch_index:
 			_touch_index = -1
 			_set_knob(Vector2.ZERO)

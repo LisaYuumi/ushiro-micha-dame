@@ -14,6 +14,10 @@ func _ready() -> void:
 	# 右下: 振り向く(押している間)
 	_add_button("振り向く", "look_back", Vector2(1, 1), Rect2(-250, -250, 220, 220), 40)
 	_add_button("拾う", "pick_up", Vector2(1, 1), Rect2(-430, -170, 160, 140), 36)
+	# 下のまん中: スタンプ(先に相手をタップして選ぶ)
+	for i in Stamps.ALL.size():
+		var kind: String = Stamps.ALL[i]
+		_add_button(Stamps.LABELS[kind], "stamp_%d" % i, Vector2(0.5, 1), Rect2(-385 + i * 150, -100, 140, 80), 24)
 	# 左下: 走るためのスティック
 	var stick := VirtualStick.new()
 	add_child(stick)

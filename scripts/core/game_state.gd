@@ -36,6 +36,8 @@ class Actor:
 	var otetsuki_count: int = 0
 	## 走る向き(追いかけるとき。長さ 0〜1)
 	var move_dir: Vector3 = Vector3.ZERO
+	## このラウンドで送れるスタンプの残り
+	var stamps_left: int = 0
 
 
 ## 席の位置(床の上)
@@ -74,6 +76,9 @@ var oni_seat_angle: float = 0.0
 var oni_entering: bool = false
 ## 勝敗。{"winner": id, "loser": id, "reason": "touched" / "sat" / "missed"}
 var result: Dictionary = {}
+
+## いま表示中のスタンプ。受け取った人の id -> {"kind", "sender", "time_left", "truthful"}
+var active_stamps: Dictionary = {}
 
 ## 表示側へのお知らせ(Dictionary の配列)
 var events: Array = []
@@ -114,6 +119,7 @@ func start_round(seed_value: int = -1) -> void:
 		actor.is_bot = i != local_player_id
 		actor.display_name = "あなた" if i == local_player_id else "ボット%d" % i
 		actor.color = palette[i % palette.size()]
+		actor.stamps_left = GameConfig.STAMPS_PER_ROUND
 		_sit(actor, i)
 		actors.append(actor)
 
@@ -137,6 +143,7 @@ func start_round(seed_value: int = -1) -> void:
 	vacant_seat = -1
 	oni_entering = false
 	result = {}
+	active_stamps = {}
 	var step := TAU / GameConfig.SEAT_COUNT
 	next_seat_crossing = ceilf(oni_angle / step) * step
 	_plan_drop()
@@ -144,6 +151,7 @@ func start_round(seed_value: int = -1) -> void:
 
 ## 時間を delta 秒すすめる。
 func tick(delta: float) -> void:
+	_tick_stamps(delta)
 	match phase:
 		Phase.WALKING, Phase.DROPPED:
 			_tick_walking(delta)
@@ -203,12 +211,46 @@ func pick_up(actor_id: int) -> void:
 	chaser_id = a.id
 	handkerchief_on_floor = false
 	phase = Phase.CHASE
+	# 追いかけっこが始まったらスタンプは消える
+	for id in active_stamps.keys():
+		events.append({"type": "stamp_end", "target": id})
+	active_stamps = {}
 	# 鬼は気づいてすぐ走り出す。空いた席まで(少なくとも一度は)輪を回ってから座る
 	oni_pause_left = 0.0
 	oni_entering = false
 	var target := seat_angle(vacant_seat)
 	oni_seat_angle = target + ceilf((oni_angle - target + 0.001) / TAU) * TAU
 	events.append({"type": "picked_up", "actor": a.id})
+
+
+## スタンプを送る。座っている人どうしで、追いかけっこの前まで。
+## 相手に表示中のスタンプがあれば届かない(早い者勝ち)。届かなかったときは回数を使わない。
+## 戻り値: 届いたら true
+func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
+	var sender := get_actor(sender_id)
+	var target := get_actor(target_id)
+	if sender == null or target == null or sender_id == target_id:
+		return false
+	if sender.role != Role.SEATED or target.role != Role.SEATED:
+		return false
+	if phase != Phase.WALKING and phase != Phase.DROPPED:
+		return false
+	if sender.stamps_left <= 0 or not (kind in Stamps.ALL):
+		return false
+	if active_stamps.has(target_id):
+		events.append({"type": "stamp_blocked", "sender": sender_id, "target": target_id})
+		return false
+	sender.stamps_left -= 1
+	# 本当のことを言ったか(あとで点数に使う)。「信じて!」は「見ろ」の意味として扱う
+	var truthful := Stamps.says_look(kind) == has_handkerchief_behind(target)
+	active_stamps[target_id] = {
+		"kind": kind,
+		"sender": sender_id,
+		"time_left": GameConfig.STAMP_SHOW_TIME,
+		"truthful": truthful,
+	}
+	events.append({"type": "stamp", "sender": sender_id, "target": target_id, "kind": kind})
+	return true
 
 
 ## 走る向きの希望を伝える(追いかける人だけ)。dir は床の上の向き、長さ 0〜1。
@@ -272,6 +314,7 @@ func snapshot() -> Dictionary:
 			"looking_back": a.looking_back,
 			"otetsuki": a.otetsuki_count,
 			"move": a.move_dir,
+			"stamps_left": a.stamps_left,
 		})
 	return {
 		"actors": list,
@@ -282,6 +325,7 @@ func snapshot() -> Dictionary:
 		"chaser": chaser_id,
 		"vacant_seat": vacant_seat,
 		"result": result,
+		"stamps": active_stamps,
 	}
 
 
@@ -317,6 +361,14 @@ func _on_pass_behind_seat() -> void:
 				"seat": _seat_at_angle(oni_angle),
 				"pos": _ring_point(oni_angle, GameConfig.DROP_RADIUS),
 			})
+
+
+func _tick_stamps(delta: float) -> void:
+	for id in active_stamps.keys():
+		active_stamps[id]["time_left"] -= delta
+		if active_stamps[id]["time_left"] <= 0.0:
+			active_stamps.erase(id)
+			events.append({"type": "stamp_end", "target": id})
 
 
 func _tick_chase(delta: float) -> void:

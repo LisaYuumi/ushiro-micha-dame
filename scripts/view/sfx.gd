@@ -8,6 +8,7 @@ const RATE := 22050
 static var _footstep: AudioStreamWAV
 static var _drop: AudioStreamWAV
 static var _beep: AudioStreamWAV
+static var _stamp := {}
 
 
 ## 「ざっ」という足音(スマホのスピーカーでも聞こえるよう、高めでくっきり)
@@ -22,6 +23,22 @@ static func drop() -> AudioStreamWAV:
 	if _drop == null:
 		_drop = _make(0.22, 0.35, 16.0, 420.0, 0.35, 1.0)
 	return _drop
+
+
+## スタンプが届いた音(種類ごとに少しちがう、仮の音)
+static func stamp(kind: String) -> AudioStreamWAV:
+	if not _stamp.has(kind):
+		match kind:
+			Stamps.NOW:
+				# 手拍子っぽい「パン」
+				_stamp[kind] = _make(0.08, 0.9, 50.0, 0.0, 0.0, 1.0)
+			Stamps.TRUST:
+				_stamp[kind] = _make(0.3, 0.0, 6.0, 520.0, 1.0, 0.7)
+			Stamps.SAFE:
+				_stamp[kind] = _make(0.2, 0.0, 10.0, 660.0, 1.0, 0.6)
+			_:
+				_stamp[kind] = _make(0.2, 0.0, 10.0, 990.0, 1.0, 0.6)
+	return _stamp[kind]
 
 
 ## 音テスト用の「ピー」

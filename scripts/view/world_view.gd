@@ -13,6 +13,19 @@ var _handkerchief: Node3D
 var _drop_player: AudioStreamPlayer3D
 var _step_player: AudioStreamPlayer3D
 var _beep_player: AudioStreamPlayer
+var _stamp_player: AudioStreamPlayer
+## 頭の上のスタンプ表示(id -> Label3D)
+var _stamp_labels := {}
+## スタンプを送る相手の目印
+var _target_marker: MeshInstance3D
+
+## スタンプの色(仮)
+const STAMP_COLORS := {
+	Stamps.DROPPED: Color(0.95, 0.35, 0.2),
+	Stamps.SAFE: Color(0.2, 0.7, 0.35),
+	Stamps.NOW: Color(0.95, 0.7, 0.1),
+	Stamps.TRUST: Color(0.6, 0.4, 0.9),
+}
 ## 足音用: 鬼の前回の位置と、前の足音から歩いた距離
 var _oni_last_pos := Vector3.ZERO
 var _oni_walked := 0.0
@@ -25,6 +38,7 @@ func build(state: GameState) -> void:
 		c.queue_free()
 	_actor_nodes.clear()
 	_turn.clear()
+	_stamp_labels.clear()
 
 	_build_environment()
 	_build_floor()
@@ -35,6 +49,7 @@ func build(state: GameState) -> void:
 		add_child(node)
 		_actor_nodes[a.id] = node
 	_build_handkerchief()
+	_build_stamp_labels(state)
 	_build_sounds(state)
 	_build_cameras(state)
 	sync(state, 0.0)
@@ -52,6 +67,7 @@ func sync(state: GameState, delta: float) -> void:
 			# 振り向いた姿は全員に見える(体ごと大げさに後ろを向く)
 			node.rotation.y = a.yaw + PI * t
 	_update_seat_camera(state, delta)
+	_update_stamp_labels(state)
 
 	var holder := state.get_actor(state.chaser_id)
 	if holder:
@@ -72,6 +88,9 @@ func on_event(e: Dictionary) -> void:
 			_drop_player.position = e["pos"]
 			_drop_player.pitch_scale = randf_range(0.9, 1.1)
 			_drop_player.play()
+		"stamp":
+			_stamp_player.stream = Sfx.stamp(e["kind"])
+			_stamp_player.play()
 
 
 func _update_footsteps(state: GameState) -> void:
@@ -205,6 +224,45 @@ func _build_character(a: GameState.Actor, is_self: bool) -> Node3D:
 	return root
 
 
+## 頭の上のスタンプ表示と、送る相手の目印
+func _build_stamp_labels(state: GameState) -> void:
+	for a in state.actors:
+		var l := Label3D.new()
+		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		l.font = HudFont.get_font()
+		l.font_size = 72
+		l.pixel_size = 0.004
+		l.outline_size = 12
+		l.no_depth_test = true
+		l.position = Vector3(0, 2.25, 0)
+		l.visible = false
+		(_actor_nodes[a.id] as Node3D).add_child(l)
+		_stamp_labels[a.id] = l
+
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.18
+	cone.bottom_radius = 0.0
+	cone.height = 0.3
+	_target_marker = _mesh(cone, Color(1.0, 0.85, 0.1))
+	_target_marker.visible = false
+	add_child(_target_marker)
+
+
+func _update_stamp_labels(state: GameState) -> void:
+	for id in _stamp_labels:
+		var l: Label3D = _stamp_labels[id]
+		var s: Dictionary = state.active_stamps.get(id, {})
+		l.visible = not s.is_empty()
+		if s.is_empty():
+			continue
+		var text: String = Stamps.LABELS[s["kind"]]
+		if GameConfig.SHOW_STAMP_SENDER:
+			var sender := state.get_actor(s["sender"])
+			text += "\n(%s)" % sender.display_name
+		l.text = text
+		l.modulate = STAMP_COLORS[s["kind"]]
+
+
 ## 仮のハンカチ: 白くて薄い四角
 func _build_handkerchief() -> void:
 	var box := BoxMesh.new()
@@ -233,10 +291,44 @@ func _build_sounds(state: GameState) -> void:
 	_drop_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	add_child(_drop_player)
 
+	_stamp_player = AudioStreamPlayer.new()
+	_stamp_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
+	_stamp_player.volume_db = -6.0
+	add_child(_stamp_player)
+
 	_beep_player = AudioStreamPlayer.new()
 	_beep_player.stream = Sfx.beep()
 	_beep_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	add_child(_beep_player)
+
+
+## スタンプを送る相手の目印を出す(-1 で消す)
+func set_stamp_target(state: GameState, id: int) -> void:
+	var a := state.get_actor(id)
+	_target_marker.visible = a != null
+	if a:
+		_target_marker.position = a.position + Vector3(0, 2.25, 0)
+
+
+## 画面のこの位置(タップした場所)にいる、座っている人の id(いなければ -1)
+func pick_actor_at(state: GameState, screen_pos: Vector2) -> int:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return -1
+	var best := -1
+	var best_dist := 110.0
+	for a in state.actors:
+		if a.id == state.local_player_id or a.role != GameState.Role.SEATED:
+			continue
+		for h in [0.9, 1.45]:
+			var p: Vector3 = a.position + Vector3(0, h, 0)
+			if cam.is_position_behind(p):
+				continue
+			var d := cam.unproject_position(p).distance_to(screen_pos)
+			if d < best_dist:
+				best_dist = d
+				best = a.id
+	return best
 
 
 ## 音テスト: 方向や距離に関係なく「ピー」と鳴らす
