@@ -348,14 +348,15 @@ func _test_bots_send_and_trust_stamps() -> void:
 			b.update(s, STEP)
 			s.tick(STEP)
 			for e in s.take_events():
-				b.on_event(s, e)
 				if e["type"] == "stamp":
 					sent += 1
+					# ボットが反応する(拾って席を立つ)前に確かめる
 					var t := s.get_actor(e["target"])
 					_check(s.seat_pass_age[t.seat_index] <= GameConfig.BOT_STAMP_RECENT_PASS + STEP * 1.5,
 							"ボットは鬼がついさっき後ろを通った人にだけスタンプを送る")
 				elif e["type"] == "otetsuki":
 					otetsuki_after_stamp += 1
+				b.on_event(s, e)
 			if s.phase == GameState.Phase.RESULT:
 				break
 		for a in s.actors:
