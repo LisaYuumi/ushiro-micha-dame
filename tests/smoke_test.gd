@@ -220,15 +220,14 @@ func _test_touch_wins() -> void:
 	var chaser := s.get_actor(s.chaser_id)
 	var e := {}
 	for i in int(60.0 / STEP):
-		var to_oni := s.get_actor(s.oni_id).position - chaser.position
-		s.set_move(chaser.id, to_oni.normalized())
+		s.set_move(chaser.id, BotBrain.chase_steer(s, chaser))
 		s.tick(STEP)
 		for ev in s.take_events():
 			if ev["type"] == "result":
 				e = ev
 		if not e.is_empty():
 			break
-	_check(not e.is_empty() and e["reason"] == "touched", "すぐ追いかければタッチできる")
+	_check(not e.is_empty() and e["reason"] == "touched", "3秒で気づいて内側を走ればタッチできる")
 	if not e.is_empty():
 		_check(e["winner"] == chaser.id and e["loser"] == s.oni_id, "タッチしたら追いかけた人の勝ち")
 

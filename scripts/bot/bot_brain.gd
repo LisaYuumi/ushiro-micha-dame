@@ -39,9 +39,17 @@ func _update_seated(state: GameState, a: GameState.Actor, delta: float) -> void:
 		state.pick_up(a.id)
 
 
-## 追いかけるボット: 鬼のほうへハンドルを切る(前へは自動で走る)
+## 追いかけるボット: ふだんは内側(近道)を走り、鬼に近づいたら鬼のほうへ曲がる
+## (前へは自動で走る)
 func _update_chaser(state: GameState, a: GameState.Actor) -> void:
+	state.set_move(a.id, chase_steer(state, a))
+
+
+## 追いかけ方のお手本(テストでも使う)
+static func chase_steer(state: GameState, a: GameState.Actor) -> Vector3:
 	var oni := state.get_actor(state.oni_id)
 	var to_oni := oni.position - a.position
 	to_oni.y = 0.0
-	state.set_move(a.id, to_oni.normalized())
+	if to_oni.length() < 2.5:
+		return to_oni.normalized()
+	return -Vector3(a.position.x, 0.0, a.position.z).normalized()
