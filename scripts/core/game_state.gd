@@ -87,6 +87,13 @@ var oni_entering: bool = false
 ## 勝敗。{"winner": id, "loser": id, "reason": "touched" / "sat" / "missed"}
 var result: Dictionary = {}
 
+## 試合: 今のラウンド(0 から)、点数(id -> 点)、試合が終わったか
+var round_index: int = 0
+var scores: Dictionary = {}
+var match_over: bool = false
+var _round_start_lineup: Array = []
+var _round_start_oni: int = -1
+
 ## いま表示中のスタンプ。受け取った人の id -> {"kind", "sender", "time_left", "truthful"}
 var active_stamps: Dictionary = {}
 
@@ -96,21 +103,15 @@ var events: Array = []
 var rng := RandomNumberGenerator.new()
 
 
-## ラウンドを最初から始める。seed を指定すると毎回同じ展開になる(テスト用)。
-## player_is_oni = true なら、この画面のプレイヤーが鬼になり、席にはボットが座る。
-func start_round(seed_value: int = -1, player_is_oni: bool = false) -> void:
-	oni_is_player = player_is_oni
-	local_player_id = GameConfig.SEAT_COUNT if player_is_oni else 0
+## 新しい試合を始める(ラウンド1から)。seed を指定すると毎回同じ展開になる(テスト用)。
+## player_is_oni = true なら、この画面のプレイヤーが最初の鬼になる。
+func start_match(seed_value: int = -1, player_is_oni: bool = false) -> void:
 	if seed_value >= 0:
 		rng.seed = seed_value
 	else:
 		rng.randomize()
-
 	seat_positions.clear()
 	seat_yaws.clear()
-	actors.clear()
-	events.clear()
-
 	for i in GameConfig.SEAT_COUNT:
 		var a := seat_angle(i)
 		seat_positions.append(_ring_point(a, GameConfig.RING_RADIUS))
@@ -123,37 +124,111 @@ func start_round(seed_value: int = -1, player_is_oni: bool = false) -> void:
 		Color(0.45, 0.8, 0.45),
 		Color(0.9, 0.8, 0.3),
 		Color(0.75, 0.5, 0.9),
-		Color(0.95, 0.6, 0.75),
+		Color(0.85, 0.2, 0.2),
 	]
-
-	for i in GameConfig.SEAT_COUNT:
+	# 登場人物は試合のあいだ同じ。席に5人、鬼が1人(id は 0〜5)
+	actors.clear()
+	local_player_id = GameConfig.SEAT_COUNT if player_is_oni else 0
+	var bot_no := 1
+	for i in GameConfig.SEAT_COUNT + 1:
 		var actor := Actor.new()
 		actor.id = i
 		actor.is_bot = i != local_player_id
-		if player_is_oni:
-			actor.display_name = "ボット%d" % (i + 1)
+		if actor.is_bot:
+			actor.display_name = "ボット%d" % bot_no
+			bot_no += 1
 		else:
-			actor.display_name = "あなた" if i == local_player_id else "ボット%d" % i
-		actor.color = palette[i % palette.size()]
-		actor.stamps_left = GameConfig.STAMPS_PER_ROUND
-		_sit(actor, i)
+			actor.display_name = "あなた"
+		actor.color = palette[0] if not actor.is_bot else palette[bot_no - 1]
 		actors.append(actor)
+	scores = {}
+	for a in actors:
+		scores[a.id] = 0
+	round_index = 0
+	match_over = false
+	var lineup := []
+	for i in GameConfig.SEAT_COUNT:
+		lineup.append(i)
+	_begin_round(lineup, GameConfig.SEAT_COUNT)
 
-	var oni := Actor.new()
-	oni.id = actors.size()
-	oni.is_bot = not player_is_oni
-	oni.display_name = "あなた(鬼)" if player_is_oni else "鬼"
-	oni.role = Role.ONI
-	oni.color = Color(0.85, 0.2, 0.2)
-	actors.append(oni)
-	oni_id = oni.id
+
+## 互換用: 新しい試合を始める
+func start_round(seed_value: int = -1, player_is_oni: bool = false) -> void:
+	start_match(seed_value, player_is_oni)
+
+
+## 勝敗が出たあと、次のラウンドへ。負けた人が次の鬼になる。
+## 最後のラウンドのあとなら試合終了(match_over)。戻り値: 次のラウンドが始まったら true
+func next_round() -> bool:
+	if phase != Phase.RESULT or match_over:
+		return false
+	if round_index + 1 >= GameConfig.ROUNDS_PER_MATCH:
+		match_over = true
+		events.append({"type": "match_over", "scores": scores.duplicate()})
+		return false
+	var seats := _lineup_after_result()
+	round_index += 1
+	_begin_round(seats[0], seats[1])
+	return true
+
+
+## 今のラウンドを、同じ並びのまま最初からやり直す
+func restart_round() -> void:
+	_begin_round(_round_start_lineup.duplicate(), _round_start_oni)
+
+
+## 今のラウンドの落とし物の名前と重さ(0〜1)
+func item_name() -> String:
+	return Items.name_of(round_index)
+
+
+func item_weight() -> float:
+	return Items.weight_of(round_index)
+
+
+## 勝敗のあとの並び: [席ごとの id の配列, 次の鬼の id]
+func _lineup_after_result() -> Array:
+	var seat_ids := []
+	seat_ids.resize(GameConfig.SEAT_COUNT)
+	for a in actors:
+		if a.role == Role.SEATED and a.seat_index >= 0:
+			seat_ids[a.seat_index] = a.id
+	var next_oni: int = result["loser"]
+	match result["reason"]:
+		"touched":
+			# 鬼が負け: 追いかけた人は自分の席に戻る。鬼はそのまま
+			seat_ids[vacant_seat] = chaser_id
+		"sat":
+			# 鬼はもう空いた席に座っている。追いかけた人が次の鬼
+			pass
+		"missed":
+			# 気づかなかった人が鬼になり、鬼がその席に入る
+			seat_ids[drop_target_seat] = oni_id
+	return [seat_ids, next_oni]
+
+
+## seat_ids[i] の人を席 i に座らせ、oni を鬼にしてラウンドを始める
+func _begin_round(seat_ids: Array, oni: int) -> void:
+	events.clear()
+	_round_start_lineup = seat_ids.duplicate()
+	_round_start_oni = oni
+	for a in actors:
+		a.looking_back = false
+		a.move_dir = Vector3.ZERO
+		a.stamps_left = GameConfig.STAMPS_PER_ROUND
+	for i in seat_ids.size():
+		_sit(get_actor(seat_ids[i]), i)
+	oni_id = oni
+	var oni_actor := get_actor(oni)
+	oni_actor.role = Role.ONI
+	oni_is_player = oni == local_player_id
 
 	# 鬼は席と席の間から歩きはじめる
 	oni_angle = seat_angle(0) + TAU / (GameConfig.SEAT_COUNT * 2)
 	oni_start_angle = oni_angle
 	oni_radius = GameConfig.ONI_WALK_RADIUS
 	oni_holding_stop = false
-	_place_on_walk_ring(oni, oni_angle)
+	_place_on_walk_ring(oni_actor, oni_angle)
 
 	phase = Phase.WALKING
 	handkerchief_on_floor = false
@@ -168,12 +243,13 @@ func start_round(seed_value: int = -1, player_is_oni: bool = false) -> void:
 	active_stamps = {}
 	var step := TAU / GameConfig.SEAT_COUNT
 	next_seat_crossing = ceilf(oni_angle / step) * step
-	if player_is_oni:
+	if oni_is_player:
 		# 人が鬼のときは、いつ誰に落とすかは本人が決める
 		drop_target_seat = -1
 		drop_angle = INF
 	else:
 		_plan_drop()
+	events.append({"type": "round_start", "round": round_index, "item": item_name()})
 
 
 ## 時間を delta 秒すすめる。
@@ -330,6 +406,7 @@ func oni_feint(actor_id: int) -> void:
 		"type": "rustle",
 		"seat": _seat_at_angle(crossing),
 		"pos": _ring_point(crossing, GameConfig.DROP_RADIUS),
+		"weight": item_weight(),
 		"feint": true,
 	})
 
@@ -346,6 +423,12 @@ func _nearest_seat_crossing() -> float:
 
 ## 鬼が歩く速さ。ボットの鬼はいつも同じ。人の鬼はスティックで変えられ、止まることもできる
 func _oni_walk_speed(oni: Actor) -> float:
+	# 落とすまでは重い落とし物を持っているので遅い
+	var carry := lerpf(1.0, GameConfig.ONI_CARRY_SPEED_HEAVY, item_weight()) if phase == Phase.WALKING else 1.0
+	return _oni_walk_speed_base(oni) * carry
+
+
+func _oni_walk_speed_base(oni: Actor) -> float:
 	if not oni_is_player:
 		return GameConfig.ONI_WALK_SPEED
 	if oni_holding_stop:
@@ -422,6 +505,10 @@ func snapshot() -> Dictionary:
 		"result": result,
 		"stamps": active_stamps,
 		"oni_is_player": oni_is_player,
+		"round": round_index,
+		"item": item_name(),
+		"scores": scores,
+		"match_over": match_over,
 		"oni_radius": oni_radius,
 	}
 
@@ -461,6 +548,7 @@ func _on_pass_behind_seat() -> void:
 				"type": "rustle",
 				"seat": _seat_at_angle(oni_angle),
 				"pos": _ring_point(oni_angle, GameConfig.DROP_RADIUS),
+				"weight": item_weight(),
 			})
 
 
@@ -526,7 +614,8 @@ func _move_chaser(a: Actor, delta: float) -> void:
 	var dir := (forward + outward * steer).normalized()
 	# 輪の中心からの距離(r)と角度(ang)で動かす。走れる範囲の端に当たったら、
 	# 外/内へ動けなかった分を前へ回して、いつでも同じ速さで走る
-	var step := GameConfig.CHASER_SPEED * delta
+	# 重い落とし物を持っているほど遅い
+	var step := GameConfig.CHASER_SPEED * lerpf(1.0, GameConfig.CARRY_SPEED_HEAVY, item_weight()) * delta
 	var r := Vector2(a.position.x, a.position.z).length()
 	var dr := dir.dot(outward) * step
 	var new_r := clampf(r + dr, GameConfig.CHASER_MIN_RADIUS, GameConfig.CHASER_MAX_RADIUS)
@@ -540,6 +629,14 @@ func _move_chaser(a: Actor, delta: float) -> void:
 func _finish(winner_id: int, loser_id: int, reason: String) -> void:
 	phase = Phase.RESULT
 	result = {"winner": winner_id, "loser": loser_id, "reason": reason}
+	match reason:
+		"sat":
+			scores[winner_id] += GameConfig.SCORE_ONI_SAT
+		"touched":
+			scores[winner_id] += GameConfig.SCORE_CHASER_TOUCHED
+		"missed":
+			scores[loser_id] += GameConfig.SCORE_MISSED
+	result["scores"] = scores.duplicate()
 	for a in actors:
 		a.move_dir = Vector3.ZERO
 	var e := result.duplicate()
@@ -564,6 +661,7 @@ func _drop() -> void:
 		"type": "dropped",
 		"seat": drop_target_seat,
 		"pos": handkerchief_position,
+		"weight": item_weight(),
 	})
 	# 振り向いたまま待っていた人の後ろに落とした場合は、その場で見つかる
 	var target := get_actor_at_seat(drop_target_seat)

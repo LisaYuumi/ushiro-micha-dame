@@ -36,10 +36,16 @@ func _on_start_tapped() -> void:
 	hud.hide_message()
 
 
+## 新しい試合を始める
 func _start_round() -> void:
-	state.start_round(-1, _player_is_oni)
+	state.start_match(-1, _player_is_oni)
+	_refresh_round()
+
+
+## ラウンドが変わったときに、画面とボットを作り直す
+func _refresh_round() -> void:
 	bots.reset()
-	touch.set_oni_mode(_player_is_oni)
+	touch.set_oni_mode(state.oni_is_player)
 	_last_sound = ""
 	_stamp_target = -1
 	hud.show_stamp("", Color.WHITE)
@@ -76,11 +82,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		view.toggle_top_camera()
 		_update_help()
 	elif event.is_action_pressed("restart"):
-		_start_round()
+		_on_restart_pressed()
 	elif event.is_action_pressed("toggle_role"):
+		# 最初の鬼を自分にするかどうかを切りかえて、新しい試合を始める
 		_player_is_oni = not _player_is_oni
 		_start_round()
-		hud.show_message("あなたは鬼" if _player_is_oni else "あなたは座る側", Color(0.3, 0.3, 0.3), 1.2)
+		hud.show_message("あなたが鬼で新しい試合" if _player_is_oni else "座る側で新しい試合", Color(0.3, 0.3, 0.3), 1.2)
 	elif event.is_action_pressed("sound_test"):
 		view.play_test_beep()
 	elif event.is_action_pressed("quit"):
@@ -101,6 +108,38 @@ func _unhandled_input(event: InputEvent) -> void:
 			if id >= 0:
 				_stamp_target = id
 				_update_help()
+
+
+## 「次へ・やり直し」: 勝敗が出ていれば次のラウンドへ、試合が終わっていれば新しい試合、
+## ラウンドの途中なら、そのラウンドをやり直す
+func _on_restart_pressed() -> void:
+	if state.match_over:
+		_start_round()
+	elif state.phase == GameState.Phase.RESULT:
+		if state.next_round():
+			_refresh_round()
+			hud.show_message("ラウンド %d: %s" % [state.round_index + 1, state.item_name()], Color(0.3, 0.3, 0.3), 1.5)
+		else:
+			_show_match_result()
+	else:
+		state.restart_round()
+		_refresh_round()
+
+
+func _show_match_result() -> void:
+	var ids := state.scores.keys()
+	ids.sort_custom(func(a, b): return state.scores[a] > state.scores[b])
+	var lines := PackedStringArray(["試合終了!"])
+	var rank := 0
+	var prev := INF
+	for i in ids.size():
+		var sc: int = state.scores[ids[i]]
+		if sc != prev:
+			rank = i + 1
+			prev = sc
+		lines.append("%d位 %s  %d点" % [rank, _name(ids[i]), sc])
+	lines.append("「次へ」(R)で新しい試合")
+	hud.show_message("\n".join(lines), Color(0.9, 0.6, 0.1), 0.0)
 
 
 func _send_stamp(kind: String) -> void:
@@ -190,7 +229,10 @@ func _show_result(r: Dictionary) -> void:
 				color = Color(0.9, 0.6, 0.1)
 			else:
 				text = "鬼の勝ち\n(%s が気づかなかった)" % _name(r["loser"])
-	hud.show_message(text + "\n「やり直し」(R)で次のラウンド", color, 0.0)
+	var me_score: int = state.scores.get(me, 0)
+	var last := state.round_index + 1 >= GameConfig.ROUNDS_PER_MATCH
+	var next_text := "最終結果" if last else "次のラウンド(%s)" % Items.name_of(state.round_index + 1)
+	hud.show_message("%s\nあなた: %d点\n「次へ」(R)で%s" % [text, me_score, next_text], color, 0.0)
 
 
 func _name(id: int) -> String:
@@ -199,7 +241,10 @@ func _name(id: int) -> String:
 
 
 func _update_help() -> void:
-	var lines := PackedStringArray(["人が鬼をやる試作" if state.oni_is_player else "ステップ3: スタンプで教える/だます"])
+	var lines := PackedStringArray(["ラウンド %d/%d: %s / あなた %d点" % [
+		state.round_index + 1, GameConfig.ROUNDS_PER_MATCH, state.item_name(), state.scores.get(state.local_player_id, 0)]])
+	if state.oni_is_player:
+		lines.append("あなたは鬼")
 	var me := state.get_local_player()
 	var left := "何回でも" if me.stamps_left < 0 else "残り %d" % me.stamps_left
 	lines.append("お手つき: %d 回 / スタンプ: %s" % [me.otetsuki_count, left])
@@ -232,5 +277,5 @@ func _update_help() -> void:
 		lines.append("スペース /「振り向く」(押している間): 振り向く")
 		lines.append("E /「拾う」: 後ろのハンカチを拾う")
 		lines.append("人をタップ → スタンプ(1〜4キー)で送る")
-	lines.append("F1: 上から見る / R: やり直し / O: 鬼⇔座る / T: 音テスト / Esc: 終了")
+	lines.append("F1: 上から見る / R: 次へ・やり直し / O: 鬼で新しい試合 / T: 音テスト")
 	hud.set_help("\n".join(lines))

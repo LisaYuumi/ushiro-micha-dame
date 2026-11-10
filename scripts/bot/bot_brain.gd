@@ -63,7 +63,9 @@ func _update_seated(state: GameState, a: GameState.Actor, delta: float) -> void:
 	if not state.has_handkerchief_behind(a):
 		return
 	if not _notice_left.has(a.id):
-		_notice_left[a.id] = rng.randf_range(GameConfig.BOT_NOTICE_TIME_MIN, GameConfig.BOT_NOTICE_TIME_MAX)
+		# 重い落とし物ほど置く音が大きいので、早く気づく
+		var k := lerpf(1.0, GameConfig.BOT_NOTICE_HEAVY, state.item_weight())
+		_notice_left[a.id] = rng.randf_range(GameConfig.BOT_NOTICE_TIME_MIN, GameConfig.BOT_NOTICE_TIME_MAX) * k
 	_notice_left[a.id] -= delta
 	if _notice_left[a.id] <= 0.0:
 		state.pick_up(a.id)

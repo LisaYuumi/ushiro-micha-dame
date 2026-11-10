@@ -39,9 +39,9 @@ func _ready() -> void:
 	stick.offset_bottom = -30
 	# 右上: 確認用の操作
 	_add_button("上から見る", "debug_top_camera", Vector2(1, 0), Rect2(-410, 16, 190, 64), 24)
-	_add_button("やり直し", "restart", Vector2(1, 0), Rect2(-206, 16, 190, 64), 24)
+	_add_button("次へ・やり直し", "restart", Vector2(1, 0), Rect2(-206, 16, 190, 64), 24)
 	_add_button("音テスト", "sound_test", Vector2(1, 0), Rect2(-614, 16, 190, 64), 24)
-	_role_button = _add_button("鬼をやる", "toggle_role", Vector2(1, 0), Rect2(-818, 16, 190, 64), 24)
+	_role_button = _add_button("役を変える", "toggle_role", Vector2(1, 0), Rect2(-858, 16, 230, 64), 22)
 	set_oni_mode(false)
 
 
@@ -51,7 +51,7 @@ func set_oni_mode(is_oni: bool) -> void:
 		b.visible = not is_oni
 	for b in _oni_buttons:
 		b.visible = is_oni
-	_role_button.text = "座る側をやる" if is_oni else "鬼をやる"
+	_role_button.text = "役を変えて新しい試合"
 	# 切りかえで押しっぱなしになった指を離しておく
 	for index in _touch_action.keys():
 		var entry: Dictionary = _touch_action[index]

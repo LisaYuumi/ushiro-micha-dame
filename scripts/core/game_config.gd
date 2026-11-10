@@ -106,3 +106,22 @@ const ONI_DROP_REACH := 1.4
 const ONI_MAX_LAPS_BEFORE_DROP := 4
 ## 鬼の「ふり」の物音で、その席のボットがだまされて振り向く確率(0〜1)
 const BOT_FEINT_FOOL_CHANCE := 0.3
+
+# --- 試合 ---
+## 1試合のラウンド数(落とし物は Items の順に重くなる)
+const ROUNDS_PER_MATCH := 5
+## 点数(企画書の仮の点数表)
+const SCORE_ONI_SAT := 3
+const SCORE_CHASER_TOUCHED := 3
+const SCORE_MISSED := -2
+
+# --- 落とし物の重さ(重さ 0 = ハンカチ、1 = 教卓) ---
+## 置く音の大きさ(dB)と、聞こえる距離。重いほど大きく遠くまで
+const DROP_VOLUME_DB_HEAVY := 6.0
+const DROP_SOUND_RANGE_HEAVY := 8.0
+## 拾って追いかける人の速さの倍率(重いほど遅い)
+const CARRY_SPEED_HEAVY := 0.7
+## 落とすまで鬼が持ち歩く間の速さの倍率
+const ONI_CARRY_SPEED_HEAVY := 0.8
+## ボットが気づくまでの時間の倍率(重いほど音が大きく、早く気づく)
+const BOT_NOTICE_HEAVY := 0.45

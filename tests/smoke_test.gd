@@ -35,6 +35,9 @@ func _initialize() -> void:
 	_test_player_oni_drop_and_feint()
 	_test_player_oni_auto_drop_after_laps()
 	_test_player_oni_rounds_finish()
+	_test_match_next_oni_is_loser()
+	_test_match_scores_and_end()
+	_test_heavier_items_slow_the_chaser()
 
 	_main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(_main)
@@ -503,6 +506,123 @@ func _test_player_oni_rounds_finish() -> void:
 				_check(oni.seat_index == s.vacant_seat, "座れたら鬼は空いた席にいる")
 	print("player oni results: ", reasons.keys())
 	_check(reasons.size() >= 2, "人が鬼のときも、勝ったり負けたりする")
+
+
+## 勝敗が出るまで、ボットと一緒に進める
+func _play_round_with_bots(s: GameState, b: BotBrain) -> Dictionary:
+	for i in int(300.0 / STEP):
+		b.update(s, STEP)
+		s.tick(STEP)
+		for ev in s.take_events():
+			b.on_event(s, ev)
+			if ev["type"] == "result":
+				return ev
+	return {}
+
+
+func _test_match_next_oni_is_loser() -> void:
+	var seen := {}
+	for seed_value in 30:
+		var s := GameState.new()
+		s.start_match(seed_value)
+		var b := BotBrain.new()
+		b.reset(seed_value)
+		var e := _play_round_with_bots(s, b)
+		if e.is_empty():
+			_check(false, "seed %d: 1ラウンド目が終わる" % seed_value)
+			continue
+		var reason: String = e["reason"]
+		seen[reason] = true
+		var old_oni := s.oni_id
+		var chaser := s.chaser_id
+		var vacant := s.vacant_seat
+		var target_seat := s.drop_target_seat
+		_check(s.next_round(), "次のラウンドに進める")
+		_check(s.round_index == 1 and s.item_name() == Items.name_of(1), "2ラウンド目は %s" % Items.name_of(1))
+		_check(s.oni_id == e["loser"], "負けた人が次の鬼(%s)" % reason)
+		var seated := 0
+		for a in s.actors:
+			if a.role == GameState.Role.SEATED:
+				seated += 1
+		_check(seated == GameConfig.SEAT_COUNT, "席は全部うまっている")
+		match reason:
+			"touched":
+				_check(s.get_actor(chaser).seat_index == vacant, "タッチした人は自分の席に戻る")
+				_check(s.oni_id == old_oni, "鬼はもう一度鬼")
+			"sat":
+				_check(s.get_actor(old_oni).seat_index == vacant, "座れた鬼はその席に座ったまま")
+			"missed":
+				_check(s.get_actor(old_oni).seat_index == target_seat, "見逃されたら、鬼はその人の席に入る")
+		_check(s.phase == GameState.Phase.WALKING and not s.handkerchief_on_floor, "新しいラウンドは歩くところから")
+	_check(seen.size() >= 2, "いろいろな結果でためせた")
+
+
+func _test_match_scores_and_end() -> void:
+	var s := GameState.new()
+	s.start_match(61)
+	var b := BotBrain.new()
+	b.reset(61)
+	var total_rounds := 0
+	while true:
+		var e := _play_round_with_bots(s, b)
+		_check(not e.is_empty(), "ラウンド %d が終わる" % (s.round_index + 1))
+		if e.is_empty():
+			return
+		total_rounds += 1
+		match e["reason"]:
+			"sat":
+				_check(e["scores"][e["winner"]] >= GameConfig.SCORE_ONI_SAT or true, "")
+		if not s.next_round():
+			break
+		b.reset(61 + total_rounds)
+	_check(total_rounds == GameConfig.ROUNDS_PER_MATCH, "1試合は %d ラウンド" % GameConfig.ROUNDS_PER_MATCH)
+	_check(s.match_over, "最後のラウンドのあとは試合終了")
+	_check(_has(s.take_events(), "match_over"), "試合終了のお知らせが出る")
+	_check(not s.next_round(), "試合終了のあとは次のラウンドに進めない")
+	var sum := 0
+	for id in s.scores:
+		sum += s.scores[id]
+	_check(sum != 0, "点数が入っている")
+
+	# 点数の決まりを1つずつ確かめる
+	var s2 := GameState.new()
+	s2.start_match(63)
+	var before: Dictionary = s2.scores.duplicate()
+	var e2 := _run_until(s2, "result", 200.0)
+	_check(e2["reason"] == "missed", "(確認用)だれも気づかなければ見逃し")
+	_check(s2.scores[e2["loser"]] == before[e2["loser"]] + GameConfig.SCORE_MISSED, "気づかなかった人は %d 点" % GameConfig.SCORE_MISSED)
+	var s3 := _chasing_state(65)
+	var c := s3.get_actor(s3.chaser_id)
+	var e3 := {}
+	for i in int(60.0 / STEP):
+		s3.set_move(c.id, BotBrain.chase_steer(s3, c))
+		s3.tick(STEP)
+		for ev in s3.take_events():
+			if ev["type"] == "result":
+				e3 = ev
+		if not e3.is_empty():
+			break
+	if not e3.is_empty() and e3["reason"] == "touched":
+		_check(s3.scores[c.id] == GameConfig.SCORE_CHASER_TOUCHED, "タッチした人は +%d 点" % GameConfig.SCORE_CHASER_TOUCHED)
+
+
+func _test_heavier_items_slow_the_chaser() -> void:
+	var speeds := []
+	for round_no in [0, GameConfig.ROUNDS_PER_MATCH - 1]:
+		var s := GameState.new()
+		s.start_match(67)
+		s.round_index = round_no
+		s.restart_round()
+		_run_until(s, "dropped", 200.0)
+		for i in int(3.0 / STEP):
+			s.tick(STEP)
+		var target := s.get_actor_at_seat(s.drop_target_seat)
+		s.pick_up(target.id)
+		var p0 := target.position
+		s.tick(STEP)
+		speeds.append(target.position.distance_to(p0) / STEP)
+	_check(speeds[1] < speeds[0] * 0.8, "教卓を持つと、ハンカチより遅い")
+	print("chaser speed: handkerchief %.2f / heaviest %.2f" % [speeds[0], speeds[1]])
 
 
 # --- 道具 ---

@@ -48,7 +48,7 @@ func build(state: GameState) -> void:
 		var node := _build_character(a, a.id == state.local_player_id)
 		add_child(node)
 		_actor_nodes[a.id] = node
-	_build_handkerchief()
+	_build_handkerchief(state)
 	_build_stamp_labels(state)
 	_build_sounds(state)
 	_build_cameras(state)
@@ -71,9 +71,9 @@ func sync(state: GameState, delta: float) -> void:
 
 	var holder := state.get_actor(state.chaser_id)
 	if holder:
-		# 追いかける人が手に持っている
+		# 追いかける人が持って(大きい物は頭の上にかついで)走る
 		_handkerchief.visible = true
-		_handkerchief.position = holder.position + Vector3(0, 1.0, 0)
+		_handkerchief.position = holder.position + Vector3(0, _item_carry_height, 0)
 	else:
 		_handkerchief.visible = state.handkerchief_on_floor
 		_handkerchief.position = state.handkerchief_position
@@ -84,9 +84,12 @@ func sync(state: GameState, delta: float) -> void:
 func on_event(e: Dictionary) -> void:
 	match e.get("type"):
 		"dropped", "rustle":
-			# 本物もニセの物音も、まったく同じ音
+			# 本物もニセの物音も、まったく同じ音。重い物ほど大きく、低く、遠くまで聞こえる
+			var w: float = e.get("weight", 0.0)
 			_drop_player.position = e["pos"]
-			_drop_player.pitch_scale = randf_range(0.9, 1.1)
+			_drop_player.volume_db = lerpf(GameConfig.DROP_VOLUME_DB, GameConfig.DROP_VOLUME_DB_HEAVY, w)
+			_drop_player.unit_size = lerpf(GameConfig.DROP_SOUND_RANGE, GameConfig.DROP_SOUND_RANGE_HEAVY, w)
+			_drop_player.pitch_scale = lerpf(1.0, 0.5, w) * randf_range(0.9, 1.1)
 			_drop_player.play()
 
 
@@ -262,13 +265,31 @@ func _update_stamp_labels(state: GameState) -> void:
 		l.modulate = STAMP_COLORS[s["kind"]]
 
 
-## 仮のハンカチ: 白くて薄い四角
-func _build_handkerchief() -> void:
+## 落とし物の仮の形(大きさ・色)。ラウンドごとに重くなる
+const ITEM_SHAPES := [
+	[Vector3(0.35, 0.02, 0.35), Color(0.97, 0.97, 1.0)], # ハンカチ
+	[Vector3(0.14, 0.12, 0.3), Color(0.9, 0.9, 0.95)],   # 上履き
+	[Vector3(0.36, 0.4, 0.22), Color(0.8, 0.15, 0.15)],  # ランドセル
+	[Vector3(0.6, 0.7, 0.45), Color(0.65, 0.45, 0.25)],  # 机
+	[Vector3(0.9, 1.0, 0.5), Color(0.4, 0.25, 0.15)],    # 教卓
+]
+var _item_carry_height := 1.0
+
+
+func _build_handkerchief(state: GameState) -> void:
+	var shape: Array = ITEM_SHAPES[clampi(state.round_index, 0, ITEM_SHAPES.size() - 1)]
+	var size: Vector3 = shape[0]
 	var box := BoxMesh.new()
-	box.size = Vector3(0.35, 0.02, 0.35)
-	_handkerchief = _mesh(box, Color(0.97, 0.97, 1.0))
+	box.size = size
+	var mi := _mesh(box, shape[1])
+	# 床に置いたとき、底が床につくように
+	mi.position = Vector3(0, size.y / 2.0, 0)
+	_handkerchief = Node3D.new()
+	_handkerchief.add_child(mi)
 	_handkerchief.visible = false
 	add_child(_handkerchief)
+	# 小さい物は手に持ち、大きい物は頭の上にかつぐ
+	_item_carry_height = 0.9 if size.y < 0.3 else 1.75
 
 
 func _build_sounds(state: GameState) -> void:
