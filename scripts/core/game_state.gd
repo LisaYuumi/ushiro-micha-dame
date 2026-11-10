@@ -405,17 +405,17 @@ func _move_chaser(a: Actor, delta: float) -> void:
 	var forward := Vector3(cos(ang), 0.0, -sin(ang))
 	var outward := Vector3(sin(ang), 0.0, cos(ang))
 	var steer := clampf(a.move_dir.dot(outward), -1.0, 1.0) * GameConfig.CHASER_STEER
-	# 走れる範囲の端では、それ以上曲がらない(曲がろうとして前へのスピードが落ちないように)
-	var r_now := Vector2(a.position.x, a.position.z).length()
-	if (steer < 0.0 and r_now <= GameConfig.CHASER_MIN_RADIUS + 0.001) \
-			or (steer > 0.0 and r_now >= GameConfig.CHASER_MAX_RADIUS - 0.001):
-		steer = 0.0
 	var dir := (forward + outward * steer).normalized()
-	var p := a.position + dir * GameConfig.CHASER_SPEED * delta
-	var flat := Vector2(p.x, p.z)
-	var r := clampf(flat.length(), GameConfig.CHASER_MIN_RADIUS, GameConfig.CHASER_MAX_RADIUS)
-	flat = flat.normalized() * r
-	a.position = Vector3(flat.x, 0.0, flat.y)
+	# 輪の中心からの距離(r)と角度(ang)で動かす。走れる範囲の端に当たったら、
+	# 外/内へ動けなかった分を前へ回して、いつでも同じ速さで走る
+	var step := GameConfig.CHASER_SPEED * delta
+	var r := Vector2(a.position.x, a.position.z).length()
+	var dr := dir.dot(outward) * step
+	var new_r := clampf(r + dr, GameConfig.CHASER_MIN_RADIUS, GameConfig.CHASER_MAX_RADIUS)
+	dr = new_r - r
+	var forward_step := sqrt(maxf(step * step - dr * dr, 0.0))
+	ang += forward_step / maxf((r + new_r) / 2.0, 0.01)
+	a.position = Vector3(sin(ang), 0.0, cos(ang)) * new_r
 	a.yaw = atan2(-dir.x, -dir.z)
 
 
