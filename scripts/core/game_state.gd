@@ -347,6 +347,11 @@ func _move_chaser(a: Actor, delta: float) -> void:
 	var forward := Vector3(cos(ang), 0.0, -sin(ang))
 	var outward := Vector3(sin(ang), 0.0, cos(ang))
 	var steer := clampf(a.move_dir.dot(outward), -1.0, 1.0) * GameConfig.CHASER_STEER
+	# 走れる範囲の端では、それ以上曲がらない(曲がろうとして前へのスピードが落ちないように)
+	var r_now := Vector2(a.position.x, a.position.z).length()
+	if (steer < 0.0 and r_now <= GameConfig.CHASER_MIN_RADIUS + 0.001) \
+			or (steer > 0.0 and r_now >= GameConfig.CHASER_MAX_RADIUS - 0.001):
+		steer = 0.0
 	var dir := (forward + outward * steer).normalized()
 	var p := a.position + dir * GameConfig.CHASER_SPEED * delta
 	var flat := Vector2(p.x, p.z)

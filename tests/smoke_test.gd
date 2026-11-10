@@ -247,6 +247,11 @@ func _test_chaser_cannot_run_backward_or_inside() -> void:
 		s.tick(STEP)
 	var r := Vector2(c.position.x, c.position.z).length()
 	_check(r >= GameConfig.CHASER_MIN_RADIUS - 0.001, "席の内側には入れない")
+	var p0 := c.position
+	s.set_move(c.id, -Vector3(c.position.x, 0.0, c.position.z).normalized())
+	s.tick(STEP)
+	var speed := c.position.distance_to(p0) / STEP
+	_check(absf(speed - GameConfig.CHASER_SPEED) < 0.05, "内側の端で内側を押しても速さは落ちない")
 
 
 func _test_no_otetsuki_during_chase() -> void:
