@@ -286,6 +286,7 @@ func _update_help() -> void:
 		lines.append("→(D)/スティック右: 速く  ←(A): ゆっくり")
 		lines.append("スペース /「止まる」(押している間): 止まる")
 		lines.append("E /「落とす」: いちばん近い席の後ろに落とす(1回だけ)")
+		lines.append("F /「落とす音」: 落とさずに、置く音だけ出す(何回でも)")
 		lines.append("1〜4 / 咳・口笛・手拍子・叫ぶ: 声を出す")
 		lines.append("  声のすぐあと(0.8秒以内)に落とすと、置く音がかき消される")
 	else:

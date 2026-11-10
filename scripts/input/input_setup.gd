@@ -15,6 +15,7 @@ const KEYS := {
 	"toggle_role": [KEY_O],
 	"oni_stop": [KEY_SPACE],
 	"oni_drop": [KEY_E],
+	"oni_feint": [KEY_F],
 	"voice_0": [KEY_1],
 	"voice_1": [KEY_2],
 	"voice_2": [KEY_3],

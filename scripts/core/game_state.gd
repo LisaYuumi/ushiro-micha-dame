@@ -471,8 +471,15 @@ func oni_drop(actor_id: int) -> bool:
 
 
 ## 落とすふり: いちばん近い席の後ろで、本物と同じ物音だけを出す
+## 「落とす音」: 落とさずに、いちばん近い席の後ろで本物と同じ置く音だけを出す(人の鬼の命令)
 func oni_feint(actor_id: int) -> void:
-	if not _is_player_oni(actor_id) or (phase != Phase.WALKING and phase != Phase.DROPPED):
+	if not _is_player_oni(actor_id):
+		return
+	_emit_fake_drop()
+
+
+func _emit_fake_drop() -> void:
+	if phase != Phase.WALKING and phase != Phase.DROPPED:
 		return
 	var crossing := _nearest_seat_crossing()
 	events.append({
@@ -629,14 +636,9 @@ func _on_pass_behind_seat() -> void:
 		return
 	elif rng.randf() < GameConfig.DECOY_STOP_CHANCE:
 		oni_pause_left = GameConfig.ONI_PAUSE_TIME
-		if rng.randf() < GameConfig.DECOY_SOUND_CHANCE:
-			# 本物と同じ音を、同じ場所(席の真後ろ)で出す
-			events.append({
-				"type": "rustle",
-				"seat": _seat_at_angle(oni_angle),
-				"pos": _ring_point(oni_angle, GameConfig.DROP_RADIUS),
-				"weight": item_weight(),
-			})
+		if rng.randf() < GameConfig.BOT_ONI_FAKE_DROP_CHANCE:
+			# ボットの鬼が、わざと「落とす音」を出す
+			_emit_fake_drop()
 
 
 func _tick_stamps(delta: float) -> void:

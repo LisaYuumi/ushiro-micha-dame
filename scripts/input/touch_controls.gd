@@ -24,6 +24,7 @@ func _ready() -> void:
 	# 鬼のとき: 同じ場所に「止まる」(押している間)「落とす」、その左に「ふり」
 	_oni_buttons.append(_add_button("止まる", "oni_stop", Vector2(1, 1), Rect2(-250, -250, 220, 220), 40))
 	_oni_buttons.append(_add_button("落とす", "oni_drop", Vector2(1, 1), Rect2(-430, -170, 160, 140), 36))
+	_oni_buttons.append(_add_button("落とす音", "oni_feint", Vector2(1, 1), Rect2(-430, -330, 160, 140), 30))
 	# 鬼の声(下のまん中。座っているときのスタンプと同じ場所)
 	for i in Voices.ALL.size():
 		var v: String = Voices.ALL[i]

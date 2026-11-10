@@ -15,6 +15,8 @@ static func apply(state: GameState, cam_basis: Basis) -> void:
 				state.oni_voice(id, Voices.ALL[i])
 		if Input.is_action_just_pressed("oni_drop"):
 			state.oni_drop(id)
+		if Input.is_action_just_pressed("oni_feint"):
+			state.oni_feint(id)
 	else:
 		state.set_looking_back(id, Input.is_action_pressed("look_back"))
 		if Input.is_action_just_pressed("pick_up"):

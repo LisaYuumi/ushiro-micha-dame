@@ -22,8 +22,8 @@ const ONI_PAUSE_TIME := 0.6
 ## 席の後ろを通るたびに、ニセで立ち止まる確率(0〜1)。
 ## 1.0 = 毎回どの席の後ろでも止まる(止まったことでは、どこに落としたかわからない)
 const DECOY_STOP_CHANCE := 1.0
-## ニセで立ち止まったとき、置く音に似た物音を出す確率(0〜1)
-const DECOY_SOUND_CHANCE := 0.6
+## ボットの鬼が、立ち止まったときに「落とす音」(本物と同じ置く音)をわざと出す確率(0〜1)
+const BOT_ONI_FAKE_DROP_CHANCE := 0.15
 ## ハンカチを落とすまでに最低何周歩くか(この範囲でランダム)
 const ONI_LAPS_BEFORE_DROP_MIN := 0.3
 const ONI_LAPS_BEFORE_DROP_MAX := 1.0
