@@ -31,9 +31,9 @@ const ONI_LAPS_BEFORE_DROP_MAX := 1.0
 ## 足音を鳴らす間隔(歩いた距離・メートル)
 const FOOTSTEP_STRIDE := 0.7
 ## 足音の大きさ(dB。小さいほど静か)
-const FOOTSTEP_VOLUME_DB := -14.0
+const FOOTSTEP_VOLUME_DB := -4.0
 ## ハンカチを置いた音(とニセの物音)の大きさ(dB)。ハンカチは足音にまぎれるくらい小さく
-const DROP_VOLUME_DB := -16.0
+const DROP_VOLUME_DB := -8.0
 ## 置いた音が、この距離(メートル)より離れると急に小さくなる。
 ## 小さいほど「自分のすぐ後ろ」でないと聞こえない
 const DROP_SOUND_RANGE := 1.2

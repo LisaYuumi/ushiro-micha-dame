@@ -12,6 +12,7 @@ var _top_cam: Camera3D
 var _handkerchief: Node3D
 var _drop_player: AudioStreamPlayer3D
 var _step_player: AudioStreamPlayer3D
+var _beep_player: AudioStreamPlayer
 ## 足音用: 鬼の前回の位置と、前の足音から歩いた距離
 var _oni_last_pos := Vector3.ZERO
 var _oni_walked := 0.0
@@ -231,6 +232,16 @@ func _build_sounds(state: GameState) -> void:
 	_drop_player.unit_size = GameConfig.DROP_SOUND_RANGE
 	_drop_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	add_child(_drop_player)
+
+	_beep_player = AudioStreamPlayer.new()
+	_beep_player.stream = Sfx.beep()
+	_beep_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
+	add_child(_beep_player)
+
+
+## 音テスト: 方向や距離に関係なく「ピー」と鳴らす
+func play_test_beep() -> void:
+	_beep_player.play()
 
 
 func _build_cameras(state: GameState) -> void:

@@ -49,6 +49,8 @@ func _process(_delta: float) -> bool:
 	elif _frames == 110:
 		Input.action_release("move_right")
 	elif _frames == 120:
+		_press("sound_test", true)
+		_press("sound_test", false)
 		_press("restart", true)
 		_press("restart", false)
 	if _frames < MAIN_SCENE_FRAMES:

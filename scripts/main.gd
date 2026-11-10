@@ -47,6 +47,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_update_help()
 	elif event.is_action_pressed("restart"):
 		_start_round()
+	elif event.is_action_pressed("sound_test"):
+		view.play_test_beep()
 	elif event.is_action_pressed("quit"):
 		get_tree().quit()
 
@@ -123,5 +125,5 @@ func _update_help() -> void:
 	else:
 		lines.append("スペース /「振り向く」(押している間): 振り向く")
 		lines.append("E /「拾う」: 後ろのハンカチを拾う")
-	lines.append("F1: 上から見る / R: やり直し / Esc: 終了")
+	lines.append("F1: 上から見る / R: やり直し / T: 音テスト / Esc: 終了")
 	hud.set_help("\n".join(lines))

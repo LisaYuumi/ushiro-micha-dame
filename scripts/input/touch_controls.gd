@@ -23,6 +23,7 @@ func _ready() -> void:
 	# 右上: 確認用の操作
 	_add_button("上から見る", "debug_top_camera", Vector2(1, 0), Rect2(-410, 16, 190, 64), 24)
 	_add_button("やり直し", "restart", Vector2(1, 0), Rect2(-206, 16, 190, 64), 24)
+	_add_button("音テスト", "sound_test", Vector2(1, 0), Rect2(-614, 16, 190, 64), 24)
 
 
 func _add_button(text: String, action: String, anchor: Vector2, rect: Rect2, font_size: int) -> Button:

@@ -11,6 +11,7 @@ const KEYS := {
 	"move_down": [KEY_S, KEY_DOWN],
 	"debug_top_camera": [KEY_F1],
 	"restart": [KEY_R],
+	"sound_test": [KEY_T],
 	"quit": [KEY_ESCAPE],
 }
 

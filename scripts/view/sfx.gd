@@ -7,20 +7,28 @@ const RATE := 22050
 
 static var _footstep: AudioStreamWAV
 static var _drop: AudioStreamWAV
+static var _beep: AudioStreamWAV
 
 
-## 「ざっ」という小さな足音
+## 「ざっ」という足音(スマホのスピーカーでも聞こえるよう、高めでくっきり)
 static func footstep() -> AudioStreamWAV:
 	if _footstep == null:
-		_footstep = _make(0.12, 0.25, 40.0, 0.0, 0.0, 0.8)
+		_footstep = _make(0.10, 0.6, 35.0, 0.0, 0.0, 1.0)
 	return _footstep
 
 
-## 「ぽふっ」というハンカチを置いた音
+## 「ぽさっ」というハンカチを置いた音
 static func drop() -> AudioStreamWAV:
 	if _drop == null:
-		_drop = _make(0.25, 0.06, 18.0, 110.0, 0.6, 0.9)
+		_drop = _make(0.22, 0.35, 16.0, 420.0, 0.35, 1.0)
 	return _drop
+
+
+## 音テスト用の「ピー」
+static func beep() -> AudioStreamWAV:
+	if _beep == null:
+		_beep = _make(0.35, 0.0, 4.0, 880.0, 1.0, 0.8)
+	return _beep
 
 
 ## ノイズ(lowpass でこもらせる)+低い音(tone_hz)を、だんだん小さくする。
