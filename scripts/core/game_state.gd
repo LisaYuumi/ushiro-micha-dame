@@ -47,6 +47,10 @@ var oni_angle: float = 0.0
 var drop_target_seat: int = -1
 ## 鬼がこの角度まで来たら落とす
 var drop_angle: float = 0.0
+## 次に鬼が席の真後ろを通る角度
+var next_seat_crossing: float = 0.0
+## 鬼が立ち止まっている残り時間(秒)
+var oni_pause_left: float = 0.0
 ## ハンカチが床に落ちているか
 var handkerchief_on_floor: bool = false
 var handkerchief_position: Vector3 = Vector3.ZERO
@@ -108,17 +112,26 @@ func start_round(seed_value: int = -1) -> void:
 
 	phase = Phase.WALKING
 	handkerchief_on_floor = false
+	oni_pause_left = 0.0
+	var step := TAU / GameConfig.SEAT_COUNT
+	next_seat_crossing = ceilf(oni_angle / step) * step
 	_plan_drop()
 
 
 ## 時間を delta 秒すすめる。
 func tick(delta: float) -> void:
+	if oni_pause_left > 0.0:
+		oni_pause_left -= delta
+		return
+
 	var oni := get_actor(oni_id)
 	oni_angle += GameConfig.ONI_WALK_SPEED / GameConfig.ONI_WALK_RADIUS * delta
+	if oni_angle >= next_seat_crossing:
+		# ちょうど席の真後ろで止まれるように位置をそろえる
+		oni_angle = next_seat_crossing
+		next_seat_crossing += TAU / GameConfig.SEAT_COUNT
+		_on_pass_behind_seat()
 	_place_on_walk_ring(oni, oni_angle)
-
-	if phase == Phase.WALKING and oni_angle >= drop_angle:
-		_drop()
 
 
 ## たまったお知らせを受け取る(受け取ると空になる)。
@@ -185,6 +198,27 @@ func _plan_drop() -> void:
 	var target := seat_angle(drop_target_seat)
 	# earliest 以降で、はじめて相手の真後ろを通る角度
 	drop_angle = target + ceilf((earliest - target) / TAU) * TAU
+
+
+## 鬼が席の真後ろに来たとき: 本当に落とす/ニセで立ち止まる/そのまま通りすぎる
+func _on_pass_behind_seat() -> void:
+	if phase == Phase.WALKING and absf(oni_angle - drop_angle) < 0.001:
+		oni_pause_left = GameConfig.ONI_PAUSE_TIME
+		_drop()
+	elif rng.randf() < GameConfig.DECOY_STOP_CHANCE:
+		oni_pause_left = GameConfig.ONI_PAUSE_TIME
+		if rng.randf() < GameConfig.DECOY_SOUND_CHANCE:
+			# 本物と同じ音を、同じ場所(席の真後ろ)で出す
+			events.append({
+				"type": "rustle",
+				"seat": _seat_at_angle(oni_angle),
+				"pos": _ring_point(oni_angle, GameConfig.DROP_RADIUS),
+			})
+
+
+func _seat_at_angle(angle: float) -> int:
+	var n := GameConfig.SEAT_COUNT
+	return posmod(roundi(angle / TAU * n), n)
 
 
 func _drop() -> void:

@@ -52,8 +52,10 @@ func sync(state: GameState) -> void:
 ## GameState からのお知らせに合わせて音などを出す。
 func on_event(e: Dictionary) -> void:
 	match e.get("type"):
-		"dropped":
+		"dropped", "rustle":
+			# 本物もニセの物音も、まったく同じ音
 			_drop_player.position = e["pos"]
+			_drop_player.pitch_scale = randf_range(0.9, 1.1)
 			_drop_player.play()
 
 
@@ -210,6 +212,7 @@ func _build_sounds(state: GameState) -> void:
 	_drop_player = AudioStreamPlayer3D.new()
 	_drop_player.stream = Sfx.drop()
 	_drop_player.volume_db = GameConfig.DROP_VOLUME_DB
+	_drop_player.unit_size = GameConfig.DROP_SOUND_RANGE
 	add_child(_drop_player)
 
 

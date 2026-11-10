@@ -4,6 +4,8 @@ extends Node3D
 ##   GameState(状態) → WorldView / Hud が読んで表示する
 
 var state: GameState
+## 確認用: 最後に鳴った物音が本物かニセか
+var _last_sound := ""
 
 @onready var view: WorldView = $WorldView
 @onready var hud: Hud = $Hud
@@ -17,6 +19,7 @@ func _ready() -> void:
 
 func _start_round() -> void:
 	state.start_round()
+	_last_sound = ""
 	view.build(state)
 	_update_help()
 
@@ -25,6 +28,11 @@ func _physics_process(delta: float) -> void:
 	state.tick(delta)
 	for e in state.take_events():
 		view.on_event(e)
+		match e.get("type"):
+			"dropped":
+				_last_sound = "本物"
+			"rustle":
+				_last_sound = "ニセ"
 		_update_help()
 
 
@@ -53,6 +61,8 @@ func _update_help() -> void:
 			lines.append("【確認用】%s の後ろに落とした" % who)
 		else:
 			lines.append("【確認用】%s の後ろに落とす予定" % who)
+		if _last_sound != "":
+			lines.append("【確認用】さっきの物音: %s" % _last_sound)
 	else:
 		lines.append("今のカメラ: 自分の席から見る")
 	lines.append("F1: カメラ切りかえ / R: やり直し / Esc: 終了")

@@ -16,6 +16,12 @@ const DROP_RADIUS := 3.6
 # --- 鬼の動き ---
 ## 鬼が歩く速さ(メートル/秒)
 const ONI_WALK_SPEED := 1.6
+## 席の後ろで立ち止まる時間(秒)。本当に落とすときも、ニセの物音のときも同じ
+const ONI_PAUSE_TIME := 0.6
+## 席の後ろを通るたびに、ニセで立ち止まる確率(0〜1)
+const DECOY_STOP_CHANCE := 0.35
+## ニセで立ち止まったとき、置く音に似た物音を出す確率(0〜1)
+const DECOY_SOUND_CHANCE := 0.6
 ## ハンカチを落とすまでに最低何周歩くか(この範囲でランダム)
 const ONI_LAPS_BEFORE_DROP_MIN := 0.3
 const ONI_LAPS_BEFORE_DROP_MAX := 1.0
@@ -25,5 +31,8 @@ const ONI_LAPS_BEFORE_DROP_MAX := 1.0
 const FOOTSTEP_STRIDE := 0.7
 ## 足音の大きさ(dB。小さいほど静か)
 const FOOTSTEP_VOLUME_DB := -14.0
-## ハンカチを落とした音の大きさ(dB)
-const DROP_VOLUME_DB := -8.0
+## ハンカチを置いた音(とニセの物音)の大きさ(dB)。ハンカチは足音にまぎれるくらい小さく
+const DROP_VOLUME_DB := -16.0
+## 置いた音が、この距離(メートル)より離れると急に小さくなる。
+## 小さいほど「自分のすぐ後ろ」でないと聞こえない
+const DROP_SOUND_RANGE := 1.2
