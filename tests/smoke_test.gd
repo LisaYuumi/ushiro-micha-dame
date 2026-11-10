@@ -44,6 +44,7 @@ func _initialize() -> void:
 	_test_banana_can_be_dodged()
 	_test_bots_throw_bananas()
 	_test_who_can_see_behind_whom()
+	_test_otetsuki_penalty_and_forced_oni()
 
 	_main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(_main)
@@ -774,6 +775,33 @@ func _test_who_can_see_behind_whom() -> void:
 			if GameState.can_see_behind(i, j):
 				seen += 1
 		_check(seen == n - 3, "見えるのは向かいの %d 人" % (n - 3))
+
+
+func _test_otetsuki_penalty_and_forced_oni() -> void:
+	var s := GameState.new()
+	s.start_match(81)
+	var me := s.get_local_player()
+	var before: int = s.scores[me.id]
+	s.set_looking_back(me.id, true)
+	_check(s.scores[me.id] == before + GameConfig.SCORE_OTETSUKI, "お手つきで %d 点" % GameConfig.SCORE_OTETSUKI)
+	for i in GameConfig.OTETSUKI_LIMIT - 1:
+		s.set_looking_back(me.id, false)
+		s.set_looking_back(me.id, true)
+	s.set_looking_back(me.id, false)
+	_check(me.otetsuki_count == GameConfig.OTETSUKI_LIMIT, "お手つきが %d 回" % GameConfig.OTETSUKI_LIMIT)
+	_run_until(s, "result", 200.0)
+	var loser: int = s.result["loser"]
+	_check(s.next_round(), "(確認用)次のラウンドへ")
+	_check(s.oni_id == me.id, "お手つき %d 回の人が、次は強制的に鬼" % GameConfig.OTETSUKI_LIMIT)
+	_check(s.forced_oni_id == me.id, "強制的に鬼になったことがわかる")
+	_check(me.otetsuki_count == 0, "鬼になったらお手つきの回数は 0 に戻る")
+	if loser != me.id:
+		_check(s.get_actor(loser).role == GameState.Role.SEATED, "本来鬼になるはずだった人は席に座る")
+	var seated := 0
+	for a in s.actors:
+		if a.role == GameState.Role.SEATED:
+			seated += 1
+	_check(seated == GameConfig.SEAT_COUNT, "席は全部うまっている")
 
 
 # --- 道具 ---

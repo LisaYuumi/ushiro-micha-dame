@@ -121,7 +121,11 @@ func _on_restart_pressed() -> void:
 	elif state.phase == GameState.Phase.RESULT:
 		if state.next_round():
 			_refresh_round()
-			hud.show_message("ラウンド %d: %s" % [state.round_index + 1, state.item_name()], Color(0.3, 0.3, 0.3), 1.5)
+			var msg := "ラウンド %d: %s" % [state.round_index + 1, state.item_name()]
+			if state.forced_oni_id >= 0:
+				msg += "\nお手つき%d回で %s が鬼!" % [GameConfig.OTETSUKI_LIMIT,
+						"あなた" if state.forced_oni_id == state.local_player_id else _name(state.forced_oni_id)]
+			hud.show_message(msg, Color(0.3, 0.3, 0.3), 2.0)
 		else:
 			_show_match_result()
 	else:
@@ -193,7 +197,9 @@ func _show_event(e: Dictionary) -> void:
 				hud.show_message("4周したので\n次の席で自動で落とす", Color(0.3, 0.3, 0.3), 1.5)
 		"otetsuki":
 			if e["actor"] == me:
-				hud.show_message("お手つき!", Color(0.85, 0.1, 0.1), GameConfig.MESSAGE_TIME)
+				hud.show_message("お手つき! %d点\n(%d/%d回で次は強制的に鬼)" % [e["points"], e["count"], GameConfig.OTETSUKI_LIMIT],
+						Color(0.85, 0.1, 0.1), GameConfig.MESSAGE_TIME)
+				_update_help()
 		"found":
 			if e["actor"] == me:
 				hud.show_message("ハンカチがある!\n「拾う」(E)", Color(0.1, 0.5, 0.9), GameConfig.MESSAGE_TIME)
@@ -258,7 +264,7 @@ func _update_help() -> void:
 		lines.append("あなたは鬼")
 	var me := state.get_local_player()
 	var left := "何回でも" if me.stamps_left < 0 else "残り %d" % me.stamps_left
-	lines.append("お手つき: %d 回 / スタンプ: %s" % [me.otetsuki_count, left])
+	lines.append("お手つき: %d/%d 回 (1回 %d点) / スタンプ: %s" % [me.otetsuki_count, GameConfig.OTETSUKI_LIMIT, GameConfig.SCORE_OTETSUKI, left])
 	if _stamp_target >= 0:
 		lines.append("スタンプを送る相手: %s" % _name(_stamp_target))
 	if view.is_top_camera():

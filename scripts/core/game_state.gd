@@ -32,7 +32,7 @@ class Actor:
 	var color: Color = Color.WHITE
 	## 振り向いているか(全員から見える)
 	var looking_back: bool = false
-	## お手つきの回数(このステップでは数えるだけ。点数はまだ)
+	## お手つきの回数(試合のあいだ数える。OTETSUKI_LIMIT 回で次のラウンドは強制的に鬼)
 	var otetsuki_count: int = 0
 	## 走る向き(追いかけるとき。長さ 0〜1)
 	var move_dir: Vector3 = Vector3.ZERO
@@ -105,6 +105,8 @@ var bananas: Array = []
 var round_index: int = 0
 var scores: Dictionary = {}
 var match_over: bool = false
+## 直前のラウンド切りかえで、お手つきが多くて強制的に鬼になった人(いなければ -1)
+var forced_oni_id: int = -1
 var _round_start_lineup: Array = []
 var _round_start_oni: int = -1
 
@@ -218,7 +220,29 @@ func _lineup_after_result() -> Array:
 		"missed":
 			# 気づかなかった人が鬼になり、鬼がその席に入る
 			seat_ids[drop_target_seat] = oni_id
+	# お手つきが多すぎる人は、次のラウンドは強制的に鬼
+	var forced := _too_many_otetsuki()
+	forced_oni_id = forced
+	if forced >= 0:
+		if forced != next_oni:
+			var idx := seat_ids.find(forced)
+			if idx >= 0:
+				# 本来鬼になるはずだった人は、強制的に鬼になる人の席に座る
+				seat_ids[idx] = next_oni
+				next_oni = forced
+		get_actor(forced).otetsuki_count = 0
 	return [seat_ids, next_oni]
+
+
+## お手つきが OTETSUKI_LIMIT 回以上の人(いちばん多い人。いなければ -1)
+func _too_many_otetsuki() -> int:
+	var best := -1
+	var best_count := GameConfig.OTETSUKI_LIMIT - 1
+	for a in actors:
+		if a.otetsuki_count > best_count:
+			best_count = a.otetsuki_count
+			best = a.id
+	return best
 
 
 ## seat_ids[i] の人を席 i に座らせ、oni を鬼にしてラウンドを始める
@@ -329,7 +353,13 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 		events.append({"type": "found", "actor": actor_id})
 	else:
 		a.otetsuki_count += 1
-		events.append({"type": "otetsuki", "actor": actor_id})
+		scores[a.id] = scores.get(a.id, 0) + GameConfig.SCORE_OTETSUKI
+		events.append({
+			"type": "otetsuki",
+			"actor": actor_id,
+			"count": a.otetsuki_count,
+			"points": GameConfig.SCORE_OTETSUKI,
+		})
 
 
 ## 後ろのハンカチを拾って立ち上がる。

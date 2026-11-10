@@ -119,6 +119,10 @@ const ROUNDS_PER_MATCH := 5
 const SCORE_ONI_SAT := 3
 const SCORE_CHASER_TOUCHED := 3
 const SCORE_MISSED := -2
+## お手つき1回の点数。もっと痛くしたいときは -2 などに
+const SCORE_OTETSUKI := -1
+## この回数お手つきすると、次のラウンドは強制的に鬼(鬼になったら回数は 0 に戻る)
+const OTETSUKI_LIMIT := 3
 
 # --- 落とし物の重さ(重さ 0 = ハンカチ、1 = 教卓) ---
 ## 置く音の大きさ(dB)と、聞こえる距離。重いほど大きく遠くまで
