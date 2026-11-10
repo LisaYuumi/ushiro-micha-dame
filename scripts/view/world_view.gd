@@ -219,6 +219,8 @@ func _build_sounds(state: GameState) -> void:
 	_step_player.stream = Sfx.footstep()
 	_step_player.volume_db = GameConfig.FOOTSTEP_VOLUME_DB
 	_step_player.max_polyphony = 2
+	# スマホのブラウザでも鳴るように、PC と同じ方式で再生する
+	_step_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	(_actor_nodes[state.oni_id] as Node3D).add_child(_step_player)
 	_oni_last_pos = state.get_actor(state.oni_id).position
 	_oni_walked = 0.0
@@ -227,6 +229,7 @@ func _build_sounds(state: GameState) -> void:
 	_drop_player.stream = Sfx.drop()
 	_drop_player.volume_db = GameConfig.DROP_VOLUME_DB
 	_drop_player.unit_size = GameConfig.DROP_SOUND_RANGE
+	_drop_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	add_child(_drop_player)
 
 
