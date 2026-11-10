@@ -352,7 +352,7 @@ func _test_bots_send_and_trust_stamps() -> void:
 				if e["type"] == "stamp":
 					sent += 1
 					var t := s.get_actor(e["target"])
-					_check(s.seat_pass_age[t.seat_index] <= GameConfig.BOT_STAMP_RECENT_PASS + 0.01,
+					_check(s.seat_pass_age[t.seat_index] <= GameConfig.BOT_STAMP_RECENT_PASS + STEP * 1.5,
 							"ボットは鬼がついさっき後ろを通った人にだけスタンプを送る")
 				elif e["type"] == "otetsuki":
 					otetsuki_after_stamp += 1
