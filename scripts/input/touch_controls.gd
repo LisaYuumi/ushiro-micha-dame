@@ -1,7 +1,12 @@
 class_name TouchControls
 extends CanvasLayer
 ## スマホ用の画面ボタン。押すとキーボードと同じ操作(アクション)を送るだけ。
-## PC でもマウスでクリックして使える。
+## スマホでは指ごとに扱うので、2本指で同時に押せる。PC ではマウスでクリックして使える。
+
+## ボタンと操作の組 [{"button": Button, "action": String}]
+var _buttons := []
+## 押している指の番号 -> 操作
+var _touch_action := {}
 
 
 func _ready() -> void:
@@ -43,9 +48,32 @@ func _add_button(text: String, action: String, anchor: Vector2, rect: Rect2, fon
 	b.offset_top = rect.position.y
 	b.offset_right = rect.position.x + rect.size.x
 	b.offset_bottom = rect.position.y + rect.size.y
+	# PC のマウス用
 	b.button_down.connect(_send.bind(action, true))
 	b.button_up.connect(_send.bind(action, false))
+	_buttons.append({"button": b, "action": action})
 	return b
+
+
+## スマホの指: ボタンの上に触れたら押す、その指を離したら離す
+func _input(event: InputEvent) -> void:
+	if not event is InputEventScreenTouch:
+		return
+	var t := event as InputEventScreenTouch
+	if t.pressed:
+		for entry in _buttons:
+			var b: Button = entry["button"]
+			if b.visible and b.get_global_rect().has_point(t.position):
+				_touch_action[t.index] = entry
+				b.modulate = Color(0.7, 0.85, 1.0, 1.0)
+				_send(entry["action"], true)
+				get_viewport().set_input_as_handled()
+				return
+	elif _touch_action.has(t.index):
+		var entry: Dictionary = _touch_action[t.index]
+		_touch_action.erase(t.index)
+		(entry["button"] as Button).modulate = Color(1, 1, 1, 0.85)
+		_send(entry["action"], false)
 
 
 func _send(action: String, pressed: bool) -> void:

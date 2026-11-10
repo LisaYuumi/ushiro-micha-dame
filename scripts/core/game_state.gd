@@ -184,10 +184,15 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 		events.append({"type": "otetsuki", "actor": actor_id})
 
 
-## ハンカチを拾って立ち上がる。振り向いていて、後ろにハンカチがあるときだけできる。
+## 後ろのハンカチを拾って立ち上がる。
+## 振り向いていなければ、まず振り向く(後ろに何もなければ、ふつうに振り向いたときと同じくお手つき)。
 func pick_up(actor_id: int) -> void:
 	var a := get_actor(actor_id)
-	if a == null or phase != Phase.DROPPED or not a.looking_back or not has_handkerchief_behind(a):
+	if a == null or a.role != Role.SEATED:
+		return
+	if not a.looking_back:
+		set_looking_back(actor_id, true)
+	if phase != Phase.DROPPED or not has_handkerchief_behind(a):
 		return
 	vacant_seat = a.seat_index
 	a.role = Role.CHASER
