@@ -8,8 +8,9 @@ const FRAME_WIDTH := 18.0
 var _help: Label
 var _message: Label
 var _message_left := 0.0
-## 自分に届いたスタンプ(画面の上に大きく)
-var _stamp_box: VBoxContainer
+## 自分に届いたスタンプ(画面の下に色付きの吹き出しで)
+var _stamp_box: PanelContainer
+var _stamp_style: StyleBoxFlat
 var _stamp_header: Label
 var _stamp: Label
 ## 自分に届いたスタンプの間、画面のふちを光らせる枠
@@ -71,8 +72,7 @@ func show_stamp(text: String, color: Color) -> void:
 		return
 
 	_stamp.text = text
-	_stamp.add_theme_color_override("font_outline_color", color)
-	_stamp_header.add_theme_color_override("font_outline_color", color)
+	_stamp_style.bg_color = color
 	_stamp_box.visible = true
 	for r in _frame:
 		r.color = color
@@ -118,26 +118,46 @@ func _build_stamp_display() -> void:
 				r.offset_left = -FRAME_WIDTH
 		_frame.append(r)
 
-	_stamp_box = VBoxContainer.new()
+	# 画面の下(スタンプボタンの上)に出す、色付きの吹き出し。
+	# ほかの人あてのスタンプは 3D の頭の上(画面の上のほう)に出るので、場所で区別できる
+	_stamp_style = StyleBoxFlat.new()
+	_stamp_style.set_corner_radius_all(28)
+	_stamp_style.set_border_width_all(6)
+	_stamp_style.border_color = Color.WHITE
+	_stamp_style.content_margin_left = 24
+	_stamp_style.content_margin_right = 24
+	_stamp_style.content_margin_top = 8
+	_stamp_style.content_margin_bottom = 12
+	_stamp_box = PanelContainer.new()
 	_stamp_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_stamp_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	_stamp_box.add_theme_stylebox_override("panel", _stamp_style)
 	add_child(_stamp_box)
-	_stamp_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_stamp_box.offset_left = -400
-	_stamp_box.offset_right = 400
-	_stamp_box.offset_top = 70
+	_stamp_box.anchor_left = 0.5
+	_stamp_box.anchor_right = 0.5
+	_stamp_box.anchor_top = 1.0
+	_stamp_box.anchor_bottom = 1.0
+	_stamp_box.offset_left = -210
+	_stamp_box.offset_right = 210
+	_stamp_box.offset_top = -330
+	_stamp_box.offset_bottom = -130
 	_stamp_box.visible = false
 
-	_stamp_header = _make_label(30, Color.WHITE)
-	_stamp_header.text = "▼ あなたへ ▼"
-	_stamp_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_stamp_header.add_theme_constant_override("outline_size", 10)
-	_stamp_box.add_child(_stamp_header)
+	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	_stamp_box.add_child(col)
 
-	_stamp = _make_label(80, Color.WHITE)
+	_stamp_header = _make_label(28, Color.WHITE)
+	_stamp_header.text = "あなたへ"
+	_stamp_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_stamp_header.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
+	col.add_child(_stamp_header)
+
+	_stamp = _make_label(72, Color.WHITE)
 	_stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_stamp.add_theme_constant_override("outline_size", 16)
-	_stamp_box.add_child(_stamp)
+	_stamp.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
+	_stamp.add_theme_constant_override("outline_size", 10)
+	col.add_child(_stamp)
 
 
 func _make_label(size: int, color: Color) -> Label:

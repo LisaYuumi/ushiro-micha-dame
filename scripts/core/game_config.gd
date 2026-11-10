@@ -88,7 +88,10 @@ const BOT_STAMP_HONEST_CHANCE := 0.5
 ## ボットが届いたスタンプを信じて振り向く確率(0〜1)
 const BOT_TRUST_CHANCE := 0.5
 ## ボットがスタンプを送る間隔(秒)。この範囲でランダム
-const BOT_STAMP_INTERVAL_MIN := 2.0
-const BOT_STAMP_INTERVAL_MAX := 9.0
+const BOT_STAMP_INTERVAL_MIN := 4.0
+const BOT_STAMP_INTERVAL_MAX := 12.0
+## ボットは、鬼がこの秒数以内に後ろを通った人にだけスタンプを送る
+## (鬼が通ってもいないのに「落ちてる!」と言わないように)
+const BOT_STAMP_RECENT_PASS := 6.0
 ## ボットが振り向いてから前を向くまで(秒)
 const BOT_LOOK_TIME := 0.8

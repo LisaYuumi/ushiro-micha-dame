@@ -60,6 +60,8 @@ var drop_target_seat: int = -1
 var drop_angle: float = 0.0
 ## 次に鬼が席の真後ろを通る角度
 var next_seat_crossing: float = 0.0
+## 鬼が最後にその席の真後ろを通ってから何秒たったか(席の番号順。まだ通っていなければ INF)
+var seat_pass_age: Array[float] = []
 ## 鬼が立ち止まっている残り時間(秒)
 var oni_pause_left: float = 0.0
 ## ハンカチが床に落ちているか
@@ -139,6 +141,9 @@ func start_round(seed_value: int = -1) -> void:
 	phase = Phase.WALKING
 	handkerchief_on_floor = false
 	oni_pause_left = 0.0
+	seat_pass_age.clear()
+	for i in GameConfig.SEAT_COUNT:
+		seat_pass_age.append(INF)
 	chaser_id = -1
 	vacant_seat = -1
 	oni_entering = false
@@ -152,6 +157,8 @@ func start_round(seed_value: int = -1) -> void:
 ## 時間を delta 秒すすめる。
 func tick(delta: float) -> void:
 	_tick_stamps(delta)
+	for i in seat_pass_age.size():
+		seat_pass_age[i] += delta
 	match phase:
 		Phase.WALKING, Phase.DROPPED:
 			_tick_walking(delta)
@@ -345,6 +352,7 @@ func _plan_drop() -> void:
 
 ## 鬼が席の真後ろに来たとき: 本当に落とす/ニセで立ち止まる/そのまま通りすぎる
 func _on_pass_behind_seat() -> void:
+	seat_pass_age[_seat_at_angle(oni_angle)] = 0.0
 	if phase == Phase.DROPPED and absf(oni_angle - (drop_angle + TAU)) < 0.001:
 		# 一周して戻ってきても気づかれなかった: 落とされた人の負け
 		var target := get_actor_at_seat(drop_target_seat)

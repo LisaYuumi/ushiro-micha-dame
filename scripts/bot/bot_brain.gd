@@ -71,7 +71,7 @@ func _update_look(state: GameState, a: GameState.Actor, delta: float) -> void:
 		state.set_looking_back(a.id, false)
 
 
-## ときどき誰かにスタンプを送る。半分は本当、半分は嘘
+## ときどき、鬼がついさっき後ろを通った人にスタンプを送る。半分は本当、半分は嘘
 func _update_stamp(state: GameState, a: GameState.Actor, delta: float) -> void:
 	if a.stamps_left == 0:
 		return
@@ -84,7 +84,9 @@ func _update_stamp(state: GameState, a: GameState.Actor, delta: float) -> void:
 
 	var targets := []
 	for t in state.actors:
-		if t.id != a.id and t.role == GameState.Role.SEATED and not state.active_stamps.has(t.id):
+		if t.id == a.id or t.role != GameState.Role.SEATED or state.active_stamps.has(t.id):
+			continue
+		if state.seat_pass_age[t.seat_index] <= GameConfig.BOT_STAMP_RECENT_PASS:
 			targets.append(t)
 	if targets.is_empty():
 		return

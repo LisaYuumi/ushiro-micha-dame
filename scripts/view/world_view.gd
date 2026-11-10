@@ -228,9 +228,10 @@ func _build_stamp_labels(state: GameState) -> void:
 		var l := Label3D.new()
 		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		l.font = HudFont.get_font()
-		l.font_size = 72
+		# ほかの人あてのスタンプは小さめに(自分あては画面の下の吹き出しに出る)
+		l.font_size = 44
 		l.pixel_size = 0.004
-		l.outline_size = 12
+		l.outline_size = 8
 		l.no_depth_test = true
 		l.position = Vector3(0, 2.25, 0)
 		l.visible = false
