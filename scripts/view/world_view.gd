@@ -275,6 +275,12 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 	var me := state.get_local_player()
 	if me == null or _seat_cam == null:
 		return
+	# 座っているときは自分の体を映さない。立ち上がって追いかけるときは映す
+	var self_bit := 1 << (SELF_LAYER - 1)
+	if me.role == GameState.Role.CHASER:
+		_seat_cam.cull_mask = 0xFFFFF
+	else:
+		_seat_cam.cull_mask = 0xFFFFF & ~self_bit
 	if me.role == GameState.Role.CHASER:
 		var out := Vector3(me.position.x, 0.0, me.position.z).normalized()
 		var want := me.position + out * GameConfig.CHASE_CAM_DISTANCE + Vector3(0, GameConfig.CHASE_CAM_HEIGHT, 0)
