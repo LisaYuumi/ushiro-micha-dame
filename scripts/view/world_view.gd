@@ -416,7 +416,9 @@ func _build_cameras(state: GameState) -> void:
 	var me := state.get_local_player()
 
 	_seat_cam = Camera3D.new()
-	_seat_cam.fov = 75
+	# 横の見える幅を固定する(横長の画面でも、両どなりの後ろが見えないように)
+	_seat_cam.keep_aspect = Camera3D.KEEP_WIDTH
+	_seat_cam.fov = GameConfig.SEAT_CAM_HFOV
 	_seat_cam.near = 0.05
 	# 自分の体のレイヤーを映さない
 	_seat_cam.cull_mask = 0xFFFFF & ~(1 << (SELF_LAYER - 1))

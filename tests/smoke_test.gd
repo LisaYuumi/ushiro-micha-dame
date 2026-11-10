@@ -43,6 +43,7 @@ func _initialize() -> void:
 	_test_banana_rules()
 	_test_banana_can_be_dodged()
 	_test_bots_throw_bananas()
+	_test_who_can_see_behind_whom()
 
 	_main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(_main)
@@ -760,6 +761,19 @@ func _test_bots_throw_bananas() -> void:
 				break
 	_check(thrown > 0, "ボットがバナナを投げることがある")
 	print("bot bananas thrown: %d, slips: %d" % [thrown, slips])
+
+
+func _test_who_can_see_behind_whom() -> void:
+	var n := GameConfig.SEAT_COUNT
+	for i in n:
+		_check(not GameState.can_see_behind(i, i), "自分の後ろは見えない")
+		_check(not GameState.can_see_behind(i, (i + 1) % n), "右どなりの後ろは見えない")
+		_check(not GameState.can_see_behind(i, (i + n - 1) % n), "左どなりの後ろは見えない")
+		var seen := 0
+		for j in n:
+			if GameState.can_see_behind(i, j):
+				seen += 1
+		_check(seen == n - 3, "見えるのは向かいの %d 人" % (n - 3))
 
 
 # --- 道具 ---

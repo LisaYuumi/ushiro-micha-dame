@@ -542,6 +542,14 @@ func get_local_player() -> Actor:
 	return get_actor(local_player_id)
 
 
+## 席 from に座っている人から、席 to の人の後ろが見えるか。
+## 両どなりは見えない(向かい側だけ見える)。見え方はカメラ(SEAT_CAM_HFOV)と合わせてある
+static func can_see_behind(from_seat: int, to_seat: int) -> bool:
+	var n := GameConfig.SEAT_COUNT
+	var d := posmod(to_seat - from_seat, n)
+	return d >= 2 and d <= n - 2
+
+
 ## 席に座っている人(いなければ null)
 func get_actor_at_seat(seat: int) -> Actor:
 	for a in actors:
