@@ -2,6 +2,13 @@
 
 だまし合いのオンライン・ハンカチ落とし。企画書は [SPEC.md](SPEC.md)。
 
+## スマホ・ブラウザで遊ぶ
+
+https://lisayuumi.github.io/ushiro-micha-dame/ (横向き推奨。音は最初に画面をタップすると鳴る)
+
+push するたびに GitHub Actions(`.github/workflows/web.yml`)が自動チェックを行い、
+Web版を `gh-pages` ブランチに書き出す。
+
 ## 動かし方(Windows)
 
 1. Godot 4.5.1 を入れる

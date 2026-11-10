@@ -75,6 +75,6 @@ func _update_help() -> void:
 			lines.append("【確認用】さっきの物音: %s" % _last_sound)
 	else:
 		lines.append("今のカメラ: 自分の席から見る")
-	lines.append("スペース(押している間): 振り向く")
+	lines.append("スペース or 「振り向く」ボタン(押している間): 振り向く")
 	lines.append("F1: カメラ切りかえ / R: やり直し / Esc: 終了")
 	hud.set_help("\n".join(lines))

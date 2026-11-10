@@ -1,0 +1,90 @@
+# push するたびに:
+#   1. 自動チェック(tests/smoke_test.gd)でスクリプトのエラーとルールを確認
+#   2. Web版に書き出して gh-pages ブランチに置く(GitHub Pages でスマホから遊べる)
+name: Web build
+
+on:
+  push:
+    branches: [main, claude/cool-hopper-41qzrz]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: web-build
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.5.1
+  FONT_URL: https://github.com/google/fonts/raw/main/ofl/mplusrounded1c/MPLUSRounded1c-Bold.ttf
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-web
+
+      - name: Download Godot and web export templates
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          mkdir -p ~/godot && cd ~/godot
+          curl -sSfL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip && mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" godot && rm godot.zip
+          curl -sSfL -o tpl.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q tpl.tpz
+          dest=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mkdir -p "$dest"
+          mv templates/version.txt templates/web_* "$dest/"
+          rm -rf templates tpl.tpz
+          ls "$dest"
+
+      - name: Download Japanese font
+        run: |
+          mkdir -p assets/fonts
+          curl -sSfL -o assets/fonts/MPLUSRounded1c-Bold.ttf "$FONT_URL"
+
+      - name: Import project
+        run: |
+          ~/godot/godot --headless --import 2>&1 | tee import.log || true
+
+      - name: Run checks
+        run: |
+          ~/godot/godot --headless -s res://tests/smoke_test.gd 2>&1 | tee test.log
+          grep -q "ALL TESTS PASSED" test.log
+          if grep -nE "SCRIPT ERROR|Parse Error|Compile Error|Failed to load script|FAIL:" import.log test.log; then
+            echo "::error::スクリプトのエラーが見つかりました(上のログを参照)"
+            exit 1
+          fi
+
+      - name: Export Web build
+        run: |
+          mkdir -p build/web
+          ~/godot/godot --headless --export-release "Web" build/web/index.html 2>&1 | tee export.log
+          test -f build/web/index.pck
+          test -f build/web/index.wasm
+          touch build/web/.nojekyll
+          ls -la build/web
+
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: build/web
+          publish_branch: gh-pages
+          force_orphan: true
+          commit_message: "Web build from ${{ github.ref_name }}@${{ github.sha }}"
