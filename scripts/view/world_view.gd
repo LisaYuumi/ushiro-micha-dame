@@ -50,10 +50,16 @@ func sync(state: GameState, delta: float) -> void:
 			node.position = a.position
 			# 振り向いた姿は全員に見える(体ごと大げさに後ろを向く)
 			node.rotation.y = a.yaw + PI * t
-	_update_seat_camera(state)
+	_update_seat_camera(state, delta)
 
-	_handkerchief.visible = state.handkerchief_on_floor
-	_handkerchief.position = state.handkerchief_position
+	var holder := state.get_actor(state.chaser_id)
+	if holder:
+		# 追いかける人が手に持っている
+		_handkerchief.visible = true
+		_handkerchief.position = holder.position + Vector3(0, 1.0, 0)
+	else:
+		_handkerchief.visible = state.handkerchief_on_floor
+		_handkerchief.position = state.handkerchief_position
 	_update_footsteps(state)
 
 
@@ -234,7 +240,7 @@ func _build_cameras(state: GameState) -> void:
 	_seat_cam.cull_mask = 0xFFFFF & ~(1 << (SELF_LAYER - 1))
 	add_child(_seat_cam)
 	_seat_cam.make_current()
-	_update_seat_camera(state)
+	_update_seat_camera(state, 0.0)
 
 	_top_cam = Camera3D.new()
 	_top_cam.fov = 60
@@ -242,10 +248,28 @@ func _build_cameras(state: GameState) -> void:
 	_top_cam.look_at_from_position(Vector3(0, 13, 6), Vector3.ZERO)
 
 
-## 自分の席のカメラ: 前を向いているときは輪の内側、振り向くと足元の後ろを見る
-func _update_seat_camera(state: GameState) -> void:
+## 今のカメラの向き(走る向きを画面に合わせるため、入力側が使う)
+func get_camera_basis() -> Basis:
+	var cam := get_viewport().get_camera_3d()
+	return cam.global_basis if cam else Basis.IDENTITY
+
+
+## 自分のカメラ:
+## - 座っているとき: 前は輪の内側、振り向くと足元の後ろを見る
+## - 追いかけているとき: 輪の外側・斜め上から自分を見る(画面の右が鬼の走る向き)
+func _update_seat_camera(state: GameState, delta: float) -> void:
 	var me := state.get_local_player()
 	if me == null or _seat_cam == null:
+		return
+	if me.role == GameState.Role.CHASER:
+		var out := Vector3(me.position.x, 0.0, me.position.z).normalized()
+		var want := me.position + out * GameConfig.CHASE_CAM_DISTANCE + Vector3(0, GameConfig.CHASE_CAM_HEIGHT, 0)
+		# 立ち上がった直後は一気に、そのあとはなめらかに追う
+		var w := 1.0 if delta == 0.0 else clampf(delta * 8.0, 0.0, 1.0)
+		var from := _seat_cam.position
+		if from.distance_to(want) > 6.0:
+			w = 1.0
+		_seat_cam.look_at_from_position(from.lerp(want, w), me.position + Vector3(0, 0.8, 0))
 		return
 	var t: float = _turn.get(me.id, 0.0)
 	var back_dir := Vector3(sin(me.yaw), 0.0, cos(me.yaw))

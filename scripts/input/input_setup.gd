@@ -3,17 +3,24 @@ extends RefCounted
 ## キー割り当てをまとめて登録する(project.godot を手で書かずに済むように)。
 
 const KEYS := {
-	"look_back": KEY_SPACE,
-	"debug_top_camera": KEY_F1,
-	"restart": KEY_R,
-	"quit": KEY_ESCAPE,
+	"look_back": [KEY_SPACE],
+	"pick_up": [KEY_E],
+	"move_left": [KEY_A, KEY_LEFT],
+	"move_right": [KEY_D, KEY_RIGHT],
+	"move_up": [KEY_W, KEY_UP],
+	"move_down": [KEY_S, KEY_DOWN],
+	"debug_top_camera": [KEY_F1],
+	"restart": [KEY_R],
+	"quit": [KEY_ESCAPE],
 }
 
 
 static func register() -> void:
 	for action in KEYS:
-		if not InputMap.has_action(action):
-			InputMap.add_action(action)
-		var ev := InputEventKey.new()
-		ev.physical_keycode = KEYS[action]
-		InputMap.action_add_event(action, ev)
+		if InputMap.has_action(action):
+			continue
+		InputMap.add_action(action)
+		for key in KEYS[action]:
+			var ev := InputEventKey.new()
+			ev.physical_keycode = key
+			InputMap.action_add_event(action, ev)

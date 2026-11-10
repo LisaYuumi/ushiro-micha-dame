@@ -8,6 +8,18 @@ func _ready() -> void:
 	layer = 2
 	# 右下: 振り向く(押している間)
 	_add_button("振り向く", "look_back", Vector2(1, 1), Rect2(-250, -250, 220, 220), 40)
+	_add_button("拾う", "pick_up", Vector2(1, 1), Rect2(-430, -170, 160, 140), 36)
+	# 左下: 走るためのスティック
+	var stick := VirtualStick.new()
+	add_child(stick)
+	stick.anchor_left = 0
+	stick.anchor_right = 0
+	stick.anchor_top = 1
+	stick.anchor_bottom = 1
+	stick.offset_left = 30
+	stick.offset_top = -250
+	stick.offset_right = 250
+	stick.offset_bottom = -30
 	# 右上: 確認用の操作
 	_add_button("上から見る", "debug_top_camera", Vector2(1, 0), Rect2(-410, 16, 190, 64), 24)
 	_add_button("やり直し", "restart", Vector2(1, 0), Rect2(-206, 16, 190, 64), 24)

@@ -9,9 +9,12 @@ extends RefCounted
 ## 将来のオンライン対戦では、ホストだけがこのクラスを動かし、
 ## snapshot() と events を全員に配る想定。
 
-enum Role { SEATED, ONI }
-## WALKING: 鬼がハンカチを持って歩いている / DROPPED: 落とした後
-enum Phase { WALKING, DROPPED }
+enum Role { SEATED, ONI, CHASER }
+## WALKING: 鬼がハンカチを持って歩いている
+## DROPPED: 落とした後、鬼は歩き続けている(もう一周で見逃し)
+## CHASE: 拾った人が鬼を追いかけている
+## RESULT: 勝敗が決まった
+enum Phase { WALKING, DROPPED, CHASE, RESULT }
 
 
 class Actor:
@@ -31,6 +34,8 @@ class Actor:
 	var looking_back: bool = false
 	## お手つきの回数(このステップでは数えるだけ。点数はまだ)
 	var otetsuki_count: int = 0
+	## 走る向き(追いかけるとき。長さ 0〜1)
+	var move_dir: Vector3 = Vector3.ZERO
 
 
 ## 席の位置(床の上)
@@ -58,6 +63,17 @@ var oni_pause_left: float = 0.0
 ## ハンカチが床に落ちているか
 var handkerchief_on_floor: bool = false
 var handkerchief_position: Vector3 = Vector3.ZERO
+
+## 追いかけている人の id(いなければ -1)
+var chaser_id: int = -1
+## 追いかける人が立って空いた席(鬼が座りに行く)
+var vacant_seat: int = -1
+## 鬼が空いた席の真後ろに着く角度
+var oni_seat_angle: float = 0.0
+## 鬼が輪から席に向かって入っているところか
+var oni_entering: bool = false
+## 勝敗。{"winner": id, "loser": id, "reason": "touched" / "sat" / "missed"}
+var result: Dictionary = {}
 
 ## 表示側へのお知らせ(Dictionary の配列)
 var events: Array = []
@@ -117,6 +133,10 @@ func start_round(seed_value: int = -1) -> void:
 	phase = Phase.WALKING
 	handkerchief_on_floor = false
 	oni_pause_left = 0.0
+	chaser_id = -1
+	vacant_seat = -1
+	oni_entering = false
+	result = {}
 	var step := TAU / GameConfig.SEAT_COUNT
 	next_seat_crossing = ceilf(oni_angle / step) * step
 	_plan_drop()
@@ -124,6 +144,14 @@ func start_round(seed_value: int = -1) -> void:
 
 ## 時間を delta 秒すすめる。
 func tick(delta: float) -> void:
+	match phase:
+		Phase.WALKING, Phase.DROPPED:
+			_tick_walking(delta)
+		Phase.CHASE:
+			_tick_chase(delta)
+
+
+func _tick_walking(delta: float) -> void:
 	if oni_pause_left > 0.0:
 		oni_pause_left -= delta
 		return
@@ -146,13 +174,45 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 	if a == null or a.role != Role.SEATED or a.looking_back == value:
 		return
 	a.looking_back = value
-	if not value:
+	# 追いかけっこ中・勝敗が出た後は、振り向いて見物してもお手つきにならない
+	if not value or phase == Phase.CHASE or phase == Phase.RESULT:
 		return
 	if has_handkerchief_behind(a):
 		events.append({"type": "found", "actor": actor_id})
 	else:
 		a.otetsuki_count += 1
 		events.append({"type": "otetsuki", "actor": actor_id})
+
+
+## ハンカチを拾って立ち上がる。振り向いていて、後ろにハンカチがあるときだけできる。
+func pick_up(actor_id: int) -> void:
+	var a := get_actor(actor_id)
+	if a == null or phase != Phase.DROPPED or not a.looking_back or not has_handkerchief_behind(a):
+		return
+	vacant_seat = a.seat_index
+	a.role = Role.CHASER
+	a.seat_index = -1
+	a.looking_back = false
+	a.position = handkerchief_position
+	a.yaw = drop_angle - PI / 2.0
+	chaser_id = a.id
+	handkerchief_on_floor = false
+	phase = Phase.CHASE
+	# 鬼は気づいてすぐ走り出す。空いた席まで(少なくとも一度は)輪を回ってから座る
+	oni_pause_left = 0.0
+	oni_entering = false
+	var target := seat_angle(vacant_seat)
+	oni_seat_angle = target + ceilf((oni_angle - target + 0.001) / TAU) * TAU
+	events.append({"type": "picked_up", "actor": a.id})
+
+
+## 走る向きを決める(追いかける人だけ)。dir は床の上の向き、長さ 0〜1。
+func set_move(actor_id: int, dir: Vector3) -> void:
+	var a := get_actor(actor_id)
+	if a == null:
+		return
+	dir.y = 0.0
+	a.move_dir = dir.limit_length(1.0)
 
 
 ## この人の後ろにハンカチが落ちているか
@@ -205,6 +265,7 @@ func snapshot() -> Dictionary:
 			"yaw": a.yaw,
 			"looking_back": a.looking_back,
 			"otetsuki": a.otetsuki_count,
+			"move": a.move_dir,
 		})
 	return {
 		"actors": list,
@@ -212,6 +273,9 @@ func snapshot() -> Dictionary:
 		"oni_angle": oni_angle,
 		"handkerchief_on_floor": handkerchief_on_floor,
 		"handkerchief_pos": handkerchief_position,
+		"chaser": chaser_id,
+		"vacant_seat": vacant_seat,
+		"result": result,
 	}
 
 
@@ -230,6 +294,11 @@ func _plan_drop() -> void:
 
 ## 鬼が席の真後ろに来たとき: 本当に落とす/ニセで立ち止まる/そのまま通りすぎる
 func _on_pass_behind_seat() -> void:
+	if phase == Phase.DROPPED and absf(oni_angle - (drop_angle + TAU)) < 0.001:
+		# 一周して戻ってきても気づかれなかった: 落とされた人の負け
+		var target := get_actor_at_seat(drop_target_seat)
+		_finish(oni_id, target.id, "missed")
+		return
 	if phase == Phase.WALKING and absf(oni_angle - drop_angle) < 0.001:
 		oni_pause_left = GameConfig.ONI_PAUSE_TIME
 		_drop()
@@ -242,6 +311,66 @@ func _on_pass_behind_seat() -> void:
 				"seat": _seat_at_angle(oni_angle),
 				"pos": _ring_point(oni_angle, GameConfig.DROP_RADIUS),
 			})
+
+
+func _tick_chase(delta: float) -> void:
+	var oni := get_actor(oni_id)
+	var chaser := get_actor(chaser_id)
+	_move_chaser(chaser, delta)
+
+	var sat := false
+	if oni_entering:
+		var seat_pos := seat_positions[vacant_seat]
+		var to_seat := seat_pos - oni.position
+		if to_seat.length() > 0.001:
+			oni.yaw = atan2(-to_seat.x, -to_seat.z)
+		oni.position = oni.position.move_toward(seat_pos, GameConfig.ONI_RUN_SPEED * delta)
+		sat = oni.position.distance_to(seat_pos) < 0.01
+	else:
+		oni_angle = minf(oni_angle + GameConfig.ONI_RUN_SPEED / GameConfig.ONI_WALK_RADIUS * delta, oni_seat_angle)
+		_place_on_walk_ring(oni, oni_angle)
+		oni_entering = oni_angle >= oni_seat_angle
+
+	if _flat_distance(chaser.position, oni.position) <= GameConfig.TOUCH_DISTANCE:
+		_finish(chaser_id, oni_id, "touched")
+	elif sat:
+		_sit(oni, vacant_seat)
+		_finish(oni_id, chaser_id, "sat")
+
+
+## 追いかける人を動かす。席の内側には入れず、(設定により)鬼と逆向きには走れない。
+func _move_chaser(a: Actor, delta: float) -> void:
+	var dir := a.move_dir
+	if dir.length_squared() < 0.0001:
+		return
+	if not GameConfig.CHASER_CAN_RUN_BACKWARD:
+		var ang := atan2(a.position.x, a.position.z)
+		# 鬼が走る向き(角度が増える向き)
+		var forward := Vector3(cos(ang), 0.0, -sin(ang))
+		var along := dir.dot(forward)
+		if along < 0.0:
+			dir -= forward * along
+	var p := a.position + dir * GameConfig.CHASER_SPEED * delta
+	var flat := Vector2(p.x, p.z)
+	var r := clampf(flat.length(), GameConfig.CHASER_MIN_RADIUS, GameConfig.CHASER_MAX_RADIUS)
+	flat = flat.normalized() * r
+	a.position = Vector3(flat.x, 0.0, flat.y)
+	if dir.length_squared() > 0.0001:
+		a.yaw = atan2(-dir.x, -dir.z)
+
+
+func _finish(winner_id: int, loser_id: int, reason: String) -> void:
+	phase = Phase.RESULT
+	result = {"winner": winner_id, "loser": loser_id, "reason": reason}
+	for a in actors:
+		a.move_dir = Vector3.ZERO
+	var e := result.duplicate()
+	e["type"] = "result"
+	events.append(e)
+
+
+func _flat_distance(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
 
 
 func _seat_at_angle(angle: float) -> int:

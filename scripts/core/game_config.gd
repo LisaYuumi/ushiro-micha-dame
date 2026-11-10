@@ -48,3 +48,27 @@ const SEAT_CAM_PITCH_BACK := -55.0
 const LOOK_BACK_LEAN := 0.2
 ## 「お手つき!」などの表示時間(秒)
 const MESSAGE_TIME := 1.5
+
+# --- 追いかけっこ ---
+## 鬼が走る速さ(メートル/秒)
+const ONI_RUN_SPEED := 3.0
+## 追いかける人の速さ(メートル/秒)。鬼よりわずかに速い
+const CHASER_SPEED := 3.3
+## この距離(メートル)まで近づいたらタッチ成立
+const TOUCH_DISTANCE := 1.0
+## 追いかける人が走れる範囲(輪の中心からの距離)。席の内側には入れない
+const CHASER_MIN_RADIUS := 3.55
+const CHASER_MAX_RADIUS := 6.0
+## 追いかける人が鬼と逆向きに走れるか(false: 同じ向きにしか走れない)
+const CHASER_CAN_RUN_BACKWARD := false
+
+# --- ボット ---
+## 後ろにハンカチを落とされたボットが気づくまでの時間(秒)。この範囲でランダム。
+## 鬼がもう一周してくるまで(約17秒)に気づかなければ見逃し
+const BOT_NOTICE_TIME_MIN := 1.5
+const BOT_NOTICE_TIME_MAX := 22.0
+
+# --- 追いかけるときのカメラ ---
+## 自分が追いかけるとき、カメラを輪の外側のどれだけ後ろ・上に置くか(メートル)
+const CHASE_CAM_DISTANCE := 3.0
+const CHASE_CAM_HEIGHT := 3.2
