@@ -1,0 +1,14 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/view/world_view.gd" id="2_view"]
+[ext_resource type="Script" path="res://scripts/view/hud.gd" id="3_hud"]
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_main")
+
+[node name="WorldView" type="Node3D" parent="."]
+script = ExtResource("2_view")
+
+[node name="Hud" type="CanvasLayer" parent="."]
+script = ExtResource("3_hud")
