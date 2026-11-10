@@ -57,6 +57,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_start_round()
 	elif event.is_action_pressed("sound_test"):
 		view.play_test_beep()
+	elif event.is_action_pressed("quit"):
+		get_tree().quit()
 	else:
 		for i in Stamps.ALL.size():
 			if event.is_action_pressed("stamp_%d" % i):
@@ -73,8 +75,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			if id >= 0:
 				_stamp_target = id
 				_update_help()
-	elif event.is_action_pressed("quit"):
-		get_tree().quit()
 
 
 func _send_stamp(kind: String) -> void:
