@@ -165,6 +165,7 @@ func _test_decoy_rustle_is_behind_a_seat() -> void:
 func _test_bot_cannot_look_back_as_oni() -> void:
 	var s := GameState.new()
 	s.start_round(7)
+	s.take_events() # 「ラウンド開始」のお知らせを読み捨てる
 	s.set_looking_back(s.oni_id, true)
 	_check(s.take_events().is_empty(), "鬼は振り向き判定の対象外")
 
