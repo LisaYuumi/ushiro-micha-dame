@@ -9,6 +9,8 @@ var bots := BotBrain.new()
 var _last_sound := ""
 ## スタンプを送る相手(画面でタップして選ぶ。-1 は未選択)
 var _stamp_target := -1
+## Web版で、最初のタップを待っている間は true(ゲームを止めておく)
+var _waiting_start := false
 
 @onready var view: WorldView = $WorldView
 @onready var hud: Hud = $Hud
@@ -18,6 +20,17 @@ func _ready() -> void:
 	InputSetup.register()
 	state = GameState.new()
 	_start_round()
+	if OS.has_feature("web"):
+		_waiting_start = true
+		var gate := StartGate.new()
+		gate.started.connect(_on_start_tapped)
+		add_child(gate) # いちばん最後の子にして、最初に入力を受け取る
+		hud.show_message("タップしてスタート\n(音が鳴ります)", Color(0.2, 0.4, 0.8), 0.0)
+
+
+func _on_start_tapped() -> void:
+	_waiting_start = false
+	hud.hide_message()
 
 
 func _start_round() -> void:
@@ -32,6 +45,8 @@ func _start_round() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _waiting_start:
+		return
 	PlayerInput.apply(state, view.get_camera_basis())
 	bots.update(state, delta)
 	state.tick(delta)
