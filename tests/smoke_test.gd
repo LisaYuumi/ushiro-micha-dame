@@ -254,10 +254,18 @@ func _test_chaser_cannot_run_backward_or_inside() -> void:
 		s.tick(STEP)
 	var r := Vector2(c.position.x, c.position.z).length()
 	_check(r >= GameConfig.CHASER_MIN_RADIUS - 0.001, "席の内側には入れない")
-	var p0 := c.position
-	s.set_move(c.id, -Vector3(c.position.x, 0.0, c.position.z).normalized())
-	s.tick(STEP)
-	var speed := c.position.distance_to(p0) / STEP
+
+	# 内側の端で内側を押しても速さが落ちないか(追いかけっこが続いているうちに測る)
+	var s2 := _chasing_state(23)
+	var c2 := s2.get_actor(s2.chaser_id)
+	for i in 30:
+		s2.set_move(c2.id, -Vector3(c2.position.x, 0.0, c2.position.z).normalized())
+		s2.tick(STEP)
+	_check(s2.phase == GameState.Phase.CHASE, "(確認用)まだ追いかけっこ中")
+	var p0 := c2.position
+	s2.set_move(c2.id, -Vector3(c2.position.x, 0.0, c2.position.z).normalized())
+	s2.tick(STEP)
+	var speed := c2.position.distance_to(p0) / STEP
 	_check(absf(speed - GameConfig.CHASER_SPEED) < 0.05, "内側の端で内側を押しても速さは落ちない")
 
 
