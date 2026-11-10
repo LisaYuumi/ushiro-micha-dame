@@ -39,7 +39,7 @@ func _update_seated(state: GameState, a: GameState.Actor, delta: float) -> void:
 		state.pick_up(a.id)
 
 
-## 追いかけるボット: 鬼にまっすぐ向かう(走れない向きは GameState が止める)
+## 追いかけるボット: 鬼のほうへハンドルを切る(前へは自動で走る)
 func _update_chaser(state: GameState, a: GameState.Actor) -> void:
 	var oni := state.get_actor(state.oni_id)
 	var to_oni := oni.position - a.position

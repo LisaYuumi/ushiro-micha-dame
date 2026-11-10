@@ -206,7 +206,8 @@ func pick_up(actor_id: int) -> void:
 	events.append({"type": "picked_up", "actor": a.id})
 
 
-## 走る向きを決める(追いかける人だけ)。dir は床の上の向き、長さ 0〜1。
+## 走る向きの希望を伝える(追いかける人だけ)。dir は床の上の向き、長さ 0〜1。
+## 追いかける人は自動で前に走るので、使われるのは「内側/外側」の成分だけ。
 func set_move(actor_id: int, dir: Vector3) -> void:
 	var a := get_actor(actor_id)
 	if a == null:
@@ -338,25 +339,21 @@ func _tick_chase(delta: float) -> void:
 		_finish(oni_id, chaser_id, "sat")
 
 
-## 追いかける人を動かす。席の内側には入れず、(設定により)鬼と逆向きには走れない。
+## 追いかける人を動かす。鬼と同じ向きに自動で走り続け、内側/外側にだけ曲がれる。
+## 席の内側には入れない。立ち止まって待ちぶせはできない。
 func _move_chaser(a: Actor, delta: float) -> void:
-	var dir := a.move_dir
-	if dir.length_squared() < 0.0001:
-		return
-	if not GameConfig.CHASER_CAN_RUN_BACKWARD:
-		var ang := atan2(a.position.x, a.position.z)
-		# 鬼が走る向き(角度が増える向き)
-		var forward := Vector3(cos(ang), 0.0, -sin(ang))
-		var along := dir.dot(forward)
-		if along < 0.0:
-			dir -= forward * along
+	var ang := atan2(a.position.x, a.position.z)
+	# 鬼が走る向き(角度が増える向き)と、輪の外向き
+	var forward := Vector3(cos(ang), 0.0, -sin(ang))
+	var outward := Vector3(sin(ang), 0.0, cos(ang))
+	var steer := clampf(a.move_dir.dot(outward), -1.0, 1.0) * GameConfig.CHASER_STEER
+	var dir := (forward + outward * steer).normalized()
 	var p := a.position + dir * GameConfig.CHASER_SPEED * delta
 	var flat := Vector2(p.x, p.z)
 	var r := clampf(flat.length(), GameConfig.CHASER_MIN_RADIUS, GameConfig.CHASER_MAX_RADIUS)
 	flat = flat.normalized() * r
 	a.position = Vector3(flat.x, 0.0, flat.y)
-	if dir.length_squared() > 0.0001:
-		a.yaw = atan2(-dir.x, -dir.z)
+	a.yaw = atan2(-dir.x, -dir.z)
 
 
 func _finish(winner_id: int, loser_id: int, reason: String) -> void:

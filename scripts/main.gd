@@ -119,7 +119,7 @@ func _update_help() -> void:
 		if _last_sound != "":
 			lines.append("【確認用】さっきの物音: %s" % _last_sound)
 	if me.role == GameState.Role.CHASER:
-		lines.append("矢印キー / WASD / 左下のスティック: 走る")
+		lines.append("自動で走る! ↑(W)/スティック上: 内側へ(近道)  ↓(S): 外側へ")
 	else:
 		lines.append("スペース /「振り向く」(押している間): 振り向く")
 		lines.append("E /「拾う」: 後ろのハンカチを拾う")

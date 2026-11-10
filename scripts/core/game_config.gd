@@ -60,8 +60,9 @@ const TOUCH_DISTANCE := 1.0
 ## 追いかける人が走れる範囲(輪の中心からの距離)。席の内側には入れない
 const CHASER_MIN_RADIUS := 3.55
 const CHASER_MAX_RADIUS := 6.0
-## 追いかける人が鬼と逆向きに走れるか(false: 同じ向きにしか走れない)
-const CHASER_CAN_RUN_BACKWARD := false
+## 追いかける人は自動で鬼と同じ向きに走り続ける。操作は内側/外側へのハンドルだけ。
+## 1.0 で、いっぱいに切ると斜め45度に曲がる
+const CHASER_STEER := 1.0
 
 # --- ボット ---
 ## 後ろにハンカチを落とされたボットが気づくまでの時間(秒)。この範囲でランダム。

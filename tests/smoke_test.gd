@@ -23,7 +23,7 @@ func _initialize() -> void:
 	_test_pick_up_rules()
 	_test_oni_sits_if_chaser_stands_still()
 	_test_touch_wins()
-	_test_waiting_at_own_seat_currently_wins()
+	_test_chaser_never_stops()
 	_test_chaser_cannot_run_backward_or_inside()
 	_test_no_otetsuki_during_chase()
 	_test_rounds_with_bots_always_finish()
@@ -185,14 +185,18 @@ func _test_pick_up_rules() -> void:
 
 func _test_oni_sits_if_chaser_stands_still() -> void:
 	var s := _chasing_state(17)
-	# 追う人を鬼の通り道から外す(輪のいちばん外側へ)
+	# 外側ばかり走ると遠回りで追いつけない
 	var c := s.get_actor(s.chaser_id)
-	for i in 120:
+	var e := {}
+	for i in int(60.0 / STEP):
 		s.set_move(c.id, Vector3(c.position.x, 0.0, c.position.z).normalized())
 		s.tick(STEP)
-	s.set_move(c.id, Vector3.ZERO)
-	var e := _run_until(s, "result", 60.0)
-	_check(not e.is_empty() and e["reason"] == "sat", "追いかけなければ鬼が座る")
+		for ev in s.take_events():
+			if ev["type"] == "result":
+				e = ev
+		if not e.is_empty():
+			break
+	_check(not e.is_empty() and e["reason"] == "sat", "外側ばかり走ると鬼に座られる")
 	if e.is_empty():
 		return
 	var oni := s.get_actor(s.oni_id)
@@ -201,11 +205,14 @@ func _test_oni_sits_if_chaser_stands_still() -> void:
 	_check(oni.position.distance_to(s.seat_positions[s.vacant_seat]) < 0.05, "鬼は席の位置にいる")
 
 
-## いまのルールの抜け道(確認待ち): 拾った場所で待っているだけでタッチできてしまう
-func _test_waiting_at_own_seat_currently_wins() -> void:
+func _test_chaser_never_stops() -> void:
 	var s := _chasing_state(31)
-	var e := _run_until(s, "result", 60.0)
-	print("waiting at own seat -> ", e.get("reason"))
+	var c := s.get_actor(s.chaser_id)
+	var before := c.position
+	s.set_move(c.id, Vector3.ZERO)
+	for i in 30:
+		s.tick(STEP)
+	_check(c.position.distance_to(before) > 1.0, "何も押さなくても前に走る(待ちぶせできない)")
 
 
 func _test_touch_wins() -> void:
@@ -235,7 +242,7 @@ func _test_chaser_cannot_run_backward_or_inside() -> void:
 		s.set_move(c.id, backward)
 		s.tick(STEP)
 	var moved := wrapf(atan2(c.position.x, c.position.z) - start_angle, -PI, PI)
-	_check(moved > -0.001, "鬼と逆向きには走れない")
+	_check(moved > 0.1, "逆向きを押しても、鬼と同じ向きに自動で走り続ける")
 	for i in 120:
 		s.set_move(c.id, -Vector3(c.position.x, 0.0, c.position.z).normalized())
 		s.tick(STEP)
