@@ -9,6 +9,7 @@ static var _footstep: AudioStreamWAV
 static var _drop: AudioStreamWAV
 static var _beep: AudioStreamWAV
 static var _stamp := {}
+static var _voice := {}
 
 
 ## 「ざっ」という足音(スマホのスピーカーでも聞こえるよう、高めでくっきり)
@@ -39,6 +40,55 @@ static func stamp(kind: String) -> AudioStreamWAV:
 			_:
 				_stamp[kind] = _make(0.2, 0.0, 10.0, 990.0, 1.0, 0.6)
 	return _stamp[kind]
+
+
+## 鬼の声(仮の音)
+static func voice(kind: String) -> AudioStreamWAV:
+	if not _voice.has(kind):
+		match kind:
+			Voices.COUGH:
+				# 「ゴホッゴホッ」: こもったノイズを2回
+				_voice[kind] = _make_fn(0.45, func(t: float, n: float) -> float:
+					var k := fmod(t, 0.22)
+					return n * exp(-k * 25.0) * (1.0 if t < 0.4 else 0.0) * 0.9)
+			Voices.WHISTLE:
+				# 「ヒューッ」: 高い音がすべり上がる
+				_voice[kind] = _make_fn(0.6, func(t: float, _n: float) -> float:
+					var f := 1300.0 + 900.0 * t / 0.6
+					return sin(TAU * f * t) * minf(t * 20.0, 1.0) * maxf(1.0 - t / 0.6, 0.0) * 0.5)
+			Voices.CLAP:
+				# 「パンパン」
+				_voice[kind] = _make_fn(0.35, func(t: float, n: float) -> float:
+					var k := fmod(t, 0.17)
+					return n * exp(-k * 60.0))
+			_:
+				# 「あーっ!」: 声っぽい低めの音に、ゆれ
+				_voice[kind] = _make_fn(0.7, func(t: float, _n: float) -> float:
+					var f := 240.0 + 10.0 * sin(TAU * 6.0 * t)
+					var v := sin(TAU * f * t) + 0.5 * sin(TAU * 2.0 * f * t) + 0.3 * sin(TAU * 3.0 * f * t)
+					return v * minf(t * 15.0, 1.0) * maxf(1.0 - t / 0.7, 0.0) * 0.4)
+	return _voice[kind]
+
+
+## 時刻 t とノイズ n から音の高さを決める関数で、音を作る
+static func _make_fn(duration: float, f: Callable) -> AudioStreamWAV:
+	var n := int(duration * RATE)
+	var data := PackedByteArray()
+	data.resize(n * 2)
+	var noise_rng := RandomNumberGenerator.new()
+	noise_rng.seed = 777
+	var y := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		y += 0.5 * (noise_rng.randf_range(-1.0, 1.0) - y)
+		var v: float = f.call(t, y * 2.0)
+		data.encode_s16(i * 2, int(clampf(v, -1.0, 1.0) * 32767.0))
+	var w := AudioStreamWAV.new()
+	w.format = AudioStreamWAV.FORMAT_16_BITS
+	w.mix_rate = RATE
+	w.stereo = false
+	w.data = data
+	return w
 
 
 ## 音テスト用の「ピー」

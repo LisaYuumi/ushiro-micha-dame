@@ -68,6 +68,9 @@ func _physics_process(delta: float) -> void:
 	if state.get_actor(_stamp_target) == null or state.get_actor(_stamp_target).role != GameState.Role.SEATED:
 		_stamp_target = -1
 	view.set_stamp_target(state, _stamp_target)
+	var me := state.get_local_player()
+	touch.set_oni_mode(state.oni_is_player,
+			me.role == GameState.Role.SEATED and state.phase == GameState.Phase.CHASE)
 	if state.oni_is_player:
 		# 何周目かの表示を更新する
 		_update_help()
@@ -94,7 +97,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_tree().quit()
 	else:
 		for i in Stamps.ALL.size():
-			if event.is_action_pressed("stamp_%d" % i):
+			if not state.oni_is_player and event.is_action_pressed("stamp_%d" % i):
 				_send_stamp(Stamps.ALL[i])
 				return
 		# 画面に映っている人をタップ/クリックすると、スタンプを送る相手になる
@@ -174,6 +177,14 @@ func _show_event(e: Dictionary) -> void:
 			_last_sound = "本物"
 		"rustle":
 			_last_sound = "ニセ"
+		"banana":
+			var who := "あなた" if e["sender"] == me else _name(e["sender"])
+			var whom := "鬼" if e["target"] == state.oni_id else "追う人"
+			if e["target"] == me:
+				whom = "あなた"
+			hud.show_message("%s が %s にバナナ!" % [who, whom], Color(0.85, 0.7, 0.0), 1.2)
+		"slip":
+			hud.show_message("つるっ! %s が転んだ" % ("あなた" if e["actor"] == me else _name(e["actor"])), Color(0.85, 0.7, 0.0), 1.2)
 		"drop_failed":
 			if e["actor"] == me:
 				hud.show_message("席の後ろで押してね", Color(0.3, 0.3, 0.3), 1.0)
@@ -266,13 +277,17 @@ func _update_help() -> void:
 			lines.append("【確認用】さっきの物音: %s" % _last_sound)
 	if me.role == GameState.Role.CHASER or (me.role == GameState.Role.ONI and state.phase == GameState.Phase.CHASE):
 		lines.append("自動で走る! ↑(W)/スティック上: 内側へ(近道)  ↓(S): 外側へ")
+		lines.append("前に落ちたバナナの皮は、曲がってよけよう")
+	elif state.phase == GameState.Phase.CHASE:
+		lines.append("B: 鬼にバナナ / N: 追う人にバナナ(1ラウンド %d 個)" % GameConfig.BANANAS_PER_ROUND)
 	elif me.role == GameState.Role.ONI:
 		var laps := int((state.oni_angle - state.oni_start_angle) / TAU) + 1
 		lines.append("%d 周目 (%d 周しても落とさないと自動で落とす)" % [laps, GameConfig.ONI_MAX_LAPS_BEFORE_DROP])
 		lines.append("→(D)/スティック右: 速く  ←(A): ゆっくり")
 		lines.append("スペース /「止まる」(押している間): 止まる")
 		lines.append("E /「落とす」: いちばん近い席の後ろに落とす(1回だけ)")
-		lines.append("F /「ふり」: 落とすふり(物音だけ)")
+		lines.append("1〜4 / 咳・口笛・手拍子・叫ぶ: 声を出す")
+		lines.append("  声のすぐあと(0.8秒以内)に落とすと、置く音がかき消される")
 	else:
 		lines.append("スペース /「振り向く」(押している間): 振り向く")
 		lines.append("E /「拾う」: 後ろのハンカチを拾う")

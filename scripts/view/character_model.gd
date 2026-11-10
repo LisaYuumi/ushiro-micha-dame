@@ -27,6 +27,7 @@ var _hop := 0.0
 var _lean := 0.0
 var _slump := 0.0
 var _time := 0.0
+var _slip := 0.0
 
 
 func build(color: Color, display_name: String, font: Font) -> void:
@@ -132,6 +133,11 @@ func hop() -> void:
 	_hop = 1.0
 
 
+## バナナの皮で、つるっと転ぶ
+func slip() -> void:
+	_slip = 1.0
+
+
 ## 毎フレームの動き。running: 走っている(前のめり)
 func animate(delta: float, running: bool) -> void:
 	_time += delta
@@ -142,7 +148,10 @@ func animate(delta: float, running: bool) -> void:
 	# 走るときは前(-Z)に傾けて小刻みに揺らす。負けたらうなだれる
 	var bob := sin(_time * 18.0) * 0.04 * _lean
 	_pivot.position = Vector3(0, hop_y + bob, 0)
-	_pivot.rotation.x = -0.35 * _lean - 0.25 * _slump
+	_slip = maxf(_slip - delta / GameConfig.SLIP_TIME, 0.0)
+	# 転ぶ: 横にばったり倒れて、だんだん起き上がる
+	_pivot.rotation.z = sin(minf(_slip * 3.0, 1.0) * PI / 2.0) * 1.3 * minf(_slip * 1.5, 1.0)
+	_pivot.rotation.x = -0.35 * _lean * (1.0 - _slip) - 0.25 * _slump
 	_pivot.scale = Vector3(1.0, 1.0 - 0.08 * _slump, 1.0)
 	# 汗はぷるぷる揺れる
 	if _sweat.visible:

@@ -38,6 +38,11 @@ func _initialize() -> void:
 	_test_match_next_oni_is_loser()
 	_test_match_scores_and_end()
 	_test_heavier_items_slow_the_chaser()
+	_test_oni_voice_masks_the_drop()
+	_test_bot_oni_uses_voices()
+	_test_banana_rules()
+	_test_banana_can_be_dodged()
+	_test_bots_throw_bananas()
 
 	_main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(_main)
@@ -62,6 +67,10 @@ func _process(_delta: float) -> bool:
 	elif _frames == 120:
 		_press("sound_test", true)
 		_press("sound_test", false)
+		_press("voice_0", true)
+		_press("voice_0", false)
+		_press("banana_oni", true)
+		_press("banana_oni", false)
 		# 相手を選ばずにスタンプ → 相手を選んでスタンプ
 		_press("stamp_0", true)
 		_press("stamp_0", false)
@@ -624,6 +633,133 @@ func _test_heavier_items_slow_the_chaser() -> void:
 		speeds.append(target.position.distance_to(p0) / STEP)
 	_check(speeds[1] < speeds[0] * 0.8, "教卓を持つと、ハンカチより遅い")
 	print("chaser speed: handkerchief %.2f / heaviest %.2f" % [speeds[0], speeds[1]])
+
+
+func _test_oni_voice_masks_the_drop() -> void:
+	var s := GameState.new()
+	s.start_match(71, true)
+	var oni := s.oni_id
+	_check(s.oni_voice(oni, Voices.WHISTLE), "鬼は声を出せる")
+	_check(_has(s.take_events(), "voice"), "声のお知らせが出る")
+	_check(not s.oni_voice(oni, Voices.COUGH), "すぐには続けて出せない")
+	_check(not s.oni_voice(0, Voices.COUGH), "座っている人は鬼の声を出せない")
+	# 席の後ろまで歩いて、声を出してすぐ落とす → かき消される
+	while s.oni_angle < s.next_seat_crossing - 0.01:
+		s.tick(STEP)
+	for i in int(GameConfig.ONI_VOICE_COOLDOWN / STEP) + 2:
+		s.set_oni_stop(oni, true)
+		s.tick(STEP)
+	_check(s.oni_voice(oni, Voices.CLAP), "休んだあとはまた出せる")
+	s.tick(STEP)
+	_check(s.oni_drop(oni), "(確認用)落とせる")
+	var dropped := {}
+	for e in s.take_events():
+		if e["type"] == "dropped":
+			dropped = e
+	_check(dropped.get("masked", false), "声のすぐあとに落とすと、置く音がかき消される")
+	# 声を出さずに落とすと、かき消されない
+	var s2 := GameState.new()
+	s2.start_match(71, true)
+	while s2.oni_angle < s2.next_seat_crossing - 0.01:
+		s2.tick(STEP)
+	s2.oni_drop(s2.oni_id)
+	var d2 := {}
+	for e in s2.take_events():
+		if e["type"] == "dropped":
+			d2 = e
+	_check(not d2.get("masked", true), "声を出さなければ、置く音はそのまま")
+
+
+func _test_bot_oni_uses_voices() -> void:
+	var voices := 0
+	var masked := 0
+	for seed_value in 20:
+		var s := GameState.new()
+		s.start_match(seed_value)
+		for i in int(60.0 / STEP):
+			s.tick(STEP)
+			for e in s.take_events():
+				if e["type"] == "voice":
+					voices += 1
+				elif e["type"] == "dropped" and e["masked"]:
+					masked += 1
+	_check(voices > 0, "ボットの鬼も声を出す")
+	_check(masked > 0, "ボットの鬼も、声で置く音をかき消すことがある")
+
+
+func _test_banana_rules() -> void:
+	var s := _chasing_state(73)
+	var thrower := s.get_actor_at_seat((s.vacant_seat + 2) % GameConfig.SEAT_COUNT)
+	var s0 := _dropped_state(73)
+	_check(not s0.throw_banana(thrower.id, s0.oni_id), "追いかけっこの前は投げられない")
+	_check(not s.throw_banana(s.oni_id, s.chaser_id), "鬼は投げられない")
+	_check(not s.throw_banana(thrower.id, thrower.id), "座っている人には投げられない")
+	_check(s.throw_banana(thrower.id, s.chaser_id), "追いかける人に投げられる")
+	_check(not s.throw_banana(thrower.id, s.oni_id), "1ラウンド1個まで")
+	var other := s.get_actor_at_seat((s.vacant_seat + 3) % GameConfig.SEAT_COUNT)
+	_check(s.throw_banana(other.id, s.oni_id), "鬼にも投げられる")
+	_check(s.bananas.size() == 2, "床にバナナが2つ")
+	# 追いかける人はまっすぐ走ると踏んで転ぶ
+	var c := s.get_actor(s.chaser_id)
+	var slipped := false
+	for i in int(2.0 / STEP):
+		s.set_move(c.id, Vector3.ZERO)
+		s.tick(STEP)
+		for e in s.take_events():
+			if e["type"] == "slip" and e["actor"] == c.id:
+				slipped = true
+		if slipped or s.phase != GameState.Phase.CHASE:
+			break
+	_check(slipped, "前に落ちたバナナをよけないと転ぶ")
+	if slipped and s.phase == GameState.Phase.CHASE:
+		var p0 := c.position
+		for i in int(0.5 / STEP):
+			s.tick(STEP)
+		_check(c.position.distance_to(p0) < 0.01, "転んでいる間は止まる")
+		for i in int(GameConfig.SLIP_TIME / STEP) + 2:
+			s.tick(STEP)
+		var p1 := c.position
+		s.tick(STEP)
+		_check(c.position.distance_to(p1) > 0.01 or s.phase != GameState.Phase.CHASE, "起き上がるとまた走る")
+
+
+func _test_banana_can_be_dodged() -> void:
+	var s := _chasing_state(75)
+	var c := s.get_actor(s.chaser_id)
+	var thrower := s.get_actor_at_seat((s.vacant_seat + 2) % GameConfig.SEAT_COUNT)
+	s.throw_banana(thrower.id, c.id)
+	var slipped := false
+	for i in int(2.0 / STEP):
+		# 外側に曲がってよける
+		s.set_move(c.id, Vector3(c.position.x, 0, c.position.z).normalized())
+		s.tick(STEP)
+		for e in s.take_events():
+			if e["type"] == "slip":
+				slipped = true
+	_check(not slipped, "曲がればバナナをよけられる")
+
+
+func _test_bots_throw_bananas() -> void:
+	var thrown := 0
+	var slips := 0
+	for seed_value in 40:
+		var s := GameState.new()
+		s.start_match(seed_value)
+		var b := BotBrain.new()
+		b.reset(seed_value)
+		for i in int(120.0 / STEP):
+			b.update(s, STEP)
+			s.tick(STEP)
+			for e in s.take_events():
+				b.on_event(s, e)
+				if e["type"] == "banana":
+					thrown += 1
+				elif e["type"] == "slip":
+					slips += 1
+			if s.phase == GameState.Phase.RESULT:
+				break
+	_check(thrown > 0, "ボットがバナナを投げることがある")
+	print("bot bananas thrown: %d, slips: %d" % [thrown, slips])
 
 
 # --- 道具 ---

@@ -38,6 +38,10 @@ class Actor:
 	var move_dir: Vector3 = Vector3.ZERO
 	## このラウンドで送れるスタンプの残り(-1 = 何回でも)
 	var stamps_left: int = 0
+	## このラウンドで投げられるバナナの皮の残り
+	var bananas_left: int = 0
+	## バナナで転んで止まっている残り時間(秒)
+	var slip_left: float = 0.0
 
 
 ## 席の位置(床の上)
@@ -86,6 +90,16 @@ var oni_seat_angle: float = 0.0
 var oni_entering: bool = false
 ## 勝敗。{"winner": id, "loser": id, "reason": "touched" / "sat" / "missed"}
 var result: Dictionary = {}
+
+## 鬼の声: 次に出せるまでの時間/最後に声を出してから何秒たったか/
+## 本物を落としたとき声でかき消されたか/ボットの鬼が次に声を出すまで
+var oni_voice_cooldown: float = 0.0
+var last_voice_age: float = INF
+var drop_masked: bool = false
+var _bot_oni_voice_left: float = 0.0
+
+## 床に落ちているバナナの皮 [{"pos": Vector3, "sender": id}]
+var bananas: Array = []
 
 ## 試合: 今のラウンド(0 から)、点数(id -> 点)、試合が終わったか
 var round_index: int = 0
@@ -216,6 +230,8 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 		a.looking_back = false
 		a.move_dir = Vector3.ZERO
 		a.stamps_left = GameConfig.STAMPS_PER_ROUND
+		a.bananas_left = GameConfig.BANANAS_PER_ROUND
+		a.slip_left = 0.0
 	for i in seat_ids.size():
 		_sit(get_actor(seat_ids[i]), i)
 	oni_id = oni
@@ -241,6 +257,11 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	oni_entering = false
 	result = {}
 	active_stamps = {}
+	bananas = []
+	oni_voice_cooldown = 0.0
+	last_voice_age = INF
+	drop_masked = false
+	_bot_oni_voice_left = rng.randf_range(GameConfig.BOT_ONI_VOICE_INTERVAL_MIN, GameConfig.BOT_ONI_VOICE_INTERVAL_MAX)
 	var step := TAU / GameConfig.SEAT_COUNT
 	next_seat_crossing = ceilf(oni_angle / step) * step
 	if oni_is_player:
@@ -255,6 +276,8 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 ## 時間を delta 秒すすめる。
 func tick(delta: float) -> void:
 	_tick_stamps(delta)
+	oni_voice_cooldown = maxf(oni_voice_cooldown - delta, 0.0)
+	last_voice_age += delta
 	for i in seat_pass_age.size():
 		seat_pass_age[i] += delta
 	match phase:
@@ -270,6 +293,12 @@ func _tick_walking(delta: float) -> void:
 		return
 
 	var oni := get_actor(oni_id)
+	if not oni_is_player:
+		# ボットの鬼も、ときどき声を出す(ふりになる)
+		_bot_oni_voice_left -= delta
+		if _bot_oni_voice_left <= 0.0:
+			_bot_oni_voice_left = rng.randf_range(GameConfig.BOT_ONI_VOICE_INTERVAL_MIN, GameConfig.BOT_ONI_VOICE_INTERVAL_MAX)
+			_emit_voice(Voices.ALL[rng.randi_range(0, Voices.ALL.size() - 1)])
 	oni_angle += _oni_walk_speed(oni) / GameConfig.ONI_WALK_RADIUS * delta
 	if oni_is_player and phase == Phase.WALKING and drop_angle == INF \
 			and oni_angle - oni_start_angle >= GameConfig.ONI_MAX_LAPS_BEFORE_DROP * TAU:
@@ -376,6 +405,50 @@ func set_move(actor_id: int, dir: Vector3) -> void:
 
 
 # --- 人が鬼のときの命令 ---
+
+## 鬼が声を出す(人の鬼の命令)。出せたら true
+func oni_voice(actor_id: int, kind: String) -> bool:
+	if not _is_player_oni(actor_id):
+		return false
+	return _emit_voice(kind)
+
+
+func _emit_voice(kind: String) -> bool:
+	if not (kind in Voices.ALL) or oni_voice_cooldown > 0.0:
+		return false
+	if phase != Phase.WALKING and phase != Phase.DROPPED:
+		return false
+	oni_voice_cooldown = GameConfig.ONI_VOICE_COOLDOWN
+	last_voice_age = 0.0
+	var oni := get_actor(oni_id)
+	events.append({
+		"type": "voice",
+		"kind": kind,
+		"pos": oni.position,
+		"seat": _seat_at_angle(_nearest_seat_crossing()),
+	})
+	return true
+
+
+## バナナの皮を投げる。座っている人が、追いかけっこ中に、鬼か追いかける人を狙う。
+## 狙った人の少し前の通り道に落ちる(曲がればよけられる)。投げられたら true
+func throw_banana(sender_id: int, target_id: int) -> bool:
+	var sender := get_actor(sender_id)
+	var target := get_actor(target_id)
+	if sender == null or target == null or phase != Phase.CHASE:
+		return false
+	if sender.role != Role.SEATED or sender.bananas_left <= 0:
+		return false
+	if target_id != oni_id and target_id != chaser_id:
+		return false
+	sender.bananas_left -= 1
+	var ang := atan2(target.position.x, target.position.z)
+	var r := Vector2(target.position.x, target.position.z).length()
+	var pos := _ring_point(ang + GameConfig.BANANA_AHEAD / maxf(r, 0.01), r)
+	bananas.append({"pos": pos, "sender": sender_id})
+	events.append({"type": "banana", "sender": sender_id, "target": target_id, "pos": pos})
+	return true
+
 
 ## 「止まる」を押している/離した
 func set_oni_stop(actor_id: int, value: bool) -> void:
@@ -509,6 +582,8 @@ func snapshot() -> Dictionary:
 		"item": item_name(),
 		"scores": scores,
 		"match_over": match_over,
+		"bananas": bananas,
+		"drop_masked": drop_masked,
 		"oni_radius": oni_radius,
 	}
 
@@ -536,6 +611,10 @@ func _on_pass_behind_seat() -> void:
 		return
 	if phase == Phase.WALKING and absf(oni_angle - drop_angle) < 0.001:
 		oni_pause_left = GameConfig.ONI_PAUSE_TIME
+		if not oni_is_player and rng.randf() < GameConfig.BOT_ONI_VOICE_AT_DROP:
+			# ボットの鬼: 声で置く音をかき消す
+			oni_voice_cooldown = 0.0
+			_emit_voice(Voices.ALL[rng.randi_range(0, Voices.ALL.size() - 1)])
 		_drop()
 	elif oni_is_player:
 		# 人が鬼のときは、立ち止まるのも物音も本人が決める
@@ -563,10 +642,14 @@ func _tick_stamps(delta: float) -> void:
 func _tick_chase(delta: float) -> void:
 	var oni := get_actor(oni_id)
 	var chaser := get_actor(chaser_id)
-	_move_chaser(chaser, delta)
+	if not _slipping(chaser, delta):
+		_move_chaser(chaser, delta)
+		_check_banana(chaser)
 
 	var sat := false
-	if oni_entering:
+	if _slipping(oni, delta):
+		pass
+	elif oni_entering:
 		var seat_pos := seat_positions[vacant_seat]
 		var to_seat := seat_pos - oni.position
 		if to_seat.length() > 0.001:
@@ -576,12 +659,32 @@ func _tick_chase(delta: float) -> void:
 	else:
 		_move_oni_running(oni, delta)
 		oni_entering = oni_angle >= oni_seat_angle
+		_check_banana(oni)
 
 	if _flat_distance(chaser.position, oni.position) <= GameConfig.TOUCH_DISTANCE:
 		_finish(chaser_id, oni_id, "touched")
 	elif sat:
 		_sit(oni, vacant_seat)
 		_finish(oni_id, chaser_id, "sat")
+
+
+## 転んでいる間は動けない。転んでいたら true
+func _slipping(a: Actor, delta: float) -> bool:
+	if a.slip_left <= 0.0:
+		return false
+	a.slip_left -= delta
+	return true
+
+
+## バナナの皮を踏んだら転ぶ(皮はなくなる)
+func _check_banana(a: Actor) -> void:
+	for i in bananas.size():
+		if _flat_distance(a.position, bananas[i]["pos"]) <= GameConfig.BANANA_HIT_RADIUS:
+			a.slip_left = GameConfig.SLIP_TIME
+			var b: Dictionary = bananas[i]
+			bananas.remove_at(i)
+			events.append({"type": "slip", "actor": a.id, "sender": b["sender"]})
+			return
 
 
 ## 追いかけっこ中の鬼: 空いた席に向かって自動で走る。
@@ -656,12 +759,15 @@ func _seat_at_angle(angle: float) -> int:
 func _drop() -> void:
 	phase = Phase.DROPPED
 	handkerchief_on_floor = true
+	# 声を出した直後なら、置く音はかき消される
+	drop_masked = last_voice_age <= GameConfig.VOICE_MASK_WINDOW
 	handkerchief_position = _ring_point(drop_angle, GameConfig.DROP_RADIUS)
 	events.append({
 		"type": "dropped",
 		"seat": drop_target_seat,
 		"pos": handkerchief_position,
 		"weight": item_weight(),
+		"masked": drop_masked,
 	})
 	# 振り向いたまま待っていた人の後ろに落とした場合は、その場で見つかる
 	var target := get_actor_at_seat(drop_target_seat)

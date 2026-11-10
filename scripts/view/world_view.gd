@@ -14,6 +14,9 @@ var _drop_player: AudioStreamPlayer3D
 var _step_player: AudioStreamPlayer3D
 var _beep_player: AudioStreamPlayer
 var _stamp_player: AudioStreamPlayer
+var _voice_player: AudioStreamPlayer3D
+## 床のバナナの皮の見た目(状態の bananas と同じ数だけ出す)
+var _banana_nodes: Array[MeshInstance3D] = []
 ## 頭の上のスタンプ表示(id -> Label3D)
 var _stamp_labels := {}
 ## スタンプを送る相手の目印
@@ -47,6 +50,7 @@ func build(state: GameState) -> void:
 	_surprise_until.clear()
 	_was_looking.clear()
 	_stamp_labels.clear()
+	_banana_nodes.clear()
 
 	_build_environment()
 	_build_floor()
@@ -77,6 +81,7 @@ func sync(state: GameState, delta: float) -> void:
 			_update_expression(state, a, node as CharacterModel, delta)
 	_update_seat_camera(state, delta)
 	_update_stamp_labels(state)
+	_update_bananas(state)
 	_clock += delta
 
 	var holder := state.get_actor(state.chaser_id)
@@ -128,11 +133,24 @@ func on_event(e: Dictionary) -> void:
 			var m := _actor_nodes.get(e["actor"]) as CharacterModel
 			if m:
 				m.hop()
+		"slip":
+			var m := _actor_nodes.get(e["actor"]) as CharacterModel
+			if m:
+				m.slip()
+			_oops_until[e["actor"]] = _clock + GameConfig.SLIP_TIME
+		"voice":
+			_voice_player.stream = Sfx.voice(e["kind"])
+			_voice_player.position = e["pos"]
+			_voice_player.pitch_scale = randf_range(0.92, 1.08)
+			_voice_player.play()
 		"dropped", "rustle":
 			# 本物もニセの物音も、まったく同じ音。重い物ほど大きく、低く、遠くまで聞こえる
 			var w: float = e.get("weight", 0.0)
 			_drop_player.position = e["pos"]
 			_drop_player.volume_db = lerpf(GameConfig.DROP_VOLUME_DB, GameConfig.DROP_VOLUME_DB_HEAVY, w)
+			if e.get("masked", false):
+				# 鬼の声でかき消された
+				_drop_player.volume_db += GameConfig.VOICE_MASK_DB
 			_drop_player.unit_size = lerpf(GameConfig.DROP_SOUND_RANGE, GameConfig.DROP_SOUND_RANGE_HEAVY, w)
 			_drop_player.pitch_scale = lerpf(1.0, 0.5, w) * randf_range(0.9, 1.1)
 			_drop_player.play()
@@ -236,6 +254,22 @@ func _build_character(a: GameState.Actor, is_self: bool) -> Node3D:
 	return model
 
 
+## バナナの皮: 状態の bananas に合わせて、黄色い三日月っぽい形を出す
+func _update_bananas(state: GameState) -> void:
+	while _banana_nodes.size() < state.bananas.size():
+		var m := BoxMesh.new()
+		m.size = Vector3(0.32, 0.05, 0.12)
+		var mi := _mesh(m, Color(1.0, 0.85, 0.1))
+		mi.rotation.y = randf() * TAU
+		add_child(mi)
+		_banana_nodes.append(mi)
+	for i in _banana_nodes.size():
+		var shown := i < state.bananas.size()
+		_banana_nodes[i].visible = shown
+		if shown:
+			_banana_nodes[i].position = state.bananas[i]["pos"] + Vector3(0, 0.03, 0)
+
+
 ## 頭の上のスタンプ表示と、送る相手の目印
 func _build_stamp_labels(state: GameState) -> void:
 	for a in state.actors:
@@ -326,6 +360,11 @@ func _build_sounds(state: GameState) -> void:
 	_stamp_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	_stamp_player.volume_db = -6.0
 	add_child(_stamp_player)
+
+	_voice_player = AudioStreamPlayer3D.new()
+	_voice_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
+	_voice_player.volume_db = -2.0
+	add_child(_voice_player)
 
 	_beep_player = AudioStreamPlayer.new()
 	_beep_player.stream = Sfx.beep()

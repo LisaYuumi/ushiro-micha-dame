@@ -125,3 +125,33 @@ const CARRY_SPEED_HEAVY := 0.7
 const ONI_CARRY_SPEED_HEAVY := 0.8
 ## ボットが気づくまでの時間の倍率(重いほど音が大きく、早く気づく)
 const BOT_NOTICE_HEAVY := 0.45
+
+# --- 鬼の声 ---
+## 声を出したあと、次に出せるまで(秒)
+const ONI_VOICE_COOLDOWN := 1.5
+## 声を出してからこの秒数以内に落とすと、置く音がかき消される
+const VOICE_MASK_WINDOW := 0.8
+## かき消されたときの置く音の小ささ(dB、元の音から引く)
+const VOICE_MASK_DB := -14.0
+## かき消されたとき、ボットが気づくまでの時間の倍率
+const BOT_NOTICE_MASKED := 1.6
+## 鬼の声で、いちばん近い席のボットがだまされて振り向く確率
+const BOT_VOICE_FOOL_CHANCE := 0.2
+## ボットの鬼が、落とす直前に声を出す確率/ふだんに声を出す間隔(秒)
+const BOT_ONI_VOICE_AT_DROP := 0.5
+const BOT_ONI_VOICE_INTERVAL_MIN := 5.0
+const BOT_ONI_VOICE_INTERVAL_MAX := 14.0
+
+# --- バナナの皮 ---
+## 1人が1ラウンドに投げられる数
+const BANANAS_PER_ROUND := 1
+## 狙った人の、どれだけ前(メートル、通り道にそって)に落ちるか
+const BANANA_AHEAD := 2.5
+## 踏んだと判定する距離(メートル)
+const BANANA_HIT_RADIUS := 0.45
+## 転んで止まる時間(秒)
+const SLIP_TIME := 1.0
+## ボットが追いかけっこ中にバナナを投げる確率と、投げるまでの時間(秒)
+const BOT_BANANA_CHANCE := 0.35
+const BOT_BANANA_DELAY_MIN := 0.5
+const BOT_BANANA_DELAY_MAX := 3.0
