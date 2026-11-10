@@ -31,6 +31,11 @@ var _oni_last_pos := Vector3.ZERO
 var _oni_walked := 0.0
 ## 振り向きの度合い(0=前、1=後ろ)。見た目をなめらかにするためだけの値
 var _turn := {} # id -> float
+## 表情のための時計と、表情を出しておく期限(id -> 時刻)
+var _clock := 0.0
+var _oops_until := {}
+var _surprise_until := {}
+var _was_looking := {}
 
 
 func build(state: GameState) -> void:
@@ -38,6 +43,9 @@ func build(state: GameState) -> void:
 		c.queue_free()
 	_actor_nodes.clear()
 	_turn.clear()
+	_oops_until.clear()
+	_surprise_until.clear()
+	_was_looking.clear()
 	_stamp_labels.clear()
 
 	_build_environment()
@@ -66,8 +74,10 @@ func sync(state: GameState, delta: float) -> void:
 			node.position = a.position
 			# 振り向いた姿は全員に見える(体ごと大げさに後ろを向く)
 			node.rotation.y = a.yaw + PI * t
+			_update_expression(state, a, node as CharacterModel, delta)
 	_update_seat_camera(state, delta)
 	_update_stamp_labels(state)
+	_clock += delta
 
 	var holder := state.get_actor(state.chaser_id)
 	if holder:
@@ -80,9 +90,44 @@ func sync(state: GameState, delta: float) -> void:
 	_update_footsteps(state)
 
 
+## 表情と動きを、状態から決める(見た目だけ。状態は変えない)
+func _update_expression(state: GameState, a: GameState.Actor, model: CharacterModel, delta: float) -> void:
+	if model == null:
+		return
+	var running := a.role == GameState.Role.CHASER \
+			or (a.role == GameState.Role.ONI and state.phase == GameState.Phase.CHASE)
+	var expr := CharacterModel.NORMAL
+	if state.phase == GameState.Phase.RESULT and not state.result.is_empty():
+		if state.result["winner"] == a.id:
+			expr = CharacterModel.WIN
+		elif state.result["loser"] == a.id:
+			expr = CharacterModel.LOSE
+	elif running:
+		expr = CharacterModel.PANIC
+	elif _oops_until.get(a.id, -1.0) > _clock:
+		expr = CharacterModel.OOPS
+	elif a.looking_back or _surprise_until.get(a.id, -1.0) > _clock:
+		expr = CharacterModel.SURPRISED
+	model.set_expression(expr)
+	# 振り向いた瞬間にピョンと跳ねる
+	if a.looking_back and not _was_looking.get(a.id, false):
+		model.hop()
+	_was_looking[a.id] = a.looking_back
+	model.animate(delta, running and state.phase == GameState.Phase.CHASE)
+
+
 ## GameState からのお知らせに合わせて音などを出す。
 func on_event(e: Dictionary) -> void:
 	match e.get("type"):
+		"otetsuki":
+			_oops_until[e["actor"]] = _clock + 1.5
+		"stamp":
+			# スタンプが届いた人は、びっくり顔になる
+			_surprise_until[e["target"]] = _clock + 1.0
+		"picked_up":
+			var m := _actor_nodes.get(e["actor"]) as CharacterModel
+			if m:
+				m.hop()
 		"dropped", "rustle":
 			# 本物もニセの物音も、まったく同じ音。重い物ほど大きく、低く、遠くまで聞こえる
 			var w: float = e.get("weight", 0.0)
@@ -180,49 +225,15 @@ func _build_chair(pos: Vector3, yaw: float) -> void:
 	add_child(chair)
 
 
-## 仮のキャラクター: カプセルの体+球の頭+点の目。正面は -Z。
+## 仮のキャラクター(体・顔・表情は CharacterModel)
 func _build_character(a: GameState.Actor, is_self: bool) -> Node3D:
-	var root := Node3D.new()
-	root.name = "Actor%d" % a.id
-
-	var body_mesh := CapsuleMesh.new()
-	body_mesh.radius = 0.25
-	body_mesh.height = 1.15
-	var body := _mesh(body_mesh, a.color)
-	body.position = Vector3(0, 0.6, 0)
-	root.add_child(body)
-
-	var head_mesh := SphereMesh.new()
-	head_mesh.radius = 0.22
-	head_mesh.height = 0.44
-	var head := _mesh(head_mesh, a.color.lightened(0.25))
-	head.position = Vector3(0, 1.42, 0)
-	root.add_child(head)
-
-	for x in [-0.08, 0.08]:
-		var eye_mesh := SphereMesh.new()
-		eye_mesh.radius = 0.03
-		eye_mesh.height = 0.06
-		var eye := _mesh(eye_mesh, Color.BLACK)
-		eye.position = Vector3(x, 1.46, -0.2)
-		root.add_child(eye)
-
-	var label := Label3D.new()
-	label.text = a.display_name
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.font_size = 48
-	label.pixel_size = 0.004
-	label.outline_size = 8
-	label.position = Vector3(0, 1.85, 0)
-	label.font = HudFont.get_font()
-	root.add_child(label)
-
+	var model := CharacterModel.new()
+	model.name = "Actor%d" % a.id
+	model.build(a.color, a.display_name, HudFont.get_font())
 	if is_self:
-		# 自分の体は自分の席カメラには映さない
-		for c in root.get_children():
-			if c is VisualInstance3D:
-				c.layers = 1 << (SELF_LAYER - 1)
-	return root
+		# 自分の体は、座っているときの自分のカメラには映さない
+		model.set_layers(1 << (SELF_LAYER - 1))
+	return model
 
 
 ## 頭の上のスタンプ表示と、送る相手の目印
