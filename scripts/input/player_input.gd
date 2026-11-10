@@ -7,9 +7,17 @@ extends RefCounted
 ## cam_basis: 今のカメラの向き。走る向きを「画面の上下左右」に合わせるために使う
 static func apply(state: GameState, cam_basis: Basis) -> void:
 	var id := state.local_player_id
-	state.set_looking_back(id, Input.is_action_pressed("look_back"))
-	if Input.is_action_just_pressed("pick_up"):
-		state.pick_up(id)
+	if state.oni_is_player:
+		# 鬼のとき: 止まる・落とす・ふり
+		state.set_oni_stop(id, Input.is_action_pressed("oni_stop"))
+		if Input.is_action_just_pressed("oni_drop"):
+			state.oni_drop(id)
+		if Input.is_action_just_pressed("oni_feint"):
+			state.oni_feint(id)
+	else:
+		state.set_looking_back(id, Input.is_action_pressed("look_back"))
+		if Input.is_action_just_pressed("pick_up"):
+			state.pick_up(id)
 
 	var v := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	var right := cam_basis.x

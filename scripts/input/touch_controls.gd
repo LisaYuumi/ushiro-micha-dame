@@ -5,6 +5,10 @@ extends CanvasLayer
 
 ## ボタンと操作の組 [{"button": Button, "action": String}]
 var _buttons := []
+## 座っているときだけ出すボタン / 鬼のときだけ出すボタン
+var _seated_buttons: Array[Button] = []
+var _oni_buttons: Array[Button] = []
+var _role_button: Button
 ## 押している指の番号 -> 操作
 var _touch_action := {}
 
@@ -12,12 +16,16 @@ var _touch_action := {}
 func _ready() -> void:
 	layer = 2
 	# 右下: 振り向く(押している間)
-	_add_button("振り向く", "look_back", Vector2(1, 1), Rect2(-250, -250, 220, 220), 40)
-	_add_button("拾う", "pick_up", Vector2(1, 1), Rect2(-430, -170, 160, 140), 36)
+	_seated_buttons.append(_add_button("振り向く", "look_back", Vector2(1, 1), Rect2(-250, -250, 220, 220), 40))
+	_seated_buttons.append(_add_button("拾う", "pick_up", Vector2(1, 1), Rect2(-430, -170, 160, 140), 36))
+	# 鬼のとき: 同じ場所に「止まる」(押している間)「落とす」、その左に「ふり」
+	_oni_buttons.append(_add_button("止まる", "oni_stop", Vector2(1, 1), Rect2(-250, -250, 220, 220), 40))
+	_oni_buttons.append(_add_button("落とす", "oni_drop", Vector2(1, 1), Rect2(-430, -170, 160, 140), 36))
+	_oni_buttons.append(_add_button("ふり", "oni_feint", Vector2(1, 1), Rect2(-610, -170, 160, 140), 36))
 	# 下のまん中: スタンプ(先に相手をタップして選ぶ)
 	for i in Stamps.ALL.size():
 		var kind: String = Stamps.ALL[i]
-		_add_button(Stamps.LABELS[kind], "stamp_%d" % i, Vector2(0.5, 1), Rect2(-385 + i * 150, -100, 140, 80), 24)
+		_seated_buttons.append(_add_button(Stamps.LABELS[kind], "stamp_%d" % i, Vector2(0.5, 1), Rect2(-385 + i * 150, -100, 140, 80), 24))
 	# 左下: 走るためのスティック
 	var stick := VirtualStick.new()
 	add_child(stick)
@@ -33,6 +41,23 @@ func _ready() -> void:
 	_add_button("上から見る", "debug_top_camera", Vector2(1, 0), Rect2(-410, 16, 190, 64), 24)
 	_add_button("やり直し", "restart", Vector2(1, 0), Rect2(-206, 16, 190, 64), 24)
 	_add_button("音テスト", "sound_test", Vector2(1, 0), Rect2(-614, 16, 190, 64), 24)
+	_role_button = _add_button("鬼をやる", "toggle_role", Vector2(1, 0), Rect2(-818, 16, 190, 64), 24)
+	set_oni_mode(false)
+
+
+## 鬼のときと座っているときで、出すボタンを切りかえる
+func set_oni_mode(is_oni: bool) -> void:
+	for b in _seated_buttons:
+		b.visible = not is_oni
+	for b in _oni_buttons:
+		b.visible = is_oni
+	_role_button.text = "座る側をやる" if is_oni else "鬼をやる"
+	# 切りかえで押しっぱなしになった指を離しておく
+	for index in _touch_action.keys():
+		var entry: Dictionary = _touch_action[index]
+		_send(entry["action"], false)
+		(entry["button"] as Button).modulate = Color(1, 1, 1, 0.85)
+	_touch_action.clear()
 
 
 func _add_button(text: String, action: String, anchor: Vector2, rect: Rect2, font_size: int) -> Button:

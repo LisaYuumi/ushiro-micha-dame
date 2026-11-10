@@ -11,9 +11,12 @@ var _last_sound := ""
 var _stamp_target := -1
 ## Web版で、最初のタップを待っている間は true(ゲームを止めておく)
 var _waiting_start := false
+## この画面のプレイヤーが鬼をやるか
+var _player_is_oni := false
 
 @onready var view: WorldView = $WorldView
 @onready var hud: Hud = $Hud
+@onready var touch: TouchControls = $TouchControls
 
 
 func _ready() -> void:
@@ -34,8 +37,9 @@ func _on_start_tapped() -> void:
 
 
 func _start_round() -> void:
-	state.start_round()
+	state.start_round(-1, _player_is_oni)
 	bots.reset()
+	touch.set_oni_mode(_player_is_oni)
 	_last_sound = ""
 	_stamp_target = -1
 	hud.show_stamp("", Color.WHITE)
@@ -58,6 +62,9 @@ func _physics_process(delta: float) -> void:
 	if state.get_actor(_stamp_target) == null or state.get_actor(_stamp_target).role != GameState.Role.SEATED:
 		_stamp_target = -1
 	view.set_stamp_target(state, _stamp_target)
+	if state.oni_is_player:
+		# 何周目かの表示を更新する
+		_update_help()
 
 
 func _process(delta: float) -> void:
@@ -70,6 +77,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_update_help()
 	elif event.is_action_pressed("restart"):
 		_start_round()
+	elif event.is_action_pressed("toggle_role"):
+		_player_is_oni = not _player_is_oni
+		_start_round()
+		hud.show_message("あなたは鬼" if _player_is_oni else "あなたは座る側", Color(0.3, 0.3, 0.3), 1.2)
 	elif event.is_action_pressed("sound_test"):
 		view.play_test_beep()
 	elif event.is_action_pressed("quit"):
@@ -124,6 +135,12 @@ func _show_event(e: Dictionary) -> void:
 			_last_sound = "本物"
 		"rustle":
 			_last_sound = "ニセ"
+		"drop_failed":
+			if e["actor"] == me:
+				hud.show_message("席の後ろで押してね", Color(0.3, 0.3, 0.3), 1.0)
+		"auto_drop":
+			if state.oni_is_player:
+				hud.show_message("4周したので\n次の席で自動で落とす", Color(0.3, 0.3, 0.3), 1.5)
 		"otetsuki":
 			if e["actor"] == me:
 				hud.show_message("お手つき!", Color(0.85, 0.1, 0.1), GameConfig.MESSAGE_TIME)
@@ -133,6 +150,8 @@ func _show_event(e: Dictionary) -> void:
 		"picked_up":
 			if e["actor"] == me:
 				hud.show_message("追いかけろ!", Color(0.1, 0.5, 0.9), GameConfig.MESSAGE_TIME)
+			elif state.oni_is_player:
+				hud.show_message("気づかれた! 逃げろ!", Color(0.85, 0.1, 0.1), GameConfig.MESSAGE_TIME)
 			else:
 				hud.show_message("%s が追いかけた!" % _name(e["actor"]), Color(0.3, 0.3, 0.3), GameConfig.MESSAGE_TIME)
 		"result":
@@ -148,18 +167,27 @@ func _show_result(r: Dictionary) -> void:
 			if r["winner"] == me:
 				text = "勝ち!\n鬼をタッチした"
 				color = Color(0.9, 0.6, 0.1)
+			elif r["loser"] == me:
+				text = "負け…\n%s にタッチされた" % _name(r["winner"])
+				color = Color(0.2, 0.3, 0.8)
 			else:
 				text = "%s の勝ち\n(鬼をタッチ)" % _name(r["winner"])
 		"sat":
 			if r["loser"] == me:
 				text = "負け…\n鬼に座られた"
 				color = Color(0.2, 0.3, 0.8)
+			elif r["winner"] == me:
+				text = "勝ち!\n空いた席に座れた"
+				color = Color(0.9, 0.6, 0.1)
 			else:
 				text = "鬼の勝ち\n(%s の席に座った)" % _name(r["loser"])
 		"missed":
 			if r["loser"] == me:
 				text = "負け…\n一周しても気づかなかった"
 				color = Color(0.2, 0.3, 0.8)
+			elif r["winner"] == me:
+				text = "勝ち!\n%s は気づかなかった" % _name(r["loser"])
+				color = Color(0.9, 0.6, 0.1)
 			else:
 				text = "鬼の勝ち\n(%s が気づかなかった)" % _name(r["loser"])
 	hud.show_message(text + "\n「やり直し」(R)で次のラウンド", color, 0.0)
@@ -171,7 +199,7 @@ func _name(id: int) -> String:
 
 
 func _update_help() -> void:
-	var lines := PackedStringArray(["ステップ3: スタンプで教える/だます"])
+	var lines := PackedStringArray(["人が鬼をやる試作" if state.oni_is_player else "ステップ3: スタンプで教える/だます"])
 	var me := state.get_local_player()
 	var left := "何回でも" if me.stamps_left < 0 else "残り %d" % me.stamps_left
 	lines.append("お手つき: %d 回 / スタンプ: %s" % [me.otetsuki_count, left])
@@ -180,18 +208,29 @@ func _update_help() -> void:
 	if view.is_top_camera():
 		lines.append("今のカメラ: 上から見る(確認用)")
 		# 確認用カメラのときだけ答えを出す
-		var who: String = _name(state.get_actor_at_seat(state.drop_target_seat).id) if state.vacant_seat < 0 else _name(state.chaser_id)
+		var who := "?"
+		if state.vacant_seat >= 0:
+			who = _name(state.chaser_id)
+		elif state.drop_target_seat >= 0:
+			who = _name(state.get_actor_at_seat(state.drop_target_seat).id)
 		if state.handkerchief_on_floor or state.chaser_id >= 0:
 			lines.append("【確認用】%s の後ろに落とした" % who)
-		else:
+		elif not state.oni_is_player:
 			lines.append("【確認用】%s の後ろに落とす予定" % who)
 		if _last_sound != "":
 			lines.append("【確認用】さっきの物音: %s" % _last_sound)
-	if me.role == GameState.Role.CHASER:
+	if me.role == GameState.Role.CHASER or (me.role == GameState.Role.ONI and state.phase == GameState.Phase.CHASE):
 		lines.append("自動で走る! ↑(W)/スティック上: 内側へ(近道)  ↓(S): 外側へ")
+	elif me.role == GameState.Role.ONI:
+		var laps := int((state.oni_angle - state.oni_start_angle) / TAU) + 1
+		lines.append("%d 周目 (%d 周しても落とさないと自動で落とす)" % [laps, GameConfig.ONI_MAX_LAPS_BEFORE_DROP])
+		lines.append("→(D)/スティック右: 速く  ←(A): ゆっくり")
+		lines.append("スペース /「止まる」(押している間): 止まる")
+		lines.append("E /「落とす」: いちばん近い席の後ろに落とす(1回だけ)")
+		lines.append("F /「ふり」: 落とすふり(物音だけ)")
 	else:
 		lines.append("スペース /「振り向く」(押している間): 振り向く")
 		lines.append("E /「拾う」: 後ろのハンカチを拾う")
 		lines.append("人をタップ → スタンプ(1〜4キー)で送る")
-	lines.append("F1: 上から見る / R: やり直し / T: 音テスト / Esc: 終了")
+	lines.append("F1: 上から見る / R: やり直し / O: 鬼⇔座る / T: 音テスト / Esc: 終了")
 	hud.set_help("\n".join(lines))

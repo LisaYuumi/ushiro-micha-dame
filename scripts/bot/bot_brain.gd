@@ -35,8 +35,16 @@ func update(state: GameState, delta: float) -> void:
 				_update_chaser(state, a)
 
 
-## GameState からのお知らせを見て反応する(届いたスタンプを信じるかどうか)
+## GameState からのお知らせを見て反応する(届いたスタンプ・鬼の「ふり」の物音)
 func on_event(state: GameState, e: Dictionary) -> void:
+	if e.get("type") == "rustle" and e.get("feint", false):
+		# 人の鬼が「ふり」をした: その席のボットがときどきだまされて振り向く
+		var fooled := state.get_actor_at_seat(e["seat"])
+		if fooled and fooled.is_bot and fooled.role == GameState.Role.SEATED \
+				and rng.randf() < GameConfig.BOT_FEINT_FOOL_CHANCE:
+			state.pick_up(fooled.id)
+			_look_left[fooled.id] = GameConfig.BOT_LOOK_TIME
+		return
 	if e.get("type") != "stamp":
 		return
 	var me := state.get_actor(e["target"])

@@ -50,6 +50,14 @@ var actors: Array = []
 var local_player_id: int = 0
 ## 鬼の id
 var oni_id: int = -1
+## 鬼を人(この画面のプレイヤー)が操作しているか
+var oni_is_player: bool = false
+## 人が鬼のとき: 立ち止まっているか(「止まる」を押している間)
+var oni_holding_stop: bool = false
+## 鬼が歩きはじめた角度(何周したかを数える)
+var oni_start_angle: float = 0.0
+## 鬼の、輪の中心からの距離(人が鬼で追いかけっこ中は、内側/外側に曲がれる)
+var oni_radius: float = GameConfig.ONI_WALK_RADIUS
 
 var phase: int = Phase.WALKING
 ## 鬼が輪の上のどこにいるか(角度・ラジアン。増え続ける=何周したかもわかる)
@@ -89,7 +97,10 @@ var rng := RandomNumberGenerator.new()
 
 
 ## ラウンドを最初から始める。seed を指定すると毎回同じ展開になる(テスト用)。
-func start_round(seed_value: int = -1) -> void:
+## player_is_oni = true なら、この画面のプレイヤーが鬼になり、席にはボットが座る。
+func start_round(seed_value: int = -1, player_is_oni: bool = false) -> void:
+	oni_is_player = player_is_oni
+	local_player_id = GameConfig.SEAT_COUNT if player_is_oni else 0
 	if seed_value >= 0:
 		rng.seed = seed_value
 	else:
@@ -119,7 +130,10 @@ func start_round(seed_value: int = -1) -> void:
 		var actor := Actor.new()
 		actor.id = i
 		actor.is_bot = i != local_player_id
-		actor.display_name = "あなた" if i == local_player_id else "ボット%d" % i
+		if player_is_oni:
+			actor.display_name = "ボット%d" % (i + 1)
+		else:
+			actor.display_name = "あなた" if i == local_player_id else "ボット%d" % i
 		actor.color = palette[i % palette.size()]
 		actor.stamps_left = GameConfig.STAMPS_PER_ROUND
 		_sit(actor, i)
@@ -127,8 +141,8 @@ func start_round(seed_value: int = -1) -> void:
 
 	var oni := Actor.new()
 	oni.id = actors.size()
-	oni.is_bot = true
-	oni.display_name = "鬼"
+	oni.is_bot = not player_is_oni
+	oni.display_name = "あなた(鬼)" if player_is_oni else "鬼"
 	oni.role = Role.ONI
 	oni.color = Color(0.85, 0.2, 0.2)
 	actors.append(oni)
@@ -136,6 +150,9 @@ func start_round(seed_value: int = -1) -> void:
 
 	# 鬼は席と席の間から歩きはじめる
 	oni_angle = seat_angle(0) + TAU / (GameConfig.SEAT_COUNT * 2)
+	oni_start_angle = oni_angle
+	oni_radius = GameConfig.ONI_WALK_RADIUS
+	oni_holding_stop = false
 	_place_on_walk_ring(oni, oni_angle)
 
 	phase = Phase.WALKING
@@ -151,7 +168,12 @@ func start_round(seed_value: int = -1) -> void:
 	active_stamps = {}
 	var step := TAU / GameConfig.SEAT_COUNT
 	next_seat_crossing = ceilf(oni_angle / step) * step
-	_plan_drop()
+	if player_is_oni:
+		# 人が鬼のときは、いつ誰に落とすかは本人が決める
+		drop_target_seat = -1
+		drop_angle = INF
+	else:
+		_plan_drop()
 
 
 ## 時間を delta 秒すすめる。
@@ -172,7 +194,13 @@ func _tick_walking(delta: float) -> void:
 		return
 
 	var oni := get_actor(oni_id)
-	oni_angle += GameConfig.ONI_WALK_SPEED / GameConfig.ONI_WALK_RADIUS * delta
+	oni_angle += _oni_walk_speed(oni) / GameConfig.ONI_WALK_RADIUS * delta
+	if oni_is_player and phase == Phase.WALKING and drop_angle == INF \
+			and oni_angle - oni_start_angle >= GameConfig.ONI_MAX_LAPS_BEFORE_DROP * TAU:
+		# 何周しても落とさない: 次の席の後ろで自動的に落とす
+		drop_angle = next_seat_crossing
+		drop_target_seat = _seat_at_angle(next_seat_crossing)
+		events.append({"type": "auto_drop", "seat": drop_target_seat})
 	if oni_angle >= next_seat_crossing:
 		# ちょうど席の真後ろで止まれるように位置をそろえる
 		oni_angle = next_seat_crossing
@@ -271,6 +299,65 @@ func set_move(actor_id: int, dir: Vector3) -> void:
 	a.move_dir = dir.limit_length(1.0)
 
 
+# --- 人が鬼のときの命令 ---
+
+## 「止まる」を押している/離した
+func set_oni_stop(actor_id: int, value: bool) -> void:
+	if _is_player_oni(actor_id):
+		oni_holding_stop = value
+
+
+## いちばん近い席の後ろにハンカチを落とす。席の後ろから離れすぎていたら落とせない。
+func oni_drop(actor_id: int) -> bool:
+	if not _is_player_oni(actor_id) or phase != Phase.WALKING:
+		return false
+	var crossing := _nearest_seat_crossing()
+	if absf(oni_angle - crossing) * GameConfig.ONI_WALK_RADIUS > GameConfig.ONI_DROP_REACH:
+		events.append({"type": "drop_failed", "actor": actor_id})
+		return false
+	drop_angle = crossing
+	drop_target_seat = _seat_at_angle(crossing)
+	_drop()
+	return true
+
+
+## 落とすふり: いちばん近い席の後ろで、本物と同じ物音だけを出す
+func oni_feint(actor_id: int) -> void:
+	if not _is_player_oni(actor_id) or (phase != Phase.WALKING and phase != Phase.DROPPED):
+		return
+	var crossing := _nearest_seat_crossing()
+	events.append({
+		"type": "rustle",
+		"seat": _seat_at_angle(crossing),
+		"pos": _ring_point(crossing, GameConfig.DROP_RADIUS),
+		"feint": true,
+	})
+
+
+func _is_player_oni(actor_id: int) -> bool:
+	return oni_is_player and actor_id == oni_id
+
+
+## 鬼にいちばん近い「席の真後ろ」の角度
+func _nearest_seat_crossing() -> float:
+	var step := TAU / GameConfig.SEAT_COUNT
+	return roundf(oni_angle / step) * step
+
+
+## 鬼が歩く速さ。ボットの鬼はいつも同じ。人の鬼はスティックで変えられ、止まることもできる
+func _oni_walk_speed(oni: Actor) -> float:
+	if not oni_is_player:
+		return GameConfig.ONI_WALK_SPEED
+	if oni_holding_stop:
+		return 0.0
+	var ang := oni_angle
+	var forward := Vector3(cos(ang), 0.0, -sin(ang))
+	var f := clampf(oni.move_dir.dot(forward), -1.0, 1.0)
+	if f >= 0.0:
+		return lerpf(GameConfig.ONI_WALK_SPEED, GameConfig.ONI_WALK_SPEED_MAX, f)
+	return lerpf(GameConfig.ONI_WALK_SPEED, GameConfig.ONI_WALK_SPEED_MIN, -f)
+
+
 ## この人の後ろにハンカチが落ちているか
 func has_handkerchief_behind(a: Actor) -> bool:
 	return handkerchief_on_floor and a.role == Role.SEATED and a.seat_index == drop_target_seat
@@ -334,6 +421,8 @@ func snapshot() -> Dictionary:
 		"vacant_seat": vacant_seat,
 		"result": result,
 		"stamps": active_stamps,
+		"oni_is_player": oni_is_player,
+		"oni_radius": oni_radius,
 	}
 
 
@@ -361,6 +450,9 @@ func _on_pass_behind_seat() -> void:
 	if phase == Phase.WALKING and absf(oni_angle - drop_angle) < 0.001:
 		oni_pause_left = GameConfig.ONI_PAUSE_TIME
 		_drop()
+	elif oni_is_player:
+		# 人が鬼のときは、立ち止まるのも物音も本人が決める
+		return
 	elif rng.randf() < GameConfig.DECOY_STOP_CHANCE:
 		oni_pause_left = GameConfig.ONI_PAUSE_TIME
 		if rng.randf() < GameConfig.DECOY_SOUND_CHANCE:
@@ -394,8 +486,7 @@ func _tick_chase(delta: float) -> void:
 		oni.position = oni.position.move_toward(seat_pos, GameConfig.ONI_RUN_SPEED * delta)
 		sat = oni.position.distance_to(seat_pos) < 0.01
 	else:
-		oni_angle = minf(oni_angle + GameConfig.ONI_RUN_SPEED / GameConfig.ONI_WALK_RADIUS * delta, oni_seat_angle)
-		_place_on_walk_ring(oni, oni_angle)
+		_move_oni_running(oni, delta)
 		oni_entering = oni_angle >= oni_seat_angle
 
 	if _flat_distance(chaser.position, oni.position) <= GameConfig.TOUCH_DISTANCE:
@@ -403,6 +494,25 @@ func _tick_chase(delta: float) -> void:
 	elif sat:
 		_sit(oni, vacant_seat)
 		_finish(oni_id, chaser_id, "sat")
+
+
+## 追いかけっこ中の鬼: 空いた席に向かって自動で走る。
+## 人の鬼は、追いかける人と同じく内側/外側に曲がれる。ボットの鬼は輪の上をそのまま走る。
+func _move_oni_running(oni: Actor, delta: float) -> void:
+	var forward := Vector3(cos(oni_angle), 0.0, -sin(oni_angle))
+	var outward := Vector3(sin(oni_angle), 0.0, cos(oni_angle))
+	var steer := 0.0
+	if oni_is_player:
+		steer = clampf(oni.move_dir.dot(outward), -1.0, 1.0) * GameConfig.CHASER_STEER
+	var dir := (forward + outward * steer).normalized()
+	var step := GameConfig.ONI_RUN_SPEED * delta
+	var new_r := clampf(oni_radius + dir.dot(outward) * step, GameConfig.CHASER_MIN_RADIUS, GameConfig.CHASER_MAX_RADIUS)
+	var dr := new_r - oni_radius
+	var forward_step := sqrt(maxf(step * step - dr * dr, 0.0))
+	oni_angle = minf(oni_angle + forward_step / ((oni_radius + new_r) / 2.0), oni_seat_angle)
+	oni_radius = new_r
+	oni.position = _ring_point(oni_angle, oni_radius)
+	oni.yaw = atan2(-dir.x, -dir.z)
 
 
 ## 追いかける人を動かす。鬼と同じ向きに自動で走り続け、内側/外側にだけ曲がれる。

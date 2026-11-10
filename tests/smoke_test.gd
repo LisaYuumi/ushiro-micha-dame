@@ -30,6 +30,11 @@ func _initialize() -> void:
 	_test_stamp_rules()
 	_test_stamp_truthfulness()
 	_test_bots_send_and_trust_stamps()
+	_test_player_oni_setup()
+	_test_player_oni_walk_speed_and_stop()
+	_test_player_oni_drop_and_feint()
+	_test_player_oni_auto_drop_after_laps()
+	_test_player_oni_rounds_finish()
 
 	_main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(_main)
@@ -364,6 +369,140 @@ func _test_bots_send_and_trust_stamps() -> void:
 	_check(sent > 0, "ボットがスタンプを送る")
 	_check(otetsuki_after_stamp > 0, "ボットがスタンプを信じて振り向き、お手つきすることがある")
 	print("bot stamps sent: %d, otetsuki: %d" % [sent, otetsuki_after_stamp])
+
+
+func _test_player_oni_setup() -> void:
+	var s := GameState.new()
+	s.start_round(51, true)
+	_check(s.oni_is_player and s.local_player_id == s.oni_id, "鬼をやるとき、自分が鬼")
+	_check(not s.get_actor(s.oni_id).is_bot, "鬼はボットではない")
+	var seated_bots := 0
+	for a in s.actors:
+		if a.role == GameState.Role.SEATED and a.is_bot:
+			seated_bots += 1
+	_check(seated_bots == GameConfig.SEAT_COUNT, "席には全部ボットが座る")
+	_check(s.drop_target_seat == -1, "誰に落とすかは決まっていない")
+	s.start_round(51, false)
+	_check(not s.oni_is_player and s.local_player_id == 0, "座る側に戻せる")
+
+
+func _test_player_oni_walk_speed_and_stop() -> void:
+	var s := GameState.new()
+	s.start_round(53, true)
+	var oni := s.get_actor(s.oni_id)
+	var a0 := s.oni_angle
+	for i in 60:
+		s.tick(STEP)
+	var normal := s.oni_angle - a0
+	_check(absf(normal * GameConfig.ONI_WALK_RADIUS - GameConfig.ONI_WALK_SPEED) < 0.05, "何もしなければふつうの速さで歩く")
+
+	var fwd := Vector3(cos(s.oni_angle), 0, -sin(s.oni_angle))
+	a0 = s.oni_angle
+	for i in 60:
+		s.set_move(oni.id, Vector3(cos(s.oni_angle), 0, -sin(s.oni_angle)))
+		s.tick(STEP)
+	_check((s.oni_angle - a0) > normal * 1.3, "スティック右で速く歩く")
+
+	a0 = s.oni_angle
+	for i in 60:
+		s.set_move(oni.id, -Vector3(cos(s.oni_angle), 0, -sin(s.oni_angle)))
+		s.tick(STEP)
+	_check((s.oni_angle - a0) < normal * 0.7 and (s.oni_angle - a0) > 0.0, "スティック左でゆっくり歩く(止まりはしない)")
+
+	s.set_move(oni.id, Vector3.ZERO)
+	s.set_oni_stop(oni.id, true)
+	a0 = s.oni_angle
+	for i in 60:
+		s.tick(STEP)
+	_check(absf(s.oni_angle - a0) < 0.0001, "「止まる」を押している間は止まる")
+	s.set_oni_stop(oni.id, false)
+	s.tick(STEP)
+	_check(s.oni_angle > a0, "離すとまた歩く")
+	_check(fwd != Vector3.ZERO, "(確認用)")
+
+
+func _test_player_oni_drop_and_feint() -> void:
+	var s := GameState.new()
+	s.start_round(55, true)
+	var oni := s.get_actor(s.oni_id)
+	# 歩きはじめは席と席のまん中なので、落とせない
+	_check(not s.oni_drop(oni.id), "席の後ろから離れていると落とせない")
+	_check(_has(s.take_events(), "drop_failed"), "落とせなかったお知らせが出る")
+	# ふりはどこでもできて、いちばん近い席の後ろで鳴る
+	s.oni_feint(oni.id)
+	var ev := s.take_events()
+	_check(_has(ev, "rustle"), "ふりで物音が出る")
+	_check(s.phase == GameState.Phase.WALKING, "ふりでは落ちない")
+	# 次の席の後ろまで歩いて落とす
+	var target_angle := s.next_seat_crossing
+	while s.oni_angle < target_angle - 0.01:
+		s.tick(STEP)
+	_check(s.oni_drop(oni.id), "席の後ろなら落とせる")
+	_check(s.phase == GameState.Phase.DROPPED and s.handkerchief_on_floor, "落とすと床にハンカチ")
+	_check(s.drop_target_seat == posmod(roundi(target_angle / TAU * GameConfig.SEAT_COUNT), GameConfig.SEAT_COUNT), "いちばん近い席の後ろに落ちる")
+	_check(not s.oni_drop(oni.id), "2回は落とせない")
+	# 座っている人は鬼の命令を使えない
+	var s2 := GameState.new()
+	s2.start_round(55, false)
+	_check(not s2.oni_drop(0), "座る側は落とせない")
+
+	# ボットが「ふり」にだまされることがある
+	var fooled := 0
+	for seed_value in 40:
+		var s3 := GameState.new()
+		s3.start_round(seed_value, true)
+		var b := BotBrain.new()
+		b.reset(seed_value)
+		s3.oni_feint(s3.oni_id)
+		for e in s3.take_events():
+			b.on_event(s3, e)
+		for e in s3.take_events():
+			if e["type"] == "otetsuki":
+				fooled += 1
+	_check(fooled > 0 and fooled < 40, "ボットは「ふり」にときどきだまされる")
+
+
+func _test_player_oni_auto_drop_after_laps() -> void:
+	var s := GameState.new()
+	s.start_round(57, true)
+	var e := _run_until(s, "dropped", 400.0)
+	_check(not e.is_empty(), "落とさなくても、いつかは自動で落ちる")
+	var laps := (s.oni_angle - s.oni_start_angle) / TAU
+	_check(laps >= GameConfig.ONI_MAX_LAPS_BEFORE_DROP and laps < GameConfig.ONI_MAX_LAPS_BEFORE_DROP + 0.5,
+			"自動で落ちるのは %d 周したあと" % GameConfig.ONI_MAX_LAPS_BEFORE_DROP)
+
+
+func _test_player_oni_rounds_finish() -> void:
+	var reasons := {}
+	for seed_value in 30:
+		var s := GameState.new()
+		s.start_round(seed_value, true)
+		var b := BotBrain.new()
+		b.reset(seed_value)
+		var oni := s.get_actor(s.oni_id)
+		var dropped := false
+		var e := {}
+		for i in int(300.0 / STEP):
+			# 人の鬼のまね: 2つ目の席の後ろで落とし、追いかけられたら内側を走る
+			if not dropped and s.oni_angle >= s.oni_start_angle + TAU * 2.0 / GameConfig.SEAT_COUNT:
+				dropped = s.oni_drop(oni.id)
+			if s.phase == GameState.Phase.CHASE:
+				s.set_move(oni.id, -Vector3(oni.position.x, 0, oni.position.z).normalized())
+			b.update(s, STEP)
+			s.tick(STEP)
+			for ev in s.take_events():
+				b.on_event(s, ev)
+				if ev["type"] == "result":
+					e = ev
+			if not e.is_empty():
+				break
+		_check(not e.is_empty(), "seed %d: 人が鬼でもラウンドは必ず終わる" % seed_value)
+		if not e.is_empty():
+			reasons[e["reason"]] = true
+			if e["reason"] == "sat":
+				_check(oni.seat_index == s.vacant_seat, "座れたら鬼は空いた席にいる")
+	print("player oni results: ", reasons.keys())
+	_check(reasons.size() >= 2, "人が鬼のときも、勝ったり負けたりする")
 
 
 # --- 道具 ---

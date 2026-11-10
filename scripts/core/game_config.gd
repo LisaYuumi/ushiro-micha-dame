@@ -95,3 +95,14 @@ const BOT_STAMP_INTERVAL_MAX := 12.0
 const BOT_STAMP_RECENT_PASS := 6.0
 ## ボットが振り向いてから前を向くまで(秒)
 const BOT_LOOK_TIME := 0.8
+
+# --- 人が鬼をやるとき ---
+## 歩く速さの範囲(メートル/秒)。スティック左でゆっくり、右で速く。何もしなければ ONI_WALK_SPEED
+const ONI_WALK_SPEED_MIN := 0.4
+const ONI_WALK_SPEED_MAX := 1.6
+## 「落とす」「ふり」が効く範囲: 席の真後ろからこの距離(メートル、輪にそって)以内
+const ONI_DROP_REACH := 1.4
+## この周数を歩いても落とさなければ、次の席の後ろで自動的に落とす
+const ONI_MAX_LAPS_BEFORE_DROP := 4
+## 鬼の「ふり」の物音で、その席のボットがだまされて振り向く確率(0〜1)
+const BOT_FEINT_FOOL_CHANCE := 0.3
