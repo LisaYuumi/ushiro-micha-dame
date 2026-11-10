@@ -20,11 +20,13 @@ func _ready() -> void:
 func _start_round() -> void:
 	state.start_round()
 	_last_sound = ""
+	hud.hide_message()
 	view.build(state)
 	_update_help()
 
 
 func _physics_process(delta: float) -> void:
+	PlayerInput.apply(state)
 	state.tick(delta)
 	for e in state.take_events():
 		view.on_event(e)
@@ -33,11 +35,17 @@ func _physics_process(delta: float) -> void:
 				_last_sound = "本物"
 			"rustle":
 				_last_sound = "ニセ"
+			"otetsuki":
+				if e["actor"] == state.local_player_id:
+					hud.show_message("お手つき!", Color(0.85, 0.1, 0.1), GameConfig.MESSAGE_TIME)
+			"found":
+				if e["actor"] == state.local_player_id:
+					hud.show_message("ハンカチがある!", Color(0.1, 0.5, 0.9), GameConfig.MESSAGE_TIME)
 		_update_help()
 
 
-func _process(_delta: float) -> void:
-	view.sync(state)
+func _process(delta: float) -> void:
+	view.sync(state, delta)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -51,7 +59,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _update_help() -> void:
-	var lines := PackedStringArray(["段階2: 鬼が歩いてハンカチを落とす"])
+	var lines := PackedStringArray(["段階3: 振り向き・お手つき"])
+	var me := state.get_local_player()
+	lines.append("お手つき: %d 回" % me.otetsuki_count)
 	if view.is_top_camera():
 		lines.append("今のカメラ: 上から見る(確認用)")
 		# 確認用カメラのときだけ答えを出す
@@ -65,5 +75,6 @@ func _update_help() -> void:
 			lines.append("【確認用】さっきの物音: %s" % _last_sound)
 	else:
 		lines.append("今のカメラ: 自分の席から見る")
+	lines.append("スペース(押している間): 振り向く")
 	lines.append("F1: カメラ切りかえ / R: やり直し / Esc: 終了")
 	hud.set_help("\n".join(lines))

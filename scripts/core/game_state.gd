@@ -27,6 +27,10 @@ class Actor:
 	var yaw: float = 0.0
 	## 仮の体の色
 	var color: Color = Color.WHITE
+	## 振り向いているか(全員から見える)
+	var looking_back: bool = false
+	## お手つきの回数(このステップでは数えるだけ。点数はまだ)
+	var otetsuki_count: int = 0
 
 
 ## 席の位置(床の上)
@@ -134,6 +138,28 @@ func tick(delta: float) -> void:
 	_place_on_walk_ring(oni, oni_angle)
 
 
+# --- 命令(プレイヤーの入力やボットから呼ばれる) ---
+
+## 振り向く/前を向く。振り向いた瞬間に、後ろにハンカチがあるかを判定する。
+func set_looking_back(actor_id: int, value: bool) -> void:
+	var a := get_actor(actor_id)
+	if a == null or a.role != Role.SEATED or a.looking_back == value:
+		return
+	a.looking_back = value
+	if not value:
+		return
+	if has_handkerchief_behind(a):
+		events.append({"type": "found", "actor": actor_id})
+	else:
+		a.otetsuki_count += 1
+		events.append({"type": "otetsuki", "actor": actor_id})
+
+
+## この人の後ろにハンカチが落ちているか
+func has_handkerchief_behind(a: Actor) -> bool:
+	return handkerchief_on_floor and a.role == Role.SEATED and a.seat_index == drop_target_seat
+
+
 ## たまったお知らせを受け取る(受け取ると空になる)。
 func take_events() -> Array:
 	var out := events
@@ -177,6 +203,8 @@ func snapshot() -> Dictionary:
 			"seat": a.seat_index,
 			"pos": a.position,
 			"yaw": a.yaw,
+			"looking_back": a.looking_back,
+			"otetsuki": a.otetsuki_count,
 		})
 	return {
 		"actors": list,
@@ -230,6 +258,10 @@ func _drop() -> void:
 		"seat": drop_target_seat,
 		"pos": handkerchief_position,
 	})
+	# 振り向いたまま待っていた人の後ろに落とした場合は、その場で見つかる
+	var target := get_actor_at_seat(drop_target_seat)
+	if target and target.looking_back:
+		events.append({"type": "found", "actor": target.id})
 
 
 func _sit(actor: Actor, seat: int) -> void:

@@ -10,8 +10,8 @@ const SEAT_COUNT := 5
 const RING_RADIUS := 3.0
 ## 鬼が歩く輪の半径(席の輪より外側)
 const ONI_WALK_RADIUS := 4.3
-## ハンカチが落ちる位置の半径(席の真後ろ)
-const DROP_RADIUS := 3.6
+## ハンカチが落ちる位置の半径(席の真後ろ。背もたれに隠れない距離)
+const DROP_RADIUS := 3.8
 
 # --- 鬼の動き ---
 ## 鬼が歩く速さ(メートル/秒)
@@ -36,3 +36,15 @@ const DROP_VOLUME_DB := -16.0
 ## 置いた音が、この距離(メートル)より離れると急に小さくなる。
 ## 小さいほど「自分のすぐ後ろ」でないと聞こえない
 const DROP_SOUND_RANGE := 1.2
+
+# --- 振り向き ---
+## 振り向くのにかかる時間(秒)
+const LOOK_BACK_TIME := 0.15
+## 前を向いているときのカメラの下向き角度(度)
+const SEAT_CAM_PITCH_FRONT := -12.0
+## 振り向いたときのカメラの下向き角度(度)。床のハンカチが見えるように深く
+const SEAT_CAM_PITCH_BACK := -55.0
+## 振り向いたとき、頭が後ろへ乗り出す距離(メートル)
+const LOOK_BACK_LEAN := 0.2
+## 「お手つき!」などの表示時間(秒)
+const MESSAGE_TIME := 1.5

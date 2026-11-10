@@ -15,12 +15,15 @@ var _step_player: AudioStreamPlayer3D
 ## 足音用: 鬼の前回の位置と、前の足音から歩いた距離
 var _oni_last_pos := Vector3.ZERO
 var _oni_walked := 0.0
+## 振り向きの度合い(0=前、1=後ろ)。見た目をなめらかにするためだけの値
+var _turn := {} # id -> float
 
 
 func build(state: GameState) -> void:
 	for c in get_children():
 		c.queue_free()
 	_actor_nodes.clear()
+	_turn.clear()
 
 	_build_environment()
 	_build_floor()
@@ -33,16 +36,21 @@ func build(state: GameState) -> void:
 	_build_handkerchief()
 	_build_sounds(state)
 	_build_cameras(state)
-	sync(state)
+	sync(state, 0.0)
 
 
 ## 毎フレーム、状態に合わせて位置と向きを反映する。
-func sync(state: GameState) -> void:
+func sync(state: GameState, delta: float) -> void:
+	var turn_step := delta / GameConfig.LOOK_BACK_TIME
 	for a in state.actors:
+		var t: float = move_toward(_turn.get(a.id, 0.0), 1.0 if a.looking_back else 0.0, turn_step)
+		_turn[a.id] = t
 		var node: Node3D = _actor_nodes.get(a.id)
 		if node:
 			node.position = a.position
-			node.rotation.y = a.yaw
+			# 振り向いた姿は全員に見える(体ごと大げさに後ろを向く)
+			node.rotation.y = a.yaw + PI * t
+	_update_seat_camera(state)
 
 	_handkerchief.visible = state.handkerchief_on_floor
 	_handkerchief.position = state.handkerchief_position
@@ -225,14 +233,25 @@ func _build_cameras(state: GameState) -> void:
 	# 自分の体のレイヤーを映さない
 	_seat_cam.cull_mask = 0xFFFFF & ~(1 << (SELF_LAYER - 1))
 	add_child(_seat_cam)
-	var eye_pos := me.position + Vector3(0, 1.45, 0)
-	_seat_cam.look_at_from_position(eye_pos, Vector3(0, 0.8, 0))
 	_seat_cam.make_current()
+	_update_seat_camera(state)
 
 	_top_cam = Camera3D.new()
 	_top_cam.fov = 60
 	add_child(_top_cam)
 	_top_cam.look_at_from_position(Vector3(0, 13, 6), Vector3.ZERO)
+
+
+## 自分の席のカメラ: 前を向いているときは輪の内側、振り向くと足元の後ろを見る
+func _update_seat_camera(state: GameState) -> void:
+	var me := state.get_local_player()
+	if me == null or _seat_cam == null:
+		return
+	var t: float = _turn.get(me.id, 0.0)
+	var back_dir := Vector3(sin(me.yaw), 0.0, cos(me.yaw))
+	_seat_cam.position = me.position + Vector3(0, 1.45, 0) + back_dir * GameConfig.LOOK_BACK_LEAN * t
+	var pitch := lerpf(GameConfig.SEAT_CAM_PITCH_FRONT, GameConfig.SEAT_CAM_PITCH_BACK, t)
+	_seat_cam.rotation = Vector3(deg_to_rad(pitch), me.yaw + PI * t, 0.0)
 
 
 func _mesh(mesh: Mesh, color: Color) -> MeshInstance3D:

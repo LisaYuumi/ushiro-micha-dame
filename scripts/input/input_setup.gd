@@ -3,6 +3,7 @@ extends RefCounted
 ## キー割り当てをまとめて登録する(project.godot を手で書かずに済むように)。
 
 const KEYS := {
+	"look_back": KEY_SPACE,
 	"debug_top_camera": KEY_F1,
 	"restart": KEY_R,
 	"quit": KEY_ESCAPE,
