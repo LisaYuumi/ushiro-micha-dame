@@ -23,6 +23,7 @@ func _initialize() -> void:
 	_test_pick_up_rules()
 	_test_oni_sits_if_chaser_stands_still()
 	_test_touch_wins()
+	_test_waiting_at_own_seat_currently_wins()
 	_test_chaser_cannot_run_backward_or_inside()
 	_test_no_otetsuki_during_chase()
 	_test_rounds_with_bots_always_finish()
@@ -184,6 +185,12 @@ func _test_pick_up_rules() -> void:
 
 func _test_oni_sits_if_chaser_stands_still() -> void:
 	var s := _chasing_state(17)
+	# 追う人を鬼の通り道から外す(輪のいちばん外側へ)
+	var c := s.get_actor(s.chaser_id)
+	for i in 120:
+		s.set_move(c.id, Vector3(c.position.x, 0.0, c.position.z).normalized())
+		s.tick(STEP)
+	s.set_move(c.id, Vector3.ZERO)
 	var e := _run_until(s, "result", 60.0)
 	_check(not e.is_empty() and e["reason"] == "sat", "追いかけなければ鬼が座る")
 	if e.is_empty():
@@ -192,6 +199,13 @@ func _test_oni_sits_if_chaser_stands_still() -> void:
 	_check(e["winner"] == s.oni_id and e["loser"] == s.chaser_id, "座られたら追いかけた人の負け")
 	_check(oni.seat_index == s.vacant_seat, "鬼は空いた席に座る")
 	_check(oni.position.distance_to(s.seat_positions[s.vacant_seat]) < 0.05, "鬼は席の位置にいる")
+
+
+## いまのルールの抜け道(確認待ち): 拾った場所で待っているだけでタッチできてしまう
+func _test_waiting_at_own_seat_currently_wins() -> void:
+	var s := _chasing_state(31)
+	var e := _run_until(s, "result", 60.0)
+	print("waiting at own seat -> ", e.get("reason"))
 
 
 func _test_touch_wins() -> void:
