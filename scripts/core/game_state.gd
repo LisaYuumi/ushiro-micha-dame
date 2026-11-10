@@ -36,7 +36,7 @@ class Actor:
 	var otetsuki_count: int = 0
 	## 走る向き(追いかけるとき。長さ 0〜1)
 	var move_dir: Vector3 = Vector3.ZERO
-	## このラウンドで送れるスタンプの残り
+	## このラウンドで送れるスタンプの残り(-1 = 何回でも)
 	var stamps_left: int = 0
 
 
@@ -235,12 +235,13 @@ func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
 		return false
 	if phase != Phase.WALKING and phase != Phase.DROPPED:
 		return false
-	if sender.stamps_left <= 0 or not (kind in Stamps.ALL):
+	if sender.stamps_left == 0 or not (kind in Stamps.ALL):
 		return false
 	if active_stamps.has(target_id):
 		events.append({"type": "stamp_blocked", "sender": sender_id, "target": target_id})
 		return false
-	sender.stamps_left -= 1
+	if sender.stamps_left > 0:
+		sender.stamps_left -= 1
 	# 本当のことを言ったか(あとで点数に使う)。「信じて!」は「見ろ」の意味として扱う
 	var truthful := Stamps.says_look(kind) == has_handkerchief_behind(target)
 	active_stamps[target_id] = {

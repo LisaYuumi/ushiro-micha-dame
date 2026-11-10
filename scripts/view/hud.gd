@@ -2,11 +2,19 @@ class_name Hud
 extends CanvasLayer
 ## 画面の文字表示だけを担当する。
 
+## 自分に届いたスタンプのまわりに出す枠の太さ
+const FRAME_WIDTH := 18.0
+
 var _help: Label
 var _message: Label
 var _message_left := 0.0
 ## 自分に届いたスタンプ(画面の上に大きく)
+var _stamp_box: VBoxContainer
+var _stamp_header: Label
 var _stamp: Label
+## 自分に届いたスタンプの間、画面のふちを光らせる枠
+var _frame: Array[ColorRect] = []
+var _stamp_tween: Tween
 
 
 func _ready() -> void:
@@ -23,14 +31,7 @@ func _ready() -> void:
 	_message.add_theme_constant_override("outline_size", 16)
 	_message.visible = false
 
-	_stamp = _make_label(64, Color.WHITE)
-	add_child(_stamp)
-	_stamp.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_stamp.offset_top = 90
-	_stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_stamp.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_stamp.add_theme_constant_override("outline_size", 14)
-	_stamp.visible = false
+	_build_stamp_display()
 
 
 func _process(delta: float) -> void:
@@ -38,15 +39,6 @@ func _process(delta: float) -> void:
 		_message_left -= delta
 		if _message_left <= 0.0:
 			_message.visible = false
-
-	_stamp = _make_label(64, Color.WHITE)
-	add_child(_stamp)
-	_stamp.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_stamp.offset_top = 90
-	_stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_stamp.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_stamp.add_theme_constant_override("outline_size", 14)
-	_stamp.visible = false
 
 
 func set_help(text: String) -> void:
@@ -61,25 +53,91 @@ func show_message(text: String, outline: Color, seconds: float) -> void:
 	_message_left = seconds if seconds > 0.0 else INF
 
 
-## 自分に届いたスタンプを出す(空文字で消す)
-func show_stamp(text: String, outline: Color) -> void:
-	_stamp.visible = text != ""
-	_stamp.text = text
-	_stamp.add_theme_color_override("font_outline_color", outline)
-
-
 func hide_message() -> void:
 	_message.visible = false
-
-	_stamp = _make_label(64, Color.WHITE)
-	add_child(_stamp)
-	_stamp.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_stamp.offset_top = 90
-	_stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_stamp.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_stamp.add_theme_constant_override("outline_size", 14)
-	_stamp.visible = false
 	_message_left = 0.0
+
+
+## 自分に届いたスタンプを出す(空文字で消す)。
+## 「あなたへ」の見出し+ポンと飛び出す動き+画面のふちが光る、で他人宛てと区別する
+func show_stamp(text: String, color: Color) -> void:
+	if _stamp_tween:
+		_stamp_tween.kill()
+		_stamp_tween = null
+	if text == "":
+		_stamp_box.visible = false
+		for r in _frame:
+			r.visible = false
+		return
+
+	_stamp.text = text
+	_stamp.add_theme_color_override("font_outline_color", color)
+	_stamp_header.add_theme_color_override("font_outline_color", color)
+	_stamp_box.visible = true
+	for r in _frame:
+		r.color = color
+		r.visible = true
+
+	# ポンと大きくなってから元の大きさへ。枠は点滅させる
+	_stamp_box.pivot_offset = _stamp_box.size / 2.0
+	_stamp_box.scale = Vector2(0.3, 0.3)
+	_stamp_tween = create_tween()
+	_stamp_tween.tween_property(_stamp_box, "scale", Vector2(1.15, 1.15), 0.12)
+	_stamp_tween.tween_property(_stamp_box, "scale", Vector2.ONE, 0.1)
+	for i in 3:
+		_stamp_tween.tween_callback(_set_frame_alpha.bind(0.25))
+		_stamp_tween.tween_interval(0.15)
+		_stamp_tween.tween_callback(_set_frame_alpha.bind(0.9))
+		_stamp_tween.tween_interval(0.15)
+
+
+func _set_frame_alpha(a: float) -> void:
+	for r in _frame:
+		r.modulate.a = a
+
+
+func _build_stamp_display() -> void:
+	# 画面のふちの枠(上下左右の4本)
+	for side in 4:
+		var r := ColorRect.new()
+		r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		r.visible = false
+		add_child(r)
+		match side:
+			0: # 上
+				r.set_anchors_preset(Control.PRESET_TOP_WIDE)
+				r.offset_bottom = FRAME_WIDTH
+			1: # 下
+				r.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+				r.offset_top = -FRAME_WIDTH
+			2: # 左
+				r.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+				r.offset_right = FRAME_WIDTH
+			3: # 右
+				r.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+				r.offset_left = -FRAME_WIDTH
+		_frame.append(r)
+
+	_stamp_box = VBoxContainer.new()
+	_stamp_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stamp_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	add_child(_stamp_box)
+	_stamp_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_stamp_box.offset_left = -400
+	_stamp_box.offset_right = 400
+	_stamp_box.offset_top = 70
+	_stamp_box.visible = false
+
+	_stamp_header = _make_label(30, Color.WHITE)
+	_stamp_header.text = "▼ あなたへ ▼"
+	_stamp_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_stamp_header.add_theme_constant_override("outline_size", 10)
+	_stamp_box.add_child(_stamp_header)
+
+	_stamp = _make_label(80, Color.WHITE)
+	_stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_stamp.add_theme_constant_override("outline_size", 16)
+	_stamp_box.add_child(_stamp)
 
 
 func _make_label(size: int, color: Color) -> Label:

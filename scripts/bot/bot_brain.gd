@@ -73,7 +73,7 @@ func _update_look(state: GameState, a: GameState.Actor, delta: float) -> void:
 
 ## ときどき誰かにスタンプを送る。半分は本当、半分は嘘
 func _update_stamp(state: GameState, a: GameState.Actor, delta: float) -> void:
-	if a.stamps_left <= 0:
+	if a.stamps_left == 0:
 		return
 	if not _stamp_left.has(a.id):
 		_stamp_left[a.id] = rng.randf_range(GameConfig.BOT_STAMP_INTERVAL_MIN, GameConfig.BOT_STAMP_INTERVAL_MAX)

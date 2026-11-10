@@ -81,7 +81,7 @@ func _send_stamp(kind: String) -> void:
 	if _stamp_target < 0:
 		hud.show_message("先に相手をタップ", Color(0.3, 0.3, 0.3), 1.0)
 		return
-	if state.get_local_player().stamps_left <= 0:
+	if state.get_local_player().stamps_left == 0:
 		hud.show_message("スタンプは使い切った", Color(0.3, 0.3, 0.3), 1.0)
 		return
 	state.send_stamp(state.local_player_id, _stamp_target, kind)
@@ -96,6 +96,9 @@ func _show_event(e: Dictionary) -> void:
 				if GameConfig.SHOW_STAMP_SENDER:
 					text += " (%s)" % _name(e["sender"])
 				hud.show_stamp(text, WorldView.STAMP_COLORS[e["kind"]])
+				view.play_stamp_sound(e["kind"])
+				# 対応しているスマホ(主に Android)では短く震える
+				Input.vibrate_handheld(150)
 		"stamp_end":
 			if e["target"] == me:
 				hud.show_stamp("", Color.WHITE)
@@ -155,7 +158,8 @@ func _name(id: int) -> String:
 func _update_help() -> void:
 	var lines := PackedStringArray(["ステップ3: スタンプで教える/だます"])
 	var me := state.get_local_player()
-	lines.append("お手つき: %d 回 / スタンプ残り: %d" % [me.otetsuki_count, me.stamps_left])
+	var left := "何回でも" if me.stamps_left < 0 else "残り %d" % me.stamps_left
+	lines.append("お手つき: %d 回 / スタンプ: %s" % [me.otetsuki_count, left])
 	if _stamp_target >= 0:
 		lines.append("スタンプを送る相手: %s" % _name(_stamp_target))
 	if view.is_top_camera():

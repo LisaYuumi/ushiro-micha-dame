@@ -78,8 +78,8 @@ const CHASE_CAM_HEIGHT := 3.2
 # --- スタンプ ---
 ## 届いたスタンプが表示される時間(秒)。表示中はほかのスタンプは届かない(早い者勝ち)
 const STAMP_SHOW_TIME := 3.0
-## 1人が1ラウンドに送れる数
-const STAMPS_PER_ROUND := 2
+## 1人が1ラウンドに送れる数。-1 = 何回でも送れる
+const STAMPS_PER_ROUND := -1
 ## 誰が送ったかを表示するか(企画書: 試遊で決める)
 const SHOW_STAMP_SENDER := false
 ## ボットが本当のことを言う確率(0〜1)

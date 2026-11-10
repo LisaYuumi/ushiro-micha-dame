@@ -297,10 +297,8 @@ func _test_stamp_rules() -> void:
 	s.start_round(41)
 	_check(s.send_stamp(1, 2, Stamps.SAFE), "座っている人どうしでスタンプが届く")
 	_check(_has(s.take_events(), "stamp"), "届いたお知らせが出る")
-	_check(s.get_actor(1).stamps_left == GameConfig.STAMPS_PER_ROUND - 1, "送ると残りが減る")
 	_check(not s.send_stamp(3, 2, Stamps.DROPPED), "表示中の人には届かない(早い者勝ち)")
 	_check(_has(s.take_events(), "stamp_blocked"), "届かなかったお知らせが出る")
-	_check(s.get_actor(3).stamps_left == GameConfig.STAMPS_PER_ROUND, "届かなかったら回数は減らない")
 	_check(not s.send_stamp(1, 1, Stamps.SAFE), "自分には送れない")
 	_check(not s.send_stamp(s.oni_id, 2, Stamps.SAFE), "鬼は送れない")
 	_check(not s.send_stamp(1, 3, "unknown"), "知らない種類は送れない")
@@ -310,9 +308,8 @@ func _test_stamp_rules() -> void:
 	_check(not s.active_stamps.has(2), "消えたら表示中ではない")
 	_check(s.send_stamp(3, 2, Stamps.DROPPED), "消えたあとはまた届く")
 	_check(s.send_stamp(1, 4, Stamps.NOW), "2つ目も送れる")
-	_check(not s.send_stamp(1, 0, Stamps.NOW), "1ラウンド2回まで")
-	s.start_round(41)
-	_check(s.get_actor(1).stamps_left == GameConfig.STAMPS_PER_ROUND, "次のラウンドで回数が戻る")
+	_check(s.send_stamp(1, 0, Stamps.NOW), "3つ目も送れる(何回でも送れる)")
+	_check(s.get_actor(1).stamps_left == GameConfig.STAMPS_PER_ROUND, "何回でもの設定なら残りは減らない")
 
 
 func _test_stamp_truthfulness() -> void:
@@ -351,7 +348,7 @@ func _test_bots_send_and_trust_stamps() -> void:
 			if s.phase == GameState.Phase.RESULT:
 				break
 		for a in s.actors:
-			_check(a.stamps_left >= 0, "スタンプの残りがマイナスにならない")
+			_check(a.stamps_left == GameConfig.STAMPS_PER_ROUND or a.stamps_left >= 0, "スタンプの残りの数がおかしくならない")
 	_check(sent > 0, "ボットがスタンプを送る")
 	_check(otetsuki_after_stamp > 0, "ボットがスタンプを信じて振り向き、お手つきすることがある")
 	print("bot stamps sent: %d, otetsuki: %d" % [sent, otetsuki_after_stamp])

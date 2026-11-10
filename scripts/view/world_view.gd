@@ -88,9 +88,7 @@ func on_event(e: Dictionary) -> void:
 			_drop_player.position = e["pos"]
 			_drop_player.pitch_scale = randf_range(0.9, 1.1)
 			_drop_player.play()
-		"stamp":
-			_stamp_player.stream = Sfx.stamp(e["kind"])
-			_stamp_player.play()
+
 
 
 func _update_footsteps(state: GameState) -> void:
@@ -300,6 +298,12 @@ func _build_sounds(state: GameState) -> void:
 	_beep_player.stream = Sfx.beep()
 	_beep_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	add_child(_beep_player)
+
+
+## 自分に届いたスタンプの音(ほかの人あてのスタンプでは鳴らさない)
+func play_stamp_sound(kind: String) -> void:
+	_stamp_player.stream = Sfx.stamp(kind)
+	_stamp_player.play()
 
 
 ## スタンプを送る相手の目印を出す(-1 で消す)
