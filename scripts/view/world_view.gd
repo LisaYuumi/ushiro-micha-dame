@@ -9,6 +9,12 @@ const SELF_LAYER := 2
 var _actor_nodes := {} # id -> Node3D
 var _seat_cam: Camera3D
 var _top_cam: Camera3D
+var _handkerchief: Node3D
+var _drop_player: AudioStreamPlayer3D
+var _step_player: AudioStreamPlayer3D
+## 足音用: 鬼の前回の位置と、前の足音から歩いた距離
+var _oni_last_pos := Vector3.ZERO
+var _oni_walked := 0.0
 
 
 func build(state: GameState) -> void:
@@ -24,6 +30,8 @@ func build(state: GameState) -> void:
 		var node := _build_character(a, a.id == state.local_player_id)
 		add_child(node)
 		_actor_nodes[a.id] = node
+	_build_handkerchief()
+	_build_sounds(state)
 	_build_cameras(state)
 	sync(state)
 
@@ -35,6 +43,30 @@ func sync(state: GameState) -> void:
 		if node:
 			node.position = a.position
 			node.rotation.y = a.yaw
+
+	_handkerchief.visible = state.handkerchief_on_floor
+	_handkerchief.position = state.handkerchief_position
+	_update_footsteps(state)
+
+
+## GameState からのお知らせに合わせて音などを出す。
+func on_event(e: Dictionary) -> void:
+	match e.get("type"):
+		"dropped":
+			_drop_player.position = e["pos"]
+			_drop_player.play()
+
+
+func _update_footsteps(state: GameState) -> void:
+	var oni := state.get_actor(state.oni_id)
+	if oni == null:
+		return
+	_oni_walked += oni.position.distance_to(_oni_last_pos)
+	_oni_last_pos = oni.position
+	if _oni_walked >= GameConfig.FOOTSTEP_STRIDE:
+		_oni_walked = 0.0
+		_step_player.pitch_scale = randf_range(0.85, 1.15)
+		_step_player.play()
 
 
 ## 席のカメラ ⇔ 上から見るカメラ(確認用)を切りかえる。
@@ -154,6 +186,31 @@ func _build_character(a: GameState.Actor, is_self: bool) -> Node3D:
 			if c is VisualInstance3D:
 				c.layers = 1 << (SELF_LAYER - 1)
 	return root
+
+
+## 仮のハンカチ: 白くて薄い四角
+func _build_handkerchief() -> void:
+	var box := BoxMesh.new()
+	box.size = Vector3(0.35, 0.02, 0.35)
+	_handkerchief = _mesh(box, Color(0.97, 0.97, 1.0))
+	_handkerchief.visible = false
+	add_child(_handkerchief)
+
+
+func _build_sounds(state: GameState) -> void:
+	# 足音は鬼の体についていく(左右・遠近で鬼の位置がわかる)
+	_step_player = AudioStreamPlayer3D.new()
+	_step_player.stream = Sfx.footstep()
+	_step_player.volume_db = GameConfig.FOOTSTEP_VOLUME_DB
+	_step_player.max_polyphony = 2
+	(_actor_nodes[state.oni_id] as Node3D).add_child(_step_player)
+	_oni_last_pos = state.get_actor(state.oni_id).position
+	_oni_walked = 0.0
+
+	_drop_player = AudioStreamPlayer3D.new()
+	_drop_player.stream = Sfx.drop()
+	_drop_player.volume_db = GameConfig.DROP_VOLUME_DB
+	add_child(_drop_player)
 
 
 func _build_cameras(state: GameState) -> void:

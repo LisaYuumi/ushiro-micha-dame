@@ -4,6 +4,7 @@ extends RefCounted
 
 const KEYS := {
 	"debug_top_camera": KEY_F1,
+	"restart": KEY_R,
 	"quit": KEY_ESCAPE,
 }
 

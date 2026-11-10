@@ -1,21 +1,24 @@
 class_name GameState
 extends RefCounted
-## ゲームの状態(誰がどこにいるか、ハンカチの位置、勝敗)だけを持つ。
+## ゲームの状態(誰がどこにいるか、ハンカチの位置、勝敗)とルールだけを持つ。
 ##
 ## ルール:
 ## - ノード・画面・キー入力・音には一切さわらない。
-## - 状態を変えるのは、このクラスの関数だけ。
-## 将来のオンライン対戦では、ホストがこのクラスを動かし、
-## snapshot() の中身を全員に配る想定。
+## - 状態を変えるのは、このクラスの関数だけ(tick と、これから足す命令の関数)。
+## - 画面や音に知らせたいことは events に積む。表示側が take_events() で受け取る。
+## 将来のオンライン対戦では、ホストだけがこのクラスを動かし、
+## snapshot() と events を全員に配る想定。
 
 enum Role { SEATED, ONI }
+## WALKING: 鬼がハンカチを持って歩いている / DROPPED: 落とした後
+enum Phase { WALKING, DROPPED }
 
 
 class Actor:
 	var id: int
 	var display_name: String
 	var is_bot: bool
-	var role: int = Role.SEATED
+	var role: int = 0 # Role.SEATED
 	## 座っている席の番号(座っていなければ -1)
 	var seat_index: int = -1
 	## 床の上の位置
@@ -34,17 +37,41 @@ var seat_yaws: Array[float] = []
 var actors: Array = []
 ## この画面で操作しているプレイヤーの id
 var local_player_id: int = 0
+## 鬼の id
+var oni_id: int = -1
+
+var phase: int = Phase.WALKING
+## 鬼が輪の上のどこにいるか(角度・ラジアン。増え続ける=何周したかもわかる)
+var oni_angle: float = 0.0
+## ハンカチを落とす相手の席
+var drop_target_seat: int = -1
+## 鬼がこの角度まで来たら落とす
+var drop_angle: float = 0.0
+## ハンカチが床に落ちているか
+var handkerchief_on_floor: bool = false
+var handkerchief_position: Vector3 = Vector3.ZERO
+
+## 表示側へのお知らせ(Dictionary の配列)
+var events: Array = []
+
+var rng := RandomNumberGenerator.new()
 
 
-## 初期配置: 6席の輪、プレイヤー1人+ボット5体が着席、鬼が輪の外に立つ。
-func setup_default() -> void:
+## ラウンドを最初から始める。seed を指定すると毎回同じ展開になる(テスト用)。
+func start_round(seed_value: int = -1) -> void:
+	if seed_value >= 0:
+		rng.seed = seed_value
+	else:
+		rng.randomize()
+
 	seat_positions.clear()
 	seat_yaws.clear()
 	actors.clear()
+	events.clear()
 
 	for i in GameConfig.SEAT_COUNT:
 		var a := seat_angle(i)
-		seat_positions.append(Vector3(sin(a), 0.0, cos(a)) * GameConfig.RING_RADIUS)
+		seat_positions.append(_ring_point(a, GameConfig.RING_RADIUS))
 		# 輪の中心を向く向き(-Z が正面なので、角度 a がそのまま中心向き)
 		seat_yaws.append(a)
 
@@ -72,8 +99,33 @@ func setup_default() -> void:
 	oni.display_name = "鬼"
 	oni.role = Role.ONI
 	oni.color = Color(0.85, 0.2, 0.2)
-	_place_on_walk_ring(oni, seat_angle(0) + TAU / (GameConfig.SEAT_COUNT * 2))
 	actors.append(oni)
+	oni_id = oni.id
+
+	# 鬼は席と席の間から歩きはじめる
+	oni_angle = seat_angle(0) + TAU / (GameConfig.SEAT_COUNT * 2)
+	_place_on_walk_ring(oni, oni_angle)
+
+	phase = Phase.WALKING
+	handkerchief_on_floor = false
+	_plan_drop()
+
+
+## 時間を delta 秒すすめる。
+func tick(delta: float) -> void:
+	var oni := get_actor(oni_id)
+	oni_angle += GameConfig.ONI_WALK_SPEED / GameConfig.ONI_WALK_RADIUS * delta
+	_place_on_walk_ring(oni, oni_angle)
+
+	if phase == Phase.WALKING and oni_angle >= drop_angle:
+		_drop()
+
+
+## たまったお知らせを受け取る(受け取ると空になる)。
+func take_events() -> Array:
+	var out := events
+	events = []
+	return out
 
 
 ## 席 i の、輪の上での角度(ラジアン)。席0 は +Z 側。
@@ -92,6 +144,14 @@ func get_local_player() -> Actor:
 	return get_actor(local_player_id)
 
 
+## 席に座っている人(いなければ null)
+func get_actor_at_seat(seat: int) -> Actor:
+	for a in actors:
+		if a.seat_index == seat:
+			return a
+	return null
+
+
 ## 通信や保存に使える、ただのデータ(Dictionary)に変換する。
 func snapshot() -> Dictionary:
 	var list := []
@@ -105,7 +165,37 @@ func snapshot() -> Dictionary:
 			"pos": a.position,
 			"yaw": a.yaw,
 		})
-	return {"actors": list}
+	return {
+		"actors": list,
+		"phase": phase,
+		"oni_angle": oni_angle,
+		"handkerchief_on_floor": handkerchief_on_floor,
+		"handkerchief_pos": handkerchief_position,
+	}
+
+
+# --- 内部の処理 ---
+
+## 落とす相手と、落とすタイミング(角度)を決める。
+## 相手はプレイヤーもボットも含めてランダム。
+func _plan_drop() -> void:
+	drop_target_seat = rng.randi_range(0, GameConfig.SEAT_COUNT - 1)
+	var laps := rng.randf_range(GameConfig.ONI_LAPS_BEFORE_DROP_MIN, GameConfig.ONI_LAPS_BEFORE_DROP_MAX)
+	var earliest := oni_angle + TAU * laps
+	var target := seat_angle(drop_target_seat)
+	# earliest 以降で、はじめて相手の真後ろを通る角度
+	drop_angle = target + ceilf((earliest - target) / TAU) * TAU
+
+
+func _drop() -> void:
+	phase = Phase.DROPPED
+	handkerchief_on_floor = true
+	handkerchief_position = _ring_point(drop_angle, GameConfig.DROP_RADIUS)
+	events.append({
+		"type": "dropped",
+		"seat": drop_target_seat,
+		"pos": handkerchief_position,
+	})
 
 
 func _sit(actor: Actor, seat: int) -> void:
@@ -118,5 +208,9 @@ func _sit(actor: Actor, seat: int) -> void:
 ## 鬼が歩く輪の上、角度 angle の位置に置き、進行方向(角度が増える向き)を向かせる。
 func _place_on_walk_ring(actor: Actor, angle: float) -> void:
 	actor.seat_index = -1
-	actor.position = Vector3(sin(angle), 0.0, cos(angle)) * GameConfig.ONI_WALK_RADIUS
+	actor.position = _ring_point(angle, GameConfig.ONI_WALK_RADIUS)
 	actor.yaw = angle - PI / 2.0
+
+
+func _ring_point(angle: float, radius: float) -> Vector3:
+	return Vector3(sin(angle), 0.0, cos(angle)) * radius
