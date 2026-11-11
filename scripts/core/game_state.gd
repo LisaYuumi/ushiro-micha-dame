@@ -108,6 +108,11 @@ var _bot_oni_voice_left: float = 0.0
 ## 床に落ちているバナナの皮 [{"pos": Vector3, "sender": id}]
 var bananas: Array = []
 
+## 鬼は人だけにするか(オンラインの試遊用)
+var humans_only_oni: bool = false
+## ラウンドを始めるたびに1つ増える(ホスト以外の画面が、見た目を作り直す合図)
+var round_serial: int = 0
+
 ## 試合: 今のラウンド(0 から)、点数(id -> 点)、試合が終わったか
 var round_index: int = 0
 var scores: Dictionary = {}
@@ -129,20 +134,24 @@ var rng := RandomNumberGenerator.new()
 ## 新しい試合を始める(ラウンド1から)。seed を指定すると毎回同じ展開になる(テスト用)。
 ## player_is_oni = true なら、この画面のプレイヤーが最初の鬼になる。
 func start_match(seed_value: int = -1, player_is_oni: bool = false) -> void:
+	var me := GameConfig.SEAT_COUNT if player_is_oni else 0
+	start_match_custom(seed_value, [me], me if player_is_oni else GameConfig.SEAT_COUNT, {me: "あなた"}, false)
+	local_player_id = me
+
+
+## 人とボットの組み合わせを決めて、新しい試合を始める(オンライン対戦のホストが使う)。
+## human_ids: 人が操作する登場人物の id(0〜SEAT_COUNT)/first_oni: 最初の鬼の id/
+## names: id -> 表示名(書かれていない人はボット名)/humans_only_oni: 鬼は人だけにする
+func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names: Dictionary, humans_only: bool) -> void:
 	if seed_value >= 0:
 		rng.seed = seed_value
 	else:
 		rng.randomize()
-	seat_positions.clear()
-	seat_yaws.clear()
-	for i in GameConfig.SEAT_COUNT:
-		var a := seat_angle(i)
-		seat_positions.append(_ring_point(a, GameConfig.RING_RADIUS))
-		# 輪の中心を向く向き(-Z が正面なので、角度 a がそのまま中心向き)
-		seat_yaws.append(a)
+	_init_seats()
+	humans_only_oni = humans_only
 
 	var palette := [
-		Color(0.95, 0.55, 0.25), # プレイヤー
+		Color(0.95, 0.55, 0.25),
 		Color(0.35, 0.65, 0.95),
 		Color(0.45, 0.8, 0.45),
 		Color(0.9, 0.8, 0.3),
@@ -151,18 +160,17 @@ func start_match(seed_value: int = -1, player_is_oni: bool = false) -> void:
 	]
 	# 登場人物は試合のあいだ同じ。席に5人、鬼が1人(id は 0〜5)
 	actors.clear()
-	local_player_id = GameConfig.SEAT_COUNT if player_is_oni else 0
 	var bot_no := 1
 	for i in GameConfig.SEAT_COUNT + 1:
 		var actor := Actor.new()
 		actor.id = i
-		actor.is_bot = i != local_player_id
-		if actor.is_bot:
+		actor.is_bot = not (i in human_ids)
+		if names.has(i):
+			actor.display_name = names[i]
+		else:
 			actor.display_name = "ボット%d" % bot_no
 			bot_no += 1
-		else:
-			actor.display_name = "あなた"
-		actor.color = palette[0] if not actor.is_bot else palette[bot_no - 1]
+		actor.color = palette[i % palette.size()]
 		actors.append(actor)
 	scores = {}
 	for a in actors:
@@ -170,9 +178,20 @@ func start_match(seed_value: int = -1, player_is_oni: bool = false) -> void:
 	round_index = 0
 	match_over = false
 	var lineup := []
+	for i in GameConfig.SEAT_COUNT + 1:
+		if i != first_oni:
+			lineup.append(i)
+	_begin_round(lineup, first_oni)
+
+
+func _init_seats() -> void:
+	seat_positions.clear()
+	seat_yaws.clear()
 	for i in GameConfig.SEAT_COUNT:
-		lineup.append(i)
-	_begin_round(lineup, GameConfig.SEAT_COUNT)
+		var a := seat_angle(i)
+		seat_positions.append(_ring_point(a, GameConfig.RING_RADIUS))
+		# 輪の中心を向く向き(-Z が正面なので、角度 a がそのまま中心向き)
+		seat_yaws.append(a)
 
 
 ## 互換用: 新しい試合を始める
@@ -238,6 +257,17 @@ func _lineup_after_result() -> Array:
 				seat_ids[idx] = next_oni
 				next_oni = forced
 		get_actor(forced).must_be_oni = false
+	# オンラインの試遊: 鬼は人だけ。ボットが負けたら、座っている人の中から次の鬼を選ぶ
+	if humans_only_oni and get_actor(next_oni).is_bot:
+		var humans := []
+		for i in seat_ids.size():
+			if not get_actor(seat_ids[i]).is_bot:
+				humans.append(i)
+		if not humans.is_empty():
+			var idx: int = humans[rng.randi_range(0, humans.size() - 1)]
+			var human: int = seat_ids[idx]
+			seat_ids[idx] = next_oni
+			next_oni = human
 	return [seat_ids, next_oni]
 
 
@@ -252,6 +282,7 @@ func _too_many_otetsuki() -> int:
 ## seat_ids[i] の人を席 i に座らせ、oni を鬼にしてラウンドを始める
 func _begin_round(seat_ids: Array, oni: int) -> void:
 	events.clear()
+	round_serial += 1
 	_round_start_lineup = seat_ids.duplicate()
 	_round_start_oni = oni
 	for a in actors:
@@ -268,7 +299,8 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	oni_id = oni
 	var oni_actor := get_actor(oni)
 	oni_actor.role = Role.ONI
-	oni_is_player = oni == local_player_id
+	# 鬼を人が操作しているか(ボットの鬼は自動で歩いて落とす)
+	oni_is_player = not oni_actor.is_bot
 
 	# 鬼は席と席の間から歩きはじめる
 	oni_angle = seat_angle(0) + TAU / (GameConfig.SEAT_COUNT * 2)
@@ -651,35 +683,84 @@ func snapshot() -> Dictionary:
 			"id": a.id,
 			"name": a.display_name,
 			"is_bot": a.is_bot,
+			"color": a.color,
 			"role": a.role,
 			"seat": a.seat_index,
 			"pos": a.position,
 			"yaw": a.yaw,
 			"looking_back": a.looking_back,
 			"otetsuki": a.otetsuki_count,
-			"move": a.move_dir,
 			"stamps_left": a.stamps_left,
 			"looks_left": a.looks_left,
+			"bananas_left": a.bananas_left,
 		})
 	return {
 		"actors": list,
 		"phase": phase,
+		"oni_id": oni_id,
+		"oni_is_player": oni_is_player,
 		"oni_angle": oni_angle,
+		"oni_start_angle": oni_start_angle,
+		"drop_target_seat": drop_target_seat,
 		"handkerchief_on_floor": handkerchief_on_floor,
 		"handkerchief_pos": handkerchief_position,
 		"chaser": chaser_id,
 		"vacant_seat": vacant_seat,
 		"result": result,
 		"stamps": active_stamps,
-		"oni_is_player": oni_is_player,
 		"round": round_index,
-		"item": item_name(),
 		"scores": scores,
 		"match_over": match_over,
 		"bananas": bananas,
 		"drop_masked": drop_masked,
-		"oni_radius": oni_radius,
+		"round_serial": round_serial,
 	}
+
+
+## snapshot() の中身をこの状態に写す(オンライン対戦で、ホスト以外が受け取った状態を表示するため)。
+## 写したあとはルールを動かさず(tick しない)、表示に使うだけ。
+func apply_snapshot(s: Dictionary) -> void:
+	if seat_positions.is_empty():
+		_init_seats()
+	var list: Array = s["actors"]
+	if actors.size() != list.size():
+		actors.clear()
+		for i in list.size():
+			actors.append(Actor.new())
+	for i in list.size():
+		var d: Dictionary = list[i]
+		var a: Actor = actors[i]
+		a.id = d["id"]
+		a.display_name = d["name"]
+		a.is_bot = d["is_bot"]
+		a.color = d["color"]
+		a.role = d["role"]
+		a.seat_index = d["seat"]
+		a.position = d["pos"]
+		a.yaw = d["yaw"]
+		a.looking_back = d["looking_back"]
+		a.otetsuki_count = d["otetsuki"]
+		a.stamps_left = d["stamps_left"]
+		a.looks_left = d["looks_left"]
+		a.bananas_left = d["bananas_left"]
+	phase = s["phase"]
+	oni_id = s["oni_id"]
+	oni_is_player = s["oni_is_player"]
+	oni_angle = s["oni_angle"]
+	oni_start_angle = s["oni_start_angle"]
+	drop_target_seat = s["drop_target_seat"]
+	handkerchief_on_floor = s["handkerchief_on_floor"]
+	handkerchief_position = s["handkerchief_pos"]
+	chaser_id = s["chaser"]
+	vacant_seat = s["vacant_seat"]
+	result = s["result"]
+	active_stamps = s["stamps"]
+	round_index = s["round"]
+	scores = s["scores"]
+	match_over = s["match_over"]
+	bananas = s["bananas"]
+	drop_masked = s["drop_masked"]
+	round_serial = s["round_serial"]
 
 
 # --- 内部の処理 ---

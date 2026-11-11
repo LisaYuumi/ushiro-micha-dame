@@ -47,6 +47,9 @@ func _initialize() -> void:
 	_test_otetsuki_penalty_and_forced_oni()
 	_test_deceiving_scores()
 	_test_look_limit_and_patience()
+	_test_online_match_setup()
+	_test_humans_only_oni()
+	_test_snapshot_round_trip()
 
 	_main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(_main)
@@ -1001,6 +1004,74 @@ func _test_look_limit_and_patience() -> void:
 		if s5.seat_pass_age[watcher_seat] < 0.05 or s5.phase == GameState.Phase.RESULT:
 			break
 	_check(watcher.tense_passes == before_tense, "落ちたのが見えていたら、鬼が通ってもがまんの場面にならない")
+
+
+func _test_online_match_setup() -> void:
+	var s := GameState.new()
+	s.start_match_custom(111, [0, 1, 2], 1, {0: "ホスト", 1: "P2", 2: "P3"}, true)
+	_check(s.oni_id == 1 and s.oni_is_player, "人が最初の鬼")
+	var humans := 0
+	for a in s.actors:
+		if not a.is_bot:
+			humans += 1
+	_check(humans == 3, "人は3人、残りはボット")
+	_check(s.get_actor(0).display_name == "ホスト", "名前が入る")
+	var seated := 0
+	for a in s.actors:
+		if a.role == GameState.Role.SEATED:
+			seated += 1
+	_check(seated == GameConfig.SEAT_COUNT, "鬼以外は全員座る")
+
+
+func _test_humans_only_oni() -> void:
+	# ボットが負けても、次の鬼は人
+	var ok := 0
+	for seed_value in 20:
+		var s := GameState.new()
+		s.start_match_custom(seed_value, [0, 5], 5, {0: "A", 5: "B"}, true)
+		var b := BotBrain.new()
+		b.reset(seed_value)
+		var e := _play_round_with_bots_and_human_oni(s, b)
+		if e.is_empty():
+			continue
+		s.next_round()
+		_check(not s.get_actor(s.oni_id).is_bot, "seed %d: 鬼は人だけ" % seed_value)
+		var seated := 0
+		for a in s.actors:
+			if a.role == GameState.Role.SEATED:
+				seated += 1
+		_check(seated == GameConfig.SEAT_COUNT, "席は全部うまっている")
+		ok += 1
+	_check(ok > 0, "(確認用)ためせた")
+
+
+func _play_round_with_bots_and_human_oni(s: GameState, b: BotBrain) -> Dictionary:
+	for i in int(300.0 / STEP):
+		var oni := s.get_actor(s.oni_id)
+		if not oni.is_bot and s.phase == GameState.Phase.WALKING:
+			s.oni_drop(oni.id)
+		b.update(s, STEP)
+		s.tick(STEP)
+		for ev in s.take_events():
+			b.on_event(s, ev)
+			if ev["type"] == "result":
+				return ev
+	return {}
+
+
+func _test_snapshot_round_trip() -> void:
+	var host := _dropped_state(113)
+	var guest := GameState.new()
+	guest.apply_snapshot(host.snapshot())
+	_check(guest.actors.size() == host.actors.size(), "登場人物が写る")
+	_check(guest.oni_id == host.oni_id and guest.phase == host.phase, "鬼と場面が写る")
+	_check(guest.handkerchief_on_floor and guest.drop_target_seat == host.drop_target_seat, "ハンカチの場所が写る")
+	for i in host.actors.size():
+		_check(guest.actors[i].position.distance_to(host.actors[i].position) < 0.001, "位置が写る")
+	# 通信で送れる形か(バイト列にして戻せるか)
+	var bytes := var_to_bytes(host.snapshot())
+	var back = bytes_to_var(bytes)
+	_check(typeof(back) == TYPE_DICTIONARY and back["round_serial"] == host.round_serial, "状態は通信で送れる形")
 
 
 # --- 道具 ---
