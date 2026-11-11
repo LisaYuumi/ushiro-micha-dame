@@ -176,7 +176,10 @@ func _show_event(e: Dictionary) -> void:
 				hud.show_stamp("", Color.WHITE)
 		"stamp_blocked":
 			if e["sender"] == me:
-				hud.show_message("先に別のスタンプが届いていた", Color(0.3, 0.3, 0.3), 1.2)
+				if e.get("reason", "") == "neighbor":
+					hud.show_message("となりの人には送れない", Color(0.3, 0.3, 0.3), 1.2)
+				else:
+					hud.show_message("先に別のスタンプが届いていた", Color(0.3, 0.3, 0.3), 1.2)
 		"dropped":
 			_last_sound = "本物"
 		"rustle":

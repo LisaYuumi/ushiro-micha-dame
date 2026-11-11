@@ -41,8 +41,9 @@ const DROP_SOUND_RANGE := 1.2
 
 # --- 見え方 ---
 ## 自分の席から見える左右の幅(度)。画面の形(横長のスマホなど)に関係なく同じになる。
-## 90 なら、向かいの2人の後ろは見えて、両どなりの後ろは見えない
-const SEAT_CAM_HFOV := 90.0
+## 両どなりの人の姿まで見える広さ。両どなりの後ろに落ちた物は、見え方のルール
+## (GameState.can_see_behind)で自分の画面には映さない
+const SEAT_CAM_HFOV := 120.0
 
 # --- 振り向き ---
 ## 振り向くのにかかる時間(秒)
@@ -118,9 +119,10 @@ const ROUNDS_PER_MATCH := 5
 ## 点数(企画書の仮の点数表)
 const SCORE_ONI_SAT := 3
 const SCORE_CHASER_TOUCHED := 3
-const SCORE_MISSED := -2
+## 負けた人(座られた・タッチされた・気づかなかった)
+const SCORE_LOSE := -3
 ## お手つき1回の点数。もっと痛くしたいときは -2 などに
-const SCORE_OTETSUKI := -1
+const SCORE_OTETSUKI := -3
 ## この回数お手つきすると、次のラウンドは強制的に鬼(鬼になったら回数は 0 に戻る)
 const OTETSUKI_LIMIT := 3
 

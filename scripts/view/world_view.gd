@@ -5,6 +5,8 @@ extends Node3D
 
 ## 自分の体を自分のカメラに映さないためのレイヤー
 const SELF_LAYER := 2
+## 自分の席からは見えない物(両どなりの後ろに落ちた物)を置くレイヤー
+const HIDDEN_LAYER := 3
 
 var _actor_nodes := {} # id -> Node3D
 var _seat_cam: Camera3D
@@ -92,6 +94,7 @@ func sync(state: GameState, delta: float) -> void:
 	else:
 		_handkerchief.visible = state.handkerchief_on_floor
 		_handkerchief.position = state.handkerchief_position
+	_hide_item_if_not_visible_to_me(state)
 	_update_footsteps(state)
 
 
@@ -310,6 +313,19 @@ func _update_stamp_labels(state: GameState) -> void:
 		l.modulate = STAMP_COLORS[s["kind"]]
 
 
+## 座っている自分から見えない席(両どなり)の後ろに落ちた物は、自分の席のカメラに映さない。
+## (上から見る確認用カメラには映る)
+func _hide_item_if_not_visible_to_me(state: GameState) -> void:
+	var me := state.get_local_player()
+	var hidden := state.handkerchief_on_floor and me.role == GameState.Role.SEATED \
+			and state.drop_target_seat != me.seat_index \
+			and not GameState.can_see_behind(me.seat_index, state.drop_target_seat)
+	var bits := 1 << (HIDDEN_LAYER - 1) if hidden else 1
+	for c in _handkerchief.get_children():
+		if c is VisualInstance3D:
+			c.layers = bits
+
+
 ## 落とし物の仮の形(大きさ・色)。ラウンドごとに重くなる
 const ITEM_SHAPES := [
 	[Vector3(0.35, 0.02, 0.35), Color(0.97, 0.97, 1.0)], # ハンカチ
@@ -396,6 +412,9 @@ func pick_actor_at(state: GameState, screen_pos: Vector2) -> int:
 	for a in state.actors:
 		if a.id == state.local_player_id or a.role != GameState.Role.SEATED:
 			continue
+		var me := state.get_local_player()
+		if me.role == GameState.Role.SEATED and not GameState.can_see_behind(me.seat_index, a.seat_index):
+			continue # 両どなりはスタンプの相手に選べない
 		for h in [0.9, 1.45]:
 			var p: Vector3 = a.position + Vector3(0, h, 0)
 			if cam.is_position_behind(p):
@@ -421,7 +440,7 @@ func _build_cameras(state: GameState) -> void:
 	_seat_cam.fov = GameConfig.SEAT_CAM_HFOV
 	_seat_cam.near = 0.05
 	# 自分の体のレイヤーを映さない
-	_seat_cam.cull_mask = 0xFFFFF & ~(1 << (SELF_LAYER - 1))
+	_seat_cam.cull_mask = 0xFFFFF & ~(1 << (SELF_LAYER - 1)) & ~(1 << (HIDDEN_LAYER - 1))
 	add_child(_seat_cam)
 	_seat_cam.make_current()
 	_update_seat_camera(state, 0.0)
@@ -450,7 +469,7 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 	if me.role != GameState.Role.SEATED:
 		_seat_cam.cull_mask = 0xFFFFF
 	else:
-		_seat_cam.cull_mask = 0xFFFFF & ~self_bit
+		_seat_cam.cull_mask = 0xFFFFF & ~self_bit & ~(1 << (HIDDEN_LAYER - 1))
 	if me.role != GameState.Role.SEATED:
 		var out := Vector3(me.position.x, 0.0, me.position.z).normalized()
 		var want := me.position + out * GameConfig.CHASE_CAM_DISTANCE + Vector3(0, GameConfig.CHASE_CAM_HEIGHT, 0)

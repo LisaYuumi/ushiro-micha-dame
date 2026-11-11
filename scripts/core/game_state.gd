@@ -407,6 +407,10 @@ func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
 		return false
 	if sender.stamps_left == 0 or not (kind in Stamps.ALL):
 		return false
+	if not can_see_behind(sender.seat_index, target.seat_index):
+		# 後ろが見えない両どなりには送れない
+		events.append({"type": "stamp_blocked", "sender": sender_id, "target": target_id, "reason": "neighbor"})
+		return false
 	if active_stamps.has(target_id):
 		events.append({"type": "stamp_blocked", "sender": sender_id, "target": target_id})
 		return false
@@ -777,8 +781,7 @@ func _finish(winner_id: int, loser_id: int, reason: String) -> void:
 			scores[winner_id] += GameConfig.SCORE_ONI_SAT
 		"touched":
 			scores[winner_id] += GameConfig.SCORE_CHASER_TOUCHED
-		"missed":
-			scores[loser_id] += GameConfig.SCORE_MISSED
+	scores[loser_id] += GameConfig.SCORE_LOSE
 	result["scores"] = scores.duplicate()
 	for a in actors:
 		a.move_dir = Vector3.ZERO

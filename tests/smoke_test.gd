@@ -321,22 +321,26 @@ func _test_rounds_with_bots_always_finish() -> void:
 
 
 func _test_stamp_rules() -> void:
+	# 席は 0〜4 の輪。両どなり(差が1)には送れず、向かい(差が2か3)には送れる
 	var s := GameState.new()
 	s.start_round(41)
-	_check(s.send_stamp(1, 2, Stamps.SAFE), "座っている人どうしでスタンプが届く")
+	s.take_events()
+	_check(s.send_stamp(1, 3, Stamps.SAFE), "向かいの人にスタンプが届く")
 	_check(_has(s.take_events(), "stamp"), "届いたお知らせが出る")
-	_check(not s.send_stamp(3, 2, Stamps.DROPPED), "表示中の人には届かない(早い者勝ち)")
+	_check(not s.send_stamp(0, 3, Stamps.DROPPED), "表示中の人には届かない(早い者勝ち)")
 	_check(_has(s.take_events(), "stamp_blocked"), "届かなかったお知らせが出る")
+	_check(not s.send_stamp(1, 2, Stamps.SAFE), "となりの人には送れない")
+	var ev := s.take_events()
+	_check(ev.size() == 1 and ev[0].get("reason", "") == "neighbor", "となりだから送れなかった、とわかる")
 	_check(not s.send_stamp(1, 1, Stamps.SAFE), "自分には送れない")
-	_check(not s.send_stamp(s.oni_id, 2, Stamps.SAFE), "鬼は送れない")
-	_check(not s.send_stamp(1, 3, "unknown"), "知らない種類は送れない")
+	_check(not s.send_stamp(s.oni_id, 3, Stamps.SAFE), "鬼は送れない")
+	_check(not s.send_stamp(1, 4, "unknown"), "知らない種類は送れない")
 	for i in int((GameConfig.STAMP_SHOW_TIME + 0.1) / STEP):
 		s.tick(STEP)
 	_check(_has(s.take_events(), "stamp_end"), "3秒で消える")
-	_check(not s.active_stamps.has(2), "消えたら表示中ではない")
-	_check(s.send_stamp(3, 2, Stamps.DROPPED), "消えたあとはまた届く")
-	_check(s.send_stamp(1, 4, Stamps.NOW), "2つ目も送れる")
-	_check(s.send_stamp(1, 0, Stamps.NOW), "3つ目も送れる(何回でも送れる)")
+	_check(not s.active_stamps.has(3), "消えたら表示中ではない")
+	_check(s.send_stamp(1, 3, Stamps.DROPPED), "消えたあとはまた届く")
+	_check(s.send_stamp(1, 4, Stamps.NOW), "3つ目も送れる(何回でも送れる)")
 	_check(s.get_actor(1).stamps_left == GameConfig.STAMPS_PER_ROUND, "何回でもの設定なら残りは減らない")
 
 
@@ -607,7 +611,7 @@ func _test_match_scores_and_end() -> void:
 	var before: Dictionary = s2.scores.duplicate()
 	var e2 := _run_until(s2, "result", 200.0)
 	_check(e2["reason"] == "missed", "(確認用)だれも気づかなければ見逃し")
-	_check(s2.scores[e2["loser"]] == before[e2["loser"]] + GameConfig.SCORE_MISSED, "気づかなかった人は %d 点" % GameConfig.SCORE_MISSED)
+	_check(s2.scores[e2["loser"]] == before[e2["loser"]] + GameConfig.SCORE_LOSE, "気づかなかった人は %d 点" % GameConfig.SCORE_LOSE)
 	var s3 := _chasing_state(65)
 	var c := s3.get_actor(s3.chaser_id)
 	var e3 := {}
