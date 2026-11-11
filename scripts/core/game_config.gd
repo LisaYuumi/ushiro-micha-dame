@@ -14,11 +14,11 @@ const ONI_WALK_RADIUS := 4.3
 const DROP_RADIUS := 3.8
 
 # --- 鬼の動き ---
-## 鬼が歩く速さ(メートル/秒)。1周 約30秒(席の後ろで止まる時間込み)。
+## 鬼が歩く速さ(メートル/秒)。1周 約46秒(席の後ろで止まる時間込み)。
 ## 遅いほど、スタンプを送ったり考えたりする時間が長くなる
-const ONI_WALK_SPEED := 1.0
+const ONI_WALK_SPEED := 0.7
 ## 席の後ろで立ち止まる時間(秒)。本当に落とすときも、ニセの物音のときも同じ
-const ONI_PAUSE_TIME := 0.6
+const ONI_PAUSE_TIME := 1.5
 ## 席の後ろを通るたびに、ニセで立ち止まる確率(0〜1)。
 ## 1.0 = 毎回どの席の後ろでも止まる(止まったことでは、どこに落としたかわからない)
 const DECOY_STOP_CHANCE := 1.0
@@ -73,9 +73,9 @@ const CHASER_STEER := 1.0
 
 # --- ボット ---
 ## 後ろにハンカチを落とされたボットが気づくまでの時間(秒)。この範囲でランダム。
-## 鬼がもう一周してくるまで(約30秒)に気づかなければ見逃し
+## 鬼がもう一周してくるまで(約46秒)に気づかなければ見逃し
 const BOT_NOTICE_TIME_MIN := 1.5
-const BOT_NOTICE_TIME_MAX := 36.0
+const BOT_NOTICE_TIME_MAX := 55.0
 
 # --- 追いかけるときのカメラ ---
 ## 自分が追いかけるとき、カメラを輪の外側のどれだけ後ろ・上に置くか(メートル)
@@ -84,7 +84,7 @@ const CHASE_CAM_HEIGHT := 3.2
 
 # --- スタンプ ---
 ## 届いたスタンプが表示される時間(秒)。表示中はほかのスタンプは届かない(早い者勝ち)
-const STAMP_SHOW_TIME := 3.0
+const STAMP_SHOW_TIME := 5.0
 ## 1人が1ラウンドに送れる数。-1 = 何回でも送れる
 const STAMPS_PER_ROUND := -1
 ## 誰が送ったかを表示するか(企画書: 試遊で決める)
@@ -94,18 +94,18 @@ const BOT_STAMP_HONEST_CHANCE := 0.5
 ## ボットが届いたスタンプを信じて振り向く確率(0〜1)
 const BOT_TRUST_CHANCE := 0.5
 ## ボットがスタンプを送る間隔(秒)。この範囲でランダム
-const BOT_STAMP_INTERVAL_MIN := 4.0
-const BOT_STAMP_INTERVAL_MAX := 12.0
+const BOT_STAMP_INTERVAL_MIN := 8.0
+const BOT_STAMP_INTERVAL_MAX := 18.0
 ## ボットは、鬼がこの秒数以内に後ろを通った人にだけスタンプを送る
 ## (鬼が通ってもいないのに「落ちてる!」と言わないように)
-const BOT_STAMP_RECENT_PASS := 6.0 # STAMP_SCORE_RECENT_PASS と同じにしておく
+const BOT_STAMP_RECENT_PASS := 10.0 # STAMP_SCORE_RECENT_PASS と同じにしておく
 ## ボットが振り向いてから前を向くまで(秒)
 const BOT_LOOK_TIME := 0.8
 
 # --- 人が鬼をやるとき ---
 ## 歩く速さの範囲(メートル/秒)。スティック左でゆっくり、右で速く。何もしなければ ONI_WALK_SPEED
-const ONI_WALK_SPEED_MIN := 0.4
-const ONI_WALK_SPEED_MAX := 1.6
+const ONI_WALK_SPEED_MIN := 0.3
+const ONI_WALK_SPEED_MAX := 1.2
 ## 「落とす」「ふり」が効く範囲: 席の真後ろからこの距離(メートル、輪にそって)以内
 const ONI_DROP_REACH := 1.4
 ## この周数を歩いても落とさなければ、次の席の後ろで自動的に落とす
@@ -122,7 +122,7 @@ const SCORE_CHASER_TOUCHED := 3
 ## 負けた人(座られた・タッチされた・気づかなかった)
 const SCORE_LOSE := -3
 ## スタンプの点数(教えた・だました)は、鬼が相手の後ろを通ってからこの秒数以内に送ったものだけ
-const STAMP_SCORE_RECENT_PASS := 6.0
+const STAMP_SCORE_RECENT_PASS := 10.0
 ## スタンプでだました人の点数
 ## (「まだ平気」→本当は落ちていた→振り向かなかった / 「落ちてる!」など→本当は落ちていない→お手つき)
 const SCORE_DECEIVE := 1
