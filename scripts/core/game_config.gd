@@ -98,7 +98,7 @@ const BOT_STAMP_INTERVAL_MIN := 4.0
 const BOT_STAMP_INTERVAL_MAX := 12.0
 ## ボットは、鬼がこの秒数以内に後ろを通った人にだけスタンプを送る
 ## (鬼が通ってもいないのに「落ちてる!」と言わないように)
-const BOT_STAMP_RECENT_PASS := 6.0
+const BOT_STAMP_RECENT_PASS := 6.0 # STAMP_SCORE_RECENT_PASS と同じにしておく
 ## ボットが振り向いてから前を向くまで(秒)
 const BOT_LOOK_TIME := 0.8
 
@@ -121,10 +121,13 @@ const SCORE_ONI_SAT := 3
 const SCORE_CHASER_TOUCHED := 3
 ## 負けた人(座られた・タッチされた・気づかなかった)
 const SCORE_LOSE := -3
+## スタンプの点数(教えた・だました)は、鬼が相手の後ろを通ってからこの秒数以内に送ったものだけ
+const STAMP_SCORE_RECENT_PASS := 6.0
 ## スタンプでだました人の点数
 ## (「まだ平気」→本当は落ちていた→振り向かなかった / 「落ちてる!」など→本当は落ちていない→お手つき)
 const SCORE_DECEIVE := 1
-## スタンプで正しく教えた人の点数(本当の「落ちてる!」などで、相手が振り向けた)
+## スタンプで正しく教えた人の点数
+## (本当の「落ちてる!」などで相手が振り向けた / 本当の「まだ平気」で相手が振り向かずにすんだ)
 const SCORE_HELP := 1
 ## お手つき1回の点数
 const SCORE_OTETSUKI := -1

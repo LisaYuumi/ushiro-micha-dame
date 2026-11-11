@@ -355,16 +355,10 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 		events.append({"type": "found", "actor": actor_id})
 		# 本当の「落ちてる!」などで振り向けた: 教えた人に点
 		var helped: Dictionary = active_stamps.get(actor_id, {})
-		if not helped.is_empty() and Stamps.says_look(helped["kind"]) and helped["truthful"] \
+		if not helped.is_empty() and helped["scorable"] and Stamps.says_look(helped["kind"]) and helped["truthful"] \
 				and not helped.get("credited", false):
 			helped["credited"] = true
-			scores[helped["sender"]] = scores.get(helped["sender"], 0) + GameConfig.SCORE_HELP
-			events.append({
-				"type": "helped",
-				"sender": helped["sender"],
-				"target": actor_id,
-				"points": GameConfig.SCORE_HELP,
-			})
+			_award_help(helped["sender"], actor_id)
 	else:
 		a.otetsuki_count += 1
 		scores[a.id] = scores.get(a.id, 0) + GameConfig.SCORE_OTETSUKI
@@ -386,7 +380,7 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 		})
 		# 嘘の「落ちてる!」などにだまされて振り向いた: 送った人に点
 		var st: Dictionary = active_stamps.get(actor_id, {})
-		if not st.is_empty() and Stamps.says_look(st["kind"]) and not st["truthful"]:
+		if not st.is_empty() and st["scorable"] and Stamps.says_look(st["kind"]) and not st["truthful"]:
 			_award_deceive(st["sender"], actor_id, st["kind"])
 
 
@@ -448,6 +442,8 @@ func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
 		"time_left": GameConfig.STAMP_SHOW_TIME,
 		"truthful": truthful,
 		"looked": false,
+		# 鬼がついさっき後ろを通った人へのスタンプだけ、点数の対象
+		"scorable": seat_pass_age[target.seat_index] <= GameConfig.STAMP_SCORE_RECENT_PASS,
 	}
 	events.append({"type": "stamp", "sender": sender_id, "target": target_id, "kind": kind})
 	return true
@@ -707,9 +703,23 @@ func _tick_stamps(delta: float) -> void:
 			var st: Dictionary = active_stamps[id]
 			active_stamps.erase(id)
 			events.append({"type": "stamp_end", "target": id})
-			# 嘘の「まだ平気」(本当は落ちていた)で、出ている間に振り向かせなかった: 送った人に点
-			if st["kind"] == Stamps.SAFE and not st["truthful"] and not st["looked"]:
-				_award_deceive(st["sender"], id, st["kind"])
+			# 「まだ平気」で、出ている間に振り向かなかった:
+			#   本当は落ちていた → だました / 本当に落ちていない → 教えた(振り向かずにすんだ)
+			if st["kind"] == Stamps.SAFE and st["scorable"] and not st["looked"]:
+				if st["truthful"]:
+					_award_help(st["sender"], id)
+				else:
+					_award_deceive(st["sender"], id, st["kind"])
+
+
+func _award_help(sender_id: int, target_id: int) -> void:
+	scores[sender_id] = scores.get(sender_id, 0) + GameConfig.SCORE_HELP
+	events.append({
+		"type": "helped",
+		"sender": sender_id,
+		"target": target_id,
+		"points": GameConfig.SCORE_HELP,
+	})
 
 
 func _award_deceive(sender_id: int, target_id: int, kind: String) -> void:

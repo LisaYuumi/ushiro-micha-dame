@@ -835,17 +835,52 @@ func _test_otetsuki_penalty_and_forced_oni() -> void:
 
 
 func _test_deceiving_scores() -> void:
-	# 嘘の「落ちてる!」→ 振り向いてお手つき → 送った人 +1
+	# 鬼が通っていない人に嘘の「落ちてる!」→ お手つきさせても点は入らない
+	var s0 := GameState.new()
+	s0.start_match(91)
+	var b0: int = s0.scores[1]
+	s0.send_stamp(1, 3, Stamps.DROPPED)
+	s0.set_looking_back(3, true)
+	_check(s0.scores[1] == b0, "鬼が通ってから %d 秒より前のスタンプは点にならない" % int(GameConfig.STAMP_SCORE_RECENT_PASS))
+
+	# 鬼が通った直後(落とされていない人)に嘘の「落ちてる!」→ お手つき → 送った人 +1
 	var s := GameState.new()
 	s.start_match(91)
+	var victim_seat := -1
+	for i in int(120.0 / STEP):
+		s.tick(STEP)
+		for seat in GameConfig.SEAT_COUNT:
+			if s.seat_pass_age[seat] < 0.5 and seat != s.drop_target_seat:
+				victim_seat = seat
+		if victim_seat >= 0:
+			break
 	s.take_events()
-	var liar := s.get_actor(1)
-	var victim := s.get_actor(3)
+	var victim := s.get_actor_at_seat(victim_seat)
+	var liar := s.get_actor_at_seat((victim_seat + 2) % GameConfig.SEAT_COUNT)
 	var before: int = s.scores[liar.id]
 	s.send_stamp(liar.id, victim.id, Stamps.DROPPED)
 	s.set_looking_back(victim.id, true)
 	_check(s.scores[liar.id] == before + GameConfig.SCORE_DECEIVE, "嘘の『落ちてる!』で振り向かせたら +%d" % GameConfig.SCORE_DECEIVE)
 	_check(_has(s.take_events(), "deceived"), "だましたお知らせが出る")
+	s.set_looking_back(victim.id, false)
+
+	# 鬼が通った直後(落とされていない人)に本当の「まだ平気」→ 振り向かない → +1(教えた)
+	var other_seat := -1
+	for i in int(60.0 / STEP):
+		s.tick(STEP)
+		for seat in GameConfig.SEAT_COUNT:
+			if s.seat_pass_age[seat] < 0.5 and seat != s.drop_target_seat and not s.active_stamps.has(s.get_actor_at_seat(seat).id):
+				other_seat = seat
+		if other_seat >= 0 or s.phase != GameState.Phase.WALKING and s.phase != GameState.Phase.DROPPED:
+			break
+	if other_seat >= 0:
+		var safe_target := s.get_actor_at_seat(other_seat)
+		var helper := s.get_actor_at_seat((other_seat + 2) % GameConfig.SEAT_COUNT)
+		var bh: int = s.scores[helper.id]
+		s.send_stamp(helper.id, safe_target.id, Stamps.SAFE)
+		for i in int((GameConfig.STAMP_SHOW_TIME + 0.1) / STEP):
+			s.tick(STEP)
+		_check(s.scores[helper.id] == bh + GameConfig.SCORE_HELP, "鬼が通った直後の本当の『まだ平気』で、振り向かずにすんだら +%d" % GameConfig.SCORE_HELP)
 
 	# 本当の「落ちてる!」で振り向けたら、教えた人に +1(だましの点ではない)
 	var s2 := _dropped_state(93)
@@ -868,7 +903,7 @@ func _test_deceiving_scores() -> void:
 	s5.send_stamp(1, 3, Stamps.SAFE)
 	for i in int((GameConfig.STAMP_SHOW_TIME + 0.1) / STEP):
 		s5.tick(STEP)
-	_check(s5.scores[1] == b5, "本当の『まだ平気』では点は入らない(連打で稼げない)")
+	_check(s5.scores[1] == b5, "鬼が通っていない人への『まだ平気』では点は入らない(連打で稼げない)")
 
 	# 嘘の「まだ平気」(本当は落ちていた)→ 3秒振り向かない → +1
 	var s3 := _dropped_state(95)
