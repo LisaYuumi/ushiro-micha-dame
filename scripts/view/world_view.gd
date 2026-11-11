@@ -19,6 +19,9 @@ var _stamp_player: AudioStreamPlayer
 var _voice_player: AudioStreamPlayer3D
 ## 床のバナナの皮の見た目(状態の bananas と同じ数だけ出す)
 var _banana_nodes: Array[MeshInstance3D] = []
+## 鬼が自分の後ろに来たとき、自分の前の床に映る影
+var _oni_shadow: MeshInstance3D
+var _oni_shadow_mat: StandardMaterial3D
 ## 頭の上のスタンプ表示(id -> Label3D)
 var _stamp_labels := {}
 ## スタンプを送る相手の目印
@@ -67,6 +70,7 @@ func build(state: GameState) -> void:
 		_actor_nodes[a.id] = node
 	_build_handkerchief(state)
 	_build_stamp_labels(state)
+	_build_oni_shadow()
 	_build_sounds(state)
 	_build_cameras(state)
 	sync(state, 0.0)
@@ -87,6 +91,7 @@ func sync(state: GameState, delta: float) -> void:
 	_update_seat_camera(state, delta)
 	_update_stamp_labels(state)
 	_update_bananas(state)
+	_update_oni_shadow(state)
 	_clock += delta
 
 	var holder := state.get_actor(state.chaser_id)
@@ -121,7 +126,8 @@ func _update_expression(state: GameState, a: GameState.Actor, model: CharacterMo
 		expr = CharacterModel.SURPRISED
 	model.set_expression(expr)
 	# お手つきの回数で、顔がだんだん崩れていく(3回目は放心)
-	model.set_fluster(CharacterModel.FLUSTER_MAX if _dazed.has(a.id) else mini(a.otetsuki_count, 2))
+	var dazed := _dazed.has(a.id) or a.otetsuki_count >= GameConfig.OTETSUKI_DAZED_COUNT
+	model.set_fluster(CharacterModel.FLUSTER_MAX if dazed else mini(a.otetsuki_count, 2))
 	# 振り向いた瞬間にピョンと跳ねる
 	if a.looking_back and not _was_looking.get(a.id, false):
 		model.hop()
@@ -262,6 +268,49 @@ func _build_character(a: GameState.Actor, is_self: bool) -> Node3D:
 		# 自分の体は、座っているときの自分のカメラには映さない
 		model.set_layers(1 << (SELF_LAYER - 1))
 	return model
+
+
+func _build_oni_shadow() -> void:
+	var disc := CylinderMesh.new()
+	disc.top_radius = 0.35
+	disc.bottom_radius = 0.35
+	disc.height = 0.005
+	_oni_shadow_mat = StandardMaterial3D.new()
+	_oni_shadow_mat.albedo_color = Color(0, 0, 0, 0)
+	_oni_shadow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_oni_shadow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_oni_shadow = MeshInstance3D.new()
+	_oni_shadow.mesh = disc
+	_oni_shadow.material_override = _oni_shadow_mat
+	_oni_shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_oni_shadow.visible = false
+	add_child(_oni_shadow)
+
+
+## 鬼の影: 座っている自分の後ろに鬼が近づくと、自分の前の床に影がのびる。
+## 近いほど濃く大きい。鬼が立ち止まれば影も止まる(後ろが見えなくても気配がわかる)
+func _update_oni_shadow(state: GameState) -> void:
+	var me := state.get_local_player()
+	var oni := state.get_actor(state.oni_id)
+	if me == null or oni == null or me.role != GameState.Role.SEATED or state.phase == GameState.Phase.RESULT:
+		_oni_shadow.visible = false
+		return
+	var back := Vector3(sin(me.yaw), 0.0, cos(me.yaw))
+	var right := Vector3(cos(me.yaw), 0.0, -sin(me.yaw))
+	var rel := oni.position - me.position
+	rel.y = 0.0
+	var behind := rel.dot(back)
+	var dist := rel.length()
+	if behind <= 0.0 or dist > GameConfig.ONI_SHADOW_RANGE:
+		_oni_shadow.visible = false
+		return
+	var near := 1.0 - dist / GameConfig.ONI_SHADOW_RANGE
+	_oni_shadow.visible = true
+	# 自分の前(輪の内側)の床に、鬼の左右の位置に合わせて映す
+	_oni_shadow.position = me.position - back * (0.9 + 0.5 * near) + right * rel.dot(right) * 0.5 + Vector3(0, 0.006, 0)
+	_oni_shadow.rotation.y = me.yaw
+	_oni_shadow.scale = Vector3(0.8 + 0.5 * near, 1.0, 1.6 + 1.4 * near)
+	_oni_shadow_mat.albedo_color = Color(0, 0, 0, GameConfig.ONI_SHADOW_ALPHA * near)
 
 
 ## バナナの皮: 状態の bananas に合わせて、黄色い三日月っぽい形を出す

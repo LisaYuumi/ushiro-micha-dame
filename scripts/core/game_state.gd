@@ -376,10 +376,15 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 		a.otetsuki_count += 1
 		scores[a.id] = scores.get(a.id, 0) + GameConfig.SCORE_OTETSUKI
 		var reset := false
-		if a.otetsuki_count >= GameConfig.OTETSUKI_LIMIT:
+		var limit_reached := false
+		if a.otetsuki_count >= GameConfig.OTETSUKI_LIMIT \
+				and (GameConfig.OTETSUKI_RESET_SCORE or GameConfig.OTETSUKI_FORCES_ONI):
+			limit_reached = true
+		if limit_reached and GameConfig.OTETSUKI_RESET_SCORE:
 			# お手つきが多すぎる: プラスの点数は 0 に(マイナスはそのまま)
 			reset = scores[a.id] > 0
 			scores[a.id] = mini(scores[a.id], 0)
+		if limit_reached:
 			a.otetsuki_count = 0
 			if GameConfig.OTETSUKI_FORCES_ONI:
 				a.must_be_oni = true
@@ -388,7 +393,7 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 			"actor": actor_id,
 			"count": a.otetsuki_count,
 			"points": GameConfig.SCORE_OTETSUKI,
-			"limit_reached": a.otetsuki_count == 0,
+			"limit_reached": limit_reached,
 			"score_reset": reset,
 		})
 		# 嘘の「落ちてる!」などにだまされて振り向いた: 送った人に点

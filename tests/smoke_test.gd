@@ -800,6 +800,11 @@ func _test_otetsuki_penalty_and_forced_oni() -> void:
 		s.set_looking_back(me.id, false)
 		s.set_looking_back(me.id, true)
 	s.set_looking_back(me.id, false)
+	if not GameConfig.OTETSUKI_RESET_SCORE:
+		# いまのルール: お手つきは1回ごとに点が減るだけ
+		_check(s.scores[me.id] == 7 + GameConfig.SCORE_OTETSUKI * GameConfig.OTETSUKI_LIMIT, "お手つきは1回ごとに %d 点だけ" % GameConfig.SCORE_OTETSUKI)
+		_check(me.otetsuki_count == GameConfig.OTETSUKI_LIMIT, "お手つきの回数は数え続ける")
+		return
 	_check(s.scores[me.id] == 0, "お手つき %d 回で、プラスの点数が 0 になる" % GameConfig.OTETSUKI_LIMIT)
 	_check(me.otetsuki_count == 0, "そのあと回数は 0 に戻る")
 	var limit_event := false

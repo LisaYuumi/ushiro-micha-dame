@@ -215,7 +215,7 @@ func _show_event(e: Dictionary) -> void:
 				hud.show_message("4周したので\n次の席で自動で落とす", Color(0.3, 0.3, 0.3), 1.5)
 		"otetsuki":
 			if e["actor"] == me:
-				var text := "お手つき! %d点\n(%d/%d回)" % [e["points"], e["count"], GameConfig.OTETSUKI_LIMIT]
+				var text := "お手つき! %d点\n(これで %d 回目)" % [e["points"], e["count"]]
 				if e["limit_reached"]:
 					text = "お手つき%d回!\n%s" % [GameConfig.OTETSUKI_LIMIT,
 							"プラスの点数が0点に…" if e["score_reset"] else "点数はそのまま(マイナスだったので)"]
@@ -288,8 +288,8 @@ func _update_help() -> void:
 	if state.oni_is_player:
 		lines.append("あなたは鬼")
 	var me := state.get_local_player()
-	lines.append("振り向き: 残り %d/%d 回 (一度もしなければ +%d点) / お手つき: %d/%d 回" % [
-		me.looks_left, GameConfig.LOOKS_PER_ROUND, GameConfig.SCORE_PATIENCE, me.otetsuki_count, GameConfig.OTETSUKI_LIMIT])
+	lines.append("振り向き: 残り %d/%d 回 (一度もしなければ +%d点) / お手つき: %d 回 (1回 %d点)" % [
+		me.looks_left, GameConfig.LOOKS_PER_ROUND, GameConfig.SCORE_PATIENCE, me.otetsuki_count, GameConfig.SCORE_OTETSUKI])
 	if _stamp_target >= 0:
 		lines.append("スタンプを送る相手: %s" % _name(_stamp_target))
 	if view.is_top_camera():

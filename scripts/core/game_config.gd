@@ -135,9 +135,13 @@ const LOOKS_PER_ROUND := 2
 const SCORE_PATIENCE := 1
 ## お手つき1回の点数
 const SCORE_OTETSUKI := -1
-## この回数お手つきすると、それまでの点数のプラス分が消えて 0 点になる(マイナスはそのまま)。
-## そのあと回数は 0 に戻る
+## お手つきを重ねたときの特別なペナルティ(OTETSUKI_RESET_SCORE / OTETSUKI_FORCES_ONI)が起きる回数。
+## 今はどちらも使わない: お手つきは1回ごとに SCORE_OTETSUKI だけ
 const OTETSUKI_LIMIT := 3
+## お手つき OTETSUKI_LIMIT 回で、プラスの点数を 0 にするか(試した案。ルールをわかりやすくするため今は使わない)
+const OTETSUKI_RESET_SCORE := false
+## この回数お手つきすると、顔が放心顔になる(見た目だけ)
+const OTETSUKI_DAZED_COUNT := 3
 ## お手つき OTETSUKI_LIMIT 回で、次のラウンドは強制的に鬼にもするか(企画書の案。今は使わない: 次の鬼は負けた人)
 const OTETSUKI_FORCES_ONI := false
 
@@ -151,6 +155,12 @@ const CARRY_SPEED_HEAVY := 0.7
 const ONI_CARRY_SPEED_HEAVY := 0.8
 ## ボットが気づくまでの時間の倍率(重いほど音が大きく、早く気づく)
 const BOT_NOTICE_HEAVY := 0.45
+
+# --- 鬼の影 ---
+## 鬼が自分の後ろのこの距離(メートル)以内に来ると、自分の前の床に影が映る
+const ONI_SHADOW_RANGE := 3.0
+## 影のいちばん濃いときの濃さ(0〜1)
+const ONI_SHADOW_ALPHA := 0.55
 
 # --- 鬼の声 ---
 ## 声を出したあと、次に出せるまで(秒)
