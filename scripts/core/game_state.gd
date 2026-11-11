@@ -47,6 +47,8 @@ class Actor:
 	## このラウンドで振り向ける残り回数/振り向いた回数
 	var looks_left: int = 0
 	var looks_used: int = 0
+	## このラウンドで、見える所にハンカチが落ちていないときに鬼が後ろを通った回数(がまんの点の条件)
+	var tense_passes: int = 0
 
 
 ## 席の位置(床の上)
@@ -259,6 +261,7 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 		a.bananas_left = GameConfig.BANANAS_PER_ROUND
 		a.looks_left = GameConfig.LOOKS_PER_ROUND
 		a.looks_used = 0
+		a.tense_passes = 0
 		a.slip_left = 0.0
 	for i in seat_ids.size():
 		_sit(get_actor(seat_ids[i]), i)
@@ -694,7 +697,13 @@ func _plan_drop() -> void:
 
 ## 鬼が席の真後ろに来たとき: 本当に落とす/ニセで立ち止まる/そのまま通りすぎる
 func _on_pass_behind_seat() -> void:
-	seat_pass_age[_seat_at_angle(oni_angle)] = 0.0
+	var passed_seat := _seat_at_angle(oni_angle)
+	seat_pass_age[passed_seat] = 0.0
+	# 見える所(向かいの人の後ろ)にハンカチが落ちていないのに、鬼が後ろを通った: ドキドキした場面
+	var seen_elsewhere := handkerchief_on_floor and can_see_behind(passed_seat, drop_target_seat)
+	var sitter := get_actor_at_seat(passed_seat)
+	if sitter and sitter.role == Role.SEATED and not seen_elsewhere:
+		sitter.tense_passes += 1
 	if phase == Phase.DROPPED and absf(oni_angle - (drop_angle + TAU)) < 0.001:
 		# 一周して戻ってきても気づかれなかった: 落とされた人の負け
 		var target := get_actor_at_seat(drop_target_seat)
@@ -856,7 +865,7 @@ func _finish(winner_id: int, loser_id: int, reason: String) -> void:
 	# 一度も振り向かずにがまんした人に点(気づかずに負けた人と、このラウンドの鬼はのぞく)
 	var patient := []
 	for a in actors:
-		if a.id == oni_id or a.id == loser_id or a.looks_used > 0:
+		if a.id == oni_id or a.id == loser_id or a.looks_used > 0 or a.tense_passes == 0:
 			continue
 		scores[a.id] += GameConfig.SCORE_PATIENCE
 		patient.append(a.id)

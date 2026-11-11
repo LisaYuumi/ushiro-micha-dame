@@ -975,11 +975,32 @@ func _test_look_limit_and_patience() -> void:
 	for a in s4.actors:
 		if a.id == s4.oni_id or a.id == loser:
 			continue
-		var expected: int = before[a.id] + (GameConfig.SCORE_OTETSUKI if a.id == turner.id else GameConfig.SCORE_PATIENCE)
 		if a.id == e["winner"]:
 			continue
-		_check(s4.scores[a.id] == expected, "%s: がまんした人は +%d、振り向いた人はもらえない" % [a.display_name, GameConfig.SCORE_PATIENCE])
+		var expected: int = before[a.id]
+		if a.id == turner.id:
+			expected += GameConfig.SCORE_OTETSUKI
+		elif a.tense_passes > 0:
+			expected += GameConfig.SCORE_PATIENCE
+		_check(s4.scores[a.id] == expected, "%s: ドキドキした場面でがまんした人だけ +%d" % [a.display_name, GameConfig.SCORE_PATIENCE])
 	_check(not (loser in e["patient"]), "気づかずに負けた人はがまんの点をもらえない")
+	var some_tense := false
+	for a in s4.actors:
+		if a.tense_passes > 0:
+			some_tense = true
+	_check(some_tense, "(確認用)ドキドキした場面が数えられている")
+
+	# 向かいの人の後ろに落ちたのが見えていれば、そのあと鬼が通ってもドキドキした場面にならない
+	var s5 := _dropped_state(109)
+	var dropped_seat := s5.drop_target_seat
+	var watcher_seat := (dropped_seat + 2) % GameConfig.SEAT_COUNT # 向かい側から見ている人
+	var watcher := s5.get_actor_at_seat(watcher_seat)
+	var before_tense := watcher.tense_passes
+	for i in int(40.0 / STEP):
+		s5.tick(STEP)
+		if s5.seat_pass_age[watcher_seat] < 0.05 or s5.phase == GameState.Phase.RESULT:
+			break
+	_check(watcher.tense_passes == before_tense, "落ちたのが見えていたら、鬼が通ってもがまんの場面にならない")
 
 
 # --- 道具 ---
