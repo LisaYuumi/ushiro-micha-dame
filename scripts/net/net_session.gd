@@ -38,6 +38,9 @@ var _rtc := WebRTCMultiplayerPeer.new()
 var _conns := {}
 var _host_signal_id := ""
 var _my_godot_id := 1
+## 参加者: ホストに申し込んでから直接つながるまでの残り時間(これを過ぎたら「つながらなかった」と出す)
+var _connect_timeout := -1.0
+const CONNECT_TIMEOUT := 15.0
 
 
 func _ready() -> void:
@@ -131,6 +134,7 @@ func _on_peer_connected(id: int) -> void:
 	if is_host:
 		peers_changed.emit(multiplayer.get_peers())
 	elif id == 1:
+		_connect_timeout = -1.0
 		connected_to_host.emit()
 		status_changed.emit("ホストとつながりました")
 
@@ -156,6 +160,10 @@ func _connect_signaling(my_id: String) -> void:
 func _process(delta: float) -> void:
 	if not is_online:
 		return
+	if _connect_timeout > 0.0:
+		_connect_timeout -= delta
+		if _connect_timeout <= 0.0:
+			status_changed.emit("直接つながりませんでした。\nホストと同じ Wi-Fi につないで、ページを読み込み直してもう一度試してください")
 	_ws.poll()
 	var st := _ws.get_ready_state()
 	if st == WebSocketPeer.STATE_OPEN:
@@ -191,8 +199,10 @@ func _on_signal_message(text: String) -> void:
 				status_changed.emit("部屋ができました。合言葉: %s" % room_code)
 			else:
 				# ホストに接続を申し込む
+				status_changed.emit("仲介サーバーにつながりました。部屋 %s に申し込んでいます…" % room_code)
 				var conn := _make_conn(_host_signal_id, 1)
 				conn.create_offer()
+				_connect_timeout = CONNECT_TIMEOUT
 		"ID-TAKEN":
 			if is_host:
 				# 合言葉がほかの部屋と重なった: 選び直す
@@ -210,10 +220,12 @@ func _on_signal_message(text: String) -> void:
 				var gid: int = int(payload.get("godot_id", 0))
 				if gid < 2 or _conns.has(src):
 					return
+				status_changed.emit("だれかが入ろうとしています…")
 				var conn := _make_conn(src, gid)
 				conn.set_remote_description("offer", payload["sdp"])
 		"ANSWER":
 			if not is_host and _conns.has(src) and typeof(payload) == TYPE_DICTIONARY:
+				status_changed.emit("ホストから返事が来ました。直接つないでいます…")
 				_conns[src]["conn"].set_remote_description("answer", payload["sdp"])
 		"CANDIDATE":
 			if _conns.has(src) and typeof(payload) == TYPE_DICTIONARY:

@@ -89,6 +89,10 @@ func _on_peers_changed(peer_ids: Array) -> void:
 		for pid in peer_ids:
 			net.send_lobby(pid, {"started": false, "players": 1 + peer_ids.size()})
 	elif mode == Mode.HOST:
+		# 試合中に入ってきた人: 次の試合から参加できる
+		for pid in peer_ids:
+			if not _peer_actor.has(pid):
+				net.send_lobby(pid, {"started": false, "late": true, "players": 1 + peer_ids.size()})
 		# 試合中に抜けた人の席は、ボットが引き継ぐ
 		for pid in _peer_actor.keys():
 			if not (pid in peer_ids):
@@ -135,6 +139,8 @@ func _on_lobby_info(info: Dictionary) -> void:
 		_built_serial = -1
 		lobby.visible = false
 		hud.show_message("スタート!", Color(0.3, 0.3, 0.3), 1.0)
+	elif info.get("late", false):
+		lobby.show_waiting("つながりました! いまは試合中です。\n次の試合から参加できます(ホストが新しい試合を始めるまで待ってください)")
 	else:
 		lobby.show_waiting("つながりました! いま %d人。ホストがスタートするのを待っています" % info.get("players", 0))
 
