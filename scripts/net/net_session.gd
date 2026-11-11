@@ -1,8 +1,9 @@
 class_name NetSession
 extends Node
 ## オンライン対戦のつながり。
-## - 仲介サーバー(PeerJS の無料公開サーバー)は「相手を見つける」ためだけに使う。
-##   ホストは「部屋の合言葉」を名前にして待ち、参加する人はその名前あてに接続の申し込みを送る。
+## - 仲介(無料のお知らせ配信サービス ntfy.sh)は「相手を見つける」ためだけに使う。
+##   ホストは「部屋の合言葉」の話題で待ち、参加する人はその話題に接続の申し込みを書きこむ。
+##   (PeerJS の公開サーバーは、相手にメッセージを渡してくれなかったのでやめた)
 ## - つながったあとのゲームのやりとりは、ブラウザどうしの直接通信(WebRTC)。
 ## - ルールを動かすのはホストだけ。ほかの人は命令を送り、ホストは状態とお知らせを全員に配る。
 ##
@@ -22,8 +23,10 @@ signal command_received(peer_id: int, cmd: String, args: Array)
 ## 参加者: ホストとの通信が切れた
 signal host_lost
 
-const PEERJS_URL := "wss://0.peerjs.com/peerjs?key=peerjs&id=%s&token=%s"
-const ID_PREFIX := "ushiromichadame-"
+## 仲介に使う無料サービス ntfy.sh(アカウント不要)。合言葉ごとの「話題」でメッセージを受け渡す
+const NTFY_WS := "wss://ntfy.sh/%s/ws"
+const NTFY_POST := "https://ntfy.sh/%s"
+const ID_PREFIX := "ushiromichadame-v1-"
 const ICE_SERVERS := [{"urls": ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]}]
 
 var is_host := false
@@ -32,7 +35,9 @@ var room_code := ""
 
 var _ws := WebSocketPeer.new()
 var _ws_was_open := false
-var _heartbeat_left := 0.0
+var _my_topic := ""
+var _send_queue: Array = []
+var _sending := false
 var _rtc := WebRTCMultiplayerPeer.new()
 ## 仲介サーバーでの相手の名前 -> {"conn": WebRTCPeerConnection, "godot_id": int}
 var _conns := {}
@@ -56,7 +61,7 @@ func host_room() -> void:
 	_rtc = WebRTCMultiplayerPeer.new()
 	_rtc.create_server()
 	multiplayer.multiplayer_peer = _rtc
-	_connect_signaling(ID_PREFIX + room_code)
+	_connect_signaling(ID_PREFIX + "room-" + room_code)
 	status_changed.emit("部屋を作っています…")
 
 
@@ -69,13 +74,14 @@ func join_room(code: String) -> void:
 	_rtc = WebRTCMultiplayerPeer.new()
 	_rtc.create_client(_my_godot_id)
 	multiplayer.multiplayer_peer = _rtc
-	_host_signal_id = ID_PREFIX + code
-	_connect_signaling(ID_PREFIX + "guest-%d" % randi())
+	_host_signal_id = ID_PREFIX + "room-" + code
+	_connect_signaling(ID_PREFIX + "guest-%d-%d" % [randi(), randi()])
 	status_changed.emit("部屋 %s をさがしています…" % code)
 
 
 func leave() -> void:
 	_ws.close()
+	_send_queue.clear()
 	for k in _conns:
 		_conns[k]["conn"].close()
 	_conns.clear()
@@ -147,12 +153,16 @@ func _on_peer_disconnected(id: int) -> void:
 		status_changed.emit("ホストとの通信が切れました")
 
 
-# --- 仲介サーバー(PeerJS) ---
+# --- 仲介(ntfy.sh) ---
+# 自分あての「話題(topic)」を WebSocket で聞き、相手の話題には HTTP で書きこむ。
+# ホストの話題は合言葉から決まる。参加者は自分の話題を作り、申し込みに「返事はここへ」と書く。
+# 書きこみは順番に1つずつ送る(申し込みより先に別のお知らせが届かないように)。
 
-func _connect_signaling(my_id: String) -> void:
+func _connect_signaling(my_topic: String) -> void:
+	_my_topic = my_topic
 	_ws = WebSocketPeer.new()
 	_ws_was_open = false
-	var err := _ws.connect_to_url(PEERJS_URL % [my_id, str(randi())])
+	var err := _ws.connect_to_url(NTFY_WS % my_topic)
 	if err != OK:
 		status_changed.emit("仲介サーバーにつなげません(%d)" % err)
 
@@ -163,73 +173,92 @@ func _process(delta: float) -> void:
 	if _connect_timeout > 0.0:
 		_connect_timeout -= delta
 		if _connect_timeout <= 0.0:
-			status_changed.emit("直接つながりませんでした。\nホストと同じ Wi-Fi につないで、ページを読み込み直してもう一度試してください")
+			status_changed.emit("直接つながりませんでした。\n全員が同じ Wi-Fi につないで(携帯回線は切って)、ページを読み込み直してもう一度試してください")
 	_ws.poll()
 	var st := _ws.get_ready_state()
 	if st == WebSocketPeer.STATE_OPEN:
-		_ws_was_open = true
 		while _ws.get_available_packet_count() > 0:
-			_on_signal_message(_ws.get_packet().get_string_from_utf8())
-		_heartbeat_left -= delta
-		if _heartbeat_left <= 0.0:
-			_heartbeat_left = 5.0
-			_ws_send({"type": "HEARTBEAT"})
+			_on_ntfy_packet(_ws.get_packet().get_string_from_utf8())
 	elif st == WebSocketPeer.STATE_CLOSED and _ws_was_open:
 		_ws_was_open = false
-		# ゲームが始まったあとは、仲介サーバーが切れても直接通信は続く
-		if _conns.is_empty():
-			status_changed.emit("仲介サーバーから切れました")
+		if _conns.is_empty() or not _any_connected():
+			status_changed.emit("仲介サーバーから切れました。ページを読み込み直してください")
 
 
-func _ws_send(msg: Dictionary) -> void:
-	if _ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
-		_ws.send_text(JSON.stringify(msg))
+func _any_connected() -> bool:
+	return not multiplayer.get_peers().is_empty()
 
 
-func _on_signal_message(text: String) -> void:
-	var msg = JSON.parse_string(text)
-	if typeof(msg) != TYPE_DICTIONARY:
+func _on_ntfy_packet(text: String) -> void:
+	var ev = JSON.parse_string(text)
+	if typeof(ev) != TYPE_DICTIONARY:
 		return
+	match ev.get("event", ""):
+		"open":
+			_ws_was_open = true
+			_on_signaling_open()
+		"message":
+			var msg = JSON.parse_string(str(ev.get("message", "")))
+			if typeof(msg) == TYPE_DICTIONARY:
+				_on_signal_message(msg)
+
+
+func _on_signaling_open() -> void:
+	if is_host:
+		status_changed.emit("部屋ができました。合言葉: %s" % room_code)
+	else:
+		# ホストに接続を申し込む(申し込みは、直接通信の準備ができたら送られる)
+		status_changed.emit("仲介サーバーにつながりました。部屋 %s に申し込んでいます…" % room_code)
+		var conn := _make_conn(_host_signal_id, 1)
+		conn.create_offer()
+		_connect_timeout = CONNECT_TIMEOUT
+
+
+## 相手の話題に書きこむ(順番待ちに入れる)
+func _signal_send(dst_topic: String, msg: Dictionary) -> void:
+	msg["from"] = _my_topic
+	_send_queue.append([dst_topic, JSON.stringify(msg)])
+	if not _sending:
+		_send_next()
+
+
+func _send_next() -> void:
+	if _send_queue.is_empty():
+		_sending = false
+		return
+	_sending = true
+	var item: Array = _send_queue.pop_front()
+	var req := HTTPRequest.new()
+	add_child(req)
+	req.request_completed.connect(func(result: int, code: int, _h: PackedStringArray, _b: PackedByteArray) -> void:
+		req.queue_free()
+		if result != HTTPRequest.RESULT_SUCCESS or code >= 400:
+			status_changed.emit("仲介サーバーに送れませんでした(%d/%d)。少し待ってもう一度試してください" % [result, code])
+		_send_next())
+	req.request(NTFY_POST % item[0], ["Content-Type: text/plain"], HTTPClient.METHOD_POST, item[1])
+
+
+func _on_signal_message(msg: Dictionary) -> void:
 	var type: String = msg.get("type", "")
-	var src: String = str(msg.get("src", ""))
-	var payload = msg.get("payload", {})
+	var src: String = str(msg.get("from", ""))
+	if src == "" or src == _my_topic:
+		return
 	match type:
-		"OPEN":
-			if is_host:
-				status_changed.emit("部屋ができました。合言葉: %s" % room_code)
-			else:
-				# ホストに接続を申し込む
-				status_changed.emit("仲介サーバーにつながりました。部屋 %s に申し込んでいます…" % room_code)
-				var conn := _make_conn(_host_signal_id, 1)
-				conn.create_offer()
-				_connect_timeout = CONNECT_TIMEOUT
-		"ID-TAKEN":
-			if is_host:
-				# 合言葉がほかの部屋と重なった: 選び直す
-				room_code = "%04d" % randi_range(0, 9999)
-				_connect_signaling(ID_PREFIX + room_code)
-			else:
-				_connect_signaling(ID_PREFIX + "guest-%d" % randi())
-		"ERROR":
-			status_changed.emit("仲介サーバーのエラー: %s" % str(payload.get("msg", "")) if typeof(payload) == TYPE_DICTIONARY else "仲介サーバーのエラー")
-		"EXPIRE":
-			if not is_host:
-				status_changed.emit("部屋 %s が見つかりません。合言葉を確かめてください" % room_code)
 		"OFFER":
-			if is_host and typeof(payload) == TYPE_DICTIONARY:
-				var gid: int = int(payload.get("godot_id", 0))
+			if is_host:
+				var gid: int = int(msg.get("godot_id", 0))
 				if gid < 2 or _conns.has(src):
 					return
 				status_changed.emit("だれかが入ろうとしています…")
 				var conn := _make_conn(src, gid)
-				conn.set_remote_description("offer", payload["sdp"])
+				conn.set_remote_description("offer", msg["sdp"])
 		"ANSWER":
-			if not is_host and _conns.has(src) and typeof(payload) == TYPE_DICTIONARY:
+			if not is_host and _conns.has(src):
 				status_changed.emit("ホストから返事が来ました。直接つないでいます…")
-				_conns[src]["conn"].set_remote_description("answer", payload["sdp"])
+				_conns[src]["conn"].set_remote_description("answer", msg["sdp"])
 		"CANDIDATE":
-			if _conns.has(src) and typeof(payload) == TYPE_DICTIONARY:
-				_conns[src]["conn"].add_ice_candidate(payload["mid"], int(payload["idx"]), payload["cand"])
+			if _conns.has(src):
+				_conns[src]["conn"].add_ice_candidate(msg["mid"], int(msg["idx"]), msg["cand"])
 
 
 ## 相手1人ぶんの直接通信を用意する
@@ -238,17 +267,13 @@ func _make_conn(remote_signal_id: String, remote_godot_id: int) -> WebRTCPeerCon
 	conn.initialize({"iceServers": ICE_SERVERS})
 	conn.session_description_created.connect(func(type: String, sdp: String) -> void:
 		conn.set_local_description(type, sdp)
-		_ws_send({
+		_signal_send(remote_signal_id, {
 			"type": "OFFER" if type == "offer" else "ANSWER",
-			"dst": remote_signal_id,
-			"payload": {"sdp": sdp, "godot_id": _my_godot_id},
+			"sdp": sdp,
+			"godot_id": _my_godot_id,
 		}))
 	conn.ice_candidate_created.connect(func(mid: String, idx: int, cand: String) -> void:
-		_ws_send({
-			"type": "CANDIDATE",
-			"dst": remote_signal_id,
-			"payload": {"mid": mid, "idx": idx, "cand": cand},
-		}))
+		_signal_send(remote_signal_id, {"type": "CANDIDATE", "mid": mid, "idx": idx, "cand": cand}))
 	_rtc.add_peer(conn, remote_godot_id)
 	_conns[remote_signal_id] = {"conn": conn, "godot_id": remote_godot_id}
 	return conn
