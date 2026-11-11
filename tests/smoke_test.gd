@@ -847,14 +847,28 @@ func _test_deceiving_scores() -> void:
 	_check(s.scores[liar.id] == before + GameConfig.SCORE_DECEIVE, "嘘の『落ちてる!』で振り向かせたら +%d" % GameConfig.SCORE_DECEIVE)
 	_check(_has(s.take_events(), "deceived"), "だましたお知らせが出る")
 
-	# 本当の「落ちてる!」で振り向いても点は入らない
+	# 本当の「落ちてる!」で振り向けたら、教えた人に +1(だましの点ではない)
 	var s2 := _dropped_state(93)
 	var target := s2.get_actor_at_seat(s2.drop_target_seat)
 	var sender := s2.get_actor_at_seat((s2.drop_target_seat + 2) % GameConfig.SEAT_COUNT)
 	var b2: int = s2.scores[sender.id]
 	s2.send_stamp(sender.id, target.id, Stamps.DROPPED)
 	s2.set_looking_back(target.id, true)
-	_check(s2.scores[sender.id] == b2, "本当のことを言っても、だましの点は入らない")
+	var ev2 := s2.take_events()
+	_check(s2.scores[sender.id] == b2 + GameConfig.SCORE_HELP, "本当の『落ちてる!』で教えたら +%d" % GameConfig.SCORE_HELP)
+	_check(_has(ev2, "helped") and not _has(ev2, "deceived"), "教えたお知らせが出る(だましではない)")
+	s2.set_looking_back(target.id, false)
+	s2.set_looking_back(target.id, true)
+	_check(s2.scores[sender.id] == b2 + GameConfig.SCORE_HELP, "同じスタンプで2回は点が入らない")
+
+	# 本当の「まだ平気」では点は入らない
+	var s5 := GameState.new()
+	s5.start_match(99)
+	var b5: int = s5.scores[1]
+	s5.send_stamp(1, 3, Stamps.SAFE)
+	for i in int((GameConfig.STAMP_SHOW_TIME + 0.1) / STEP):
+		s5.tick(STEP)
+	_check(s5.scores[1] == b5, "本当の『まだ平気』では点は入らない(連打で稼げない)")
 
 	# 嘘の「まだ平気」(本当は落ちていた)→ 3秒振り向かない → +1
 	var s3 := _dropped_state(95)

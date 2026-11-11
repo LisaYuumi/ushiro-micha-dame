@@ -353,6 +353,18 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 		active_stamps[actor_id]["looked"] = true
 	if has_handkerchief_behind(a):
 		events.append({"type": "found", "actor": actor_id})
+		# 本当の「落ちてる!」などで振り向けた: 教えた人に点
+		var helped: Dictionary = active_stamps.get(actor_id, {})
+		if not helped.is_empty() and Stamps.says_look(helped["kind"]) and helped["truthful"] \
+				and not helped.get("credited", false):
+			helped["credited"] = true
+			scores[helped["sender"]] = scores.get(helped["sender"], 0) + GameConfig.SCORE_HELP
+			events.append({
+				"type": "helped",
+				"sender": helped["sender"],
+				"target": actor_id,
+				"points": GameConfig.SCORE_HELP,
+			})
 	else:
 		a.otetsuki_count += 1
 		scores[a.id] = scores.get(a.id, 0) + GameConfig.SCORE_OTETSUKI
