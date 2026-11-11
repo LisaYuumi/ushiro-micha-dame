@@ -11,6 +11,10 @@ const PANIC := "panic"         # 追いかける/逃げる: 細い目・汗・�
 const WIN := "win"             # 勝ち: にっこり(「^」の目・U の口)
 const LOSE := "lose"           # 負け: しょんぼり(下がった目・への字の口・うなだれる)
 
+## お手つきでだんだん崩れる顔(set_fluster)
+## 0: ふだん / 1: 困り眉・汗 / 2: 汗2つ・目がちぐはぐ・への字口・ふるえる / 3: 放心(×の目・ぽかん口・ふらふら)
+const FLUSTER_MAX := 3
+
 const HEAD_Y := 1.42
 const FACE_Z := -0.205
 
@@ -22,7 +26,11 @@ var _mouth_o: MeshInstance3D
 var _mouth_smile: Node3D
 var _mouth_frown: Node3D
 var _sweat: MeshInstance3D
+var _sweat2: MeshInstance3D
+var _brows: Array[MeshInstance3D] = []
+var _x_eyes: Array[Node3D] = []
 var _expression := ""
+var _fluster := -1
 var _hop := 0.0
 var _lean := 0.0
 var _slump := 0.0
@@ -83,6 +91,24 @@ func build(color: Color, display_name: String, font: Font) -> void:
 	_sweat = _mesh(sweat_mesh, Color(0.45, 0.75, 1.0))
 	_sweat.position = Vector3(0.2, HEAD_Y + 0.1, -0.08)
 	_pivot.add_child(_sweat)
+	_sweat2 = _mesh(sweat_mesh, Color(0.45, 0.75, 1.0))
+	_sweat2.position = Vector3(-0.19, HEAD_Y + 0.02, -0.1)
+	_pivot.add_child(_sweat2)
+
+	# 困り眉(ハの字)と、放心の「×」の目
+	for x in [-0.08, 0.08]:
+		var brow := _box(Vector3(0.075, 0.015, 0.01), Vector3(x, HEAD_Y + 0.115, FACE_Z + 0.01))
+		brow.rotation.z = 0.4 if x < 0.0 else -0.4
+		_pivot.add_child(brow)
+		_brows.append(brow)
+		var xe := Node3D.new()
+		xe.position = Vector3(x, HEAD_Y + 0.04, FACE_Z)
+		for r in [0.785, -0.785]:
+			var bar := _box(Vector3(0.07, 0.014, 0.01), Vector3.ZERO)
+			bar.rotation.z = r
+			xe.add_child(bar)
+		_pivot.add_child(xe)
+		_x_eyes.append(xe)
 
 	var label := Label3D.new()
 	label.text = display_name
@@ -106,6 +132,20 @@ func set_expression(expr: String) -> void:
 	if expr == _expression:
 		return
 	_expression = expr
+	_apply_face()
+
+
+## お手つきの回数に合わせて、顔をだんだん崩す(0〜FLUSTER_MAX)
+func set_fluster(level: int) -> void:
+	level = clampi(level, 0, FLUSTER_MAX)
+	if level == _fluster:
+		return
+	_fluster = level
+	_apply_face()
+
+
+func _apply_face() -> void:
+	var expr := _expression
 	var happy := expr == WIN
 	for e in _eyes:
 		e.visible = not happy
@@ -126,6 +166,33 @@ func set_expression(expr: String) -> void:
 			eye_scale = Vector3(1.2, 0.5, 1.0)
 	for e in _eyes:
 		e.scale = eye_scale
+
+	# --- お手つきで崩れた顔を上からかぶせる(勝ち・負け・走っているときは、その顔を優先) ---
+	var f := maxi(_fluster, 0)
+	var calm := expr == NORMAL or expr == SURPRISED or expr == OOPS
+	for b in _brows:
+		b.visible = f >= 1 and expr != WIN
+	_sweat.visible = _sweat.visible or f >= 1
+	_sweat2.visible = f >= 2
+	for xe in _x_eyes:
+		xe.visible = false
+	if not calm:
+		return
+	if f >= 3:
+		# 放心: ×の目・ぽかん口
+		for e in _eyes:
+			e.visible = false
+		for xe in _x_eyes:
+			xe.visible = true
+		_mouth_flat.visible = false
+		_mouth_frown.visible = false
+		_mouth_o.visible = true
+	elif f >= 2 and expr == NORMAL:
+		# 目がちぐはぐ・への字口
+		_eyes[0].scale = Vector3(1.5, 1.5, 1.0)
+		_eyes[1].scale = Vector3(0.75, 0.75, 1.0)
+		_mouth_flat.visible = false
+		_mouth_frown.visible = true
 
 
 ## 振り向いたときなどに、ピョンと跳ねる
@@ -151,11 +218,21 @@ func animate(delta: float, running: bool) -> void:
 	_slip = maxf(_slip - delta / GameConfig.SLIP_TIME, 0.0)
 	# 転ぶ: 横にばったり倒れて、だんだん起き上がる
 	_pivot.rotation.z = sin(minf(_slip * 3.0, 1.0) * PI / 2.0) * 1.3 * minf(_slip * 1.5, 1.0)
+	# お手つきが重なるほど落ち着きがなくなる: 2回でふるえ、放心でふらふら
+	if _fluster == 2:
+		_pivot.position.x = sin(_time * 45.0) * 0.012
+	elif _fluster >= 3:
+		_pivot.rotation.z += sin(_time * 2.5) * 0.15
+		_pivot.position.x = 0.0
+	else:
+		_pivot.position.x = 0.0
 	_pivot.rotation.x = -0.35 * _lean * (1.0 - _slip) - 0.25 * _slump
 	_pivot.scale = Vector3(1.0, 1.0 - 0.08 * _slump, 1.0)
 	# 汗はぷるぷる揺れる
 	if _sweat.visible:
 		_sweat.position.y = HEAD_Y + 0.1 + sin(_time * 10.0) * 0.015
+	if _sweat2.visible:
+		_sweat2.position.y = HEAD_Y + 0.02 + sin(_time * 12.0 + 1.0) * 0.015
 
 
 # --- 部品づくり ---

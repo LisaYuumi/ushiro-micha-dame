@@ -41,6 +41,8 @@ var _clock := 0.0
 var _oops_until := {}
 var _surprise_until := {}
 var _was_looking := {}
+## お手つき3回で放心している人(そのラウンドの間)
+var _dazed := {}
 
 
 func build(state: GameState) -> void:
@@ -51,6 +53,7 @@ func build(state: GameState) -> void:
 	_oops_until.clear()
 	_surprise_until.clear()
 	_was_looking.clear()
+	_dazed.clear()
 	_stamp_labels.clear()
 	_banana_nodes.clear()
 
@@ -117,6 +120,8 @@ func _update_expression(state: GameState, a: GameState.Actor, model: CharacterMo
 	elif a.looking_back or _surprise_until.get(a.id, -1.0) > _clock:
 		expr = CharacterModel.SURPRISED
 	model.set_expression(expr)
+	# お手つきの回数で、顔がだんだん崩れていく(3回目は放心)
+	model.set_fluster(CharacterModel.FLUSTER_MAX if _dazed.has(a.id) else mini(a.otetsuki_count, 2))
 	# 振り向いた瞬間にピョンと跳ねる
 	if a.looking_back and not _was_looking.get(a.id, false):
 		model.hop()
@@ -129,6 +134,8 @@ func on_event(e: Dictionary) -> void:
 	match e.get("type"):
 		"otetsuki":
 			_oops_until[e["actor"]] = _clock + 1.5
+			if e.get("limit_reached", false):
+				_dazed[e["actor"]] = true
 		"stamp":
 			# スタンプが届いた人は、びっくり顔になる
 			_surprise_until[e["target"]] = _clock + 1.0
