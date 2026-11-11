@@ -126,8 +126,8 @@ const SCORE_OTETSUKI := -1
 ## この回数お手つきすると、それまでの点数のプラス分が消えて 0 点になる(マイナスはそのまま)。
 ## そのあと回数は 0 に戻る
 const OTETSUKI_LIMIT := 3
-## お手つき OTETSUKI_LIMIT 回で、次のラウンドは強制的に鬼にもするか(企画書のルール)
-const OTETSUKI_FORCES_ONI := true
+## お手つき OTETSUKI_LIMIT 回で、次のラウンドは強制的に鬼にもするか(企画書の案。今は使わない: 次の鬼は負けた人)
+const OTETSUKI_FORCES_ONI := false
 
 # --- 落とし物の重さ(重さ 0 = ハンカチ、1 = 教卓) ---
 ## 置く音の大きさ(dB)と、聞こえる距離。重いほど大きく遠くまで
