@@ -45,6 +45,7 @@ func _initialize() -> void:
 	_test_bots_throw_bananas()
 	_test_who_can_see_behind_whom()
 	_test_otetsuki_penalty_and_forced_oni()
+	_test_deceiving_scores()
 
 	_main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(_main)
@@ -831,6 +832,52 @@ func _test_otetsuki_penalty_and_forced_oni() -> void:
 		if a.role == GameState.Role.SEATED:
 			seated += 1
 	_check(seated == GameConfig.SEAT_COUNT, "席は全部うまっている")
+
+
+func _test_deceiving_scores() -> void:
+	# 嘘の「落ちてる!」→ 振り向いてお手つき → 送った人 +1
+	var s := GameState.new()
+	s.start_match(91)
+	s.take_events()
+	var liar := s.get_actor(1)
+	var victim := s.get_actor(3)
+	var before: int = s.scores[liar.id]
+	s.send_stamp(liar.id, victim.id, Stamps.DROPPED)
+	s.set_looking_back(victim.id, true)
+	_check(s.scores[liar.id] == before + GameConfig.SCORE_DECEIVE, "嘘の『落ちてる!』で振り向かせたら +%d" % GameConfig.SCORE_DECEIVE)
+	_check(_has(s.take_events(), "deceived"), "だましたお知らせが出る")
+
+	# 本当の「落ちてる!」で振り向いても点は入らない
+	var s2 := _dropped_state(93)
+	var target := s2.get_actor_at_seat(s2.drop_target_seat)
+	var sender := s2.get_actor_at_seat((s2.drop_target_seat + 2) % GameConfig.SEAT_COUNT)
+	var b2: int = s2.scores[sender.id]
+	s2.send_stamp(sender.id, target.id, Stamps.DROPPED)
+	s2.set_looking_back(target.id, true)
+	_check(s2.scores[sender.id] == b2, "本当のことを言っても、だましの点は入らない")
+
+	# 嘘の「まだ平気」(本当は落ちていた)→ 3秒振り向かない → +1
+	var s3 := _dropped_state(95)
+	var t3 := s3.get_actor_at_seat(s3.drop_target_seat)
+	var liar3 := s3.get_actor_at_seat((s3.drop_target_seat + 2) % GameConfig.SEAT_COUNT)
+	var b3: int = s3.scores[liar3.id]
+	s3.send_stamp(liar3.id, t3.id, Stamps.SAFE)
+	for i in int((GameConfig.STAMP_SHOW_TIME + 0.1) / STEP):
+		s3.tick(STEP)
+	_check(s3.scores[liar3.id] == b3 + GameConfig.SCORE_DECEIVE, "嘘の『まだ平気』で振り向かせなかったら +%d" % GameConfig.SCORE_DECEIVE)
+
+	# 嘘の「まだ平気」でも、振り向かれたら点は入らない
+	var s4 := _dropped_state(97)
+	var t4 := s4.get_actor_at_seat(s4.drop_target_seat)
+	var liar4 := s4.get_actor_at_seat((s4.drop_target_seat + 2) % GameConfig.SEAT_COUNT)
+	var b4: int = s4.scores[liar4.id]
+	s4.send_stamp(liar4.id, t4.id, Stamps.SAFE)
+	s4.tick(STEP)
+	s4.set_looking_back(t4.id, true)
+	s4.set_looking_back(t4.id, false)
+	for i in int((GameConfig.STAMP_SHOW_TIME + 0.1) / STEP):
+		s4.tick(STEP)
+	_check(s4.scores[liar4.id] == b4, "『まだ平気』の嘘は、振り向かれたら失敗")
 
 
 # --- 道具 ---

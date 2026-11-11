@@ -171,6 +171,12 @@ func _show_event(e: Dictionary) -> void:
 				view.play_stamp_sound(e["kind"])
 				# 対応しているスマホ(主に Android)では短く震える
 				Input.vibrate_handheld(150)
+		"deceived":
+			if e["sender"] == me:
+				hud.show_message("だました! +%d点\n(%s が引っかかった)" % [e["points"], _name(e["target"])], Color(0.6, 0.3, 0.8), 1.5)
+				_update_help()
+			elif e["target"] == me:
+				hud.show_message("だまされた…", Color(0.6, 0.3, 0.8), 1.2)
 		"stamp_end":
 			if e["target"] == me:
 				hud.show_stamp("", Color.WHITE)

@@ -348,6 +348,9 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 	# 追いかけっこ中・勝敗が出た後は、振り向いて見物してもお手つきにならない
 	if not value or phase == Phase.CHASE or phase == Phase.RESULT:
 		return
+	if active_stamps.has(actor_id):
+		# スタンプが出ている間に振り向いた(「まだ平気」のだましは失敗)
+		active_stamps[actor_id]["looked"] = true
 	if has_handkerchief_behind(a):
 		events.append({"type": "found", "actor": actor_id})
 	else:
@@ -369,6 +372,10 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 			"limit_reached": a.otetsuki_count == 0,
 			"score_reset": reset,
 		})
+		# 嘘の「落ちてる!」などにだまされて振り向いた: 送った人に点
+		var st: Dictionary = active_stamps.get(actor_id, {})
+		if not st.is_empty() and Stamps.says_look(st["kind"]) and not st["truthful"]:
+			_award_deceive(st["sender"], actor_id, st["kind"])
 
 
 ## 後ろのハンカチを拾って立ち上がる。
@@ -428,6 +435,7 @@ func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
 		"sender": sender_id,
 		"time_left": GameConfig.STAMP_SHOW_TIME,
 		"truthful": truthful,
+		"looked": false,
 	}
 	events.append({"type": "stamp", "sender": sender_id, "target": target_id, "kind": kind})
 	return true
@@ -684,8 +692,23 @@ func _tick_stamps(delta: float) -> void:
 	for id in active_stamps.keys():
 		active_stamps[id]["time_left"] -= delta
 		if active_stamps[id]["time_left"] <= 0.0:
+			var st: Dictionary = active_stamps[id]
 			active_stamps.erase(id)
 			events.append({"type": "stamp_end", "target": id})
+			# 嘘の「まだ平気」(本当は落ちていた)で、出ている間に振り向かせなかった: 送った人に点
+			if st["kind"] == Stamps.SAFE and not st["truthful"] and not st["looked"]:
+				_award_deceive(st["sender"], id, st["kind"])
+
+
+func _award_deceive(sender_id: int, target_id: int, kind: String) -> void:
+	scores[sender_id] = scores.get(sender_id, 0) + GameConfig.SCORE_DECEIVE
+	events.append({
+		"type": "deceived",
+		"sender": sender_id,
+		"target": target_id,
+		"kind": kind,
+		"points": GameConfig.SCORE_DECEIVE,
+	})
 
 
 func _tick_chase(delta: float) -> void:

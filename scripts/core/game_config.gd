@@ -121,6 +121,9 @@ const SCORE_ONI_SAT := 3
 const SCORE_CHASER_TOUCHED := 3
 ## 負けた人(座られた・タッチされた・気づかなかった)
 const SCORE_LOSE := -3
+## スタンプでだました人の点数
+## (「まだ平気」→本当は落ちていた→振り向かなかった / 「落ちてる!」など→本当は落ちていない→お手つき)
+const SCORE_DECEIVE := 1
 ## お手つき1回の点数
 const SCORE_OTETSUKI := -1
 ## この回数お手つきすると、それまでの点数のプラス分が消えて 0 点になる(マイナスはそのまま)。
