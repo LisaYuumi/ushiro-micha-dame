@@ -1080,8 +1080,10 @@ func _dropped_state(seed_value: int) -> GameState:
 	var s := GameState.new()
 	s.start_round(seed_value)
 	_run_until(s, "dropped", 120.0)
-	# 鬼がハンカチの横から離れるまで少し待つ(落とした直後に拾うと、その場でタッチになる)
-	for i in int(3.0 / STEP):
+	# 鬼がハンカチの横から3mくらい離れるまで待つ(すぐ拾うと、その場でタッチになる)
+	for i in int(20.0 / STEP):
+		if (s.oni_angle - s.drop_angle) * GameConfig.ONI_WALK_RADIUS >= 3.0:
+			break
 		s.tick(STEP)
 	s.take_events()
 	return s
