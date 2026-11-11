@@ -118,7 +118,7 @@ func _update_stamp(state: GameState, a: GameState.Actor, delta: float) -> void:
 	var target: GameState.Actor = targets[rng.randi_range(0, targets.size() - 1)]
 	var honest := rng.randf() < GameConfig.BOT_STAMP_HONEST_CHANCE
 	var say_look := false
-	if GameState.can_see_behind(a.seat_index, target.seat_index):
+	if state.can_see_behind(a.seat_index, target.seat_index):
 		var behind := state.has_handkerchief_behind(target)
 		say_look = behind if honest else not behind
 	else:

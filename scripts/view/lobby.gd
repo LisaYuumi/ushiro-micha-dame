@@ -18,6 +18,9 @@ var _menu: VBoxContainer
 var _join_box: VBoxContainer
 var _host_box: VBoxContainer
 var _code := ""
+## 遊ぶ人数(鬼をふくむ全員の数)。ひとりで遊ぶとき・部屋を作るときに使う
+var players: int = GameConfig.PLAYER_COUNT_OPTIONS[0]
+var _players_button: Button
 ## スマホの指で押せるように、ボタンは自分で当たり判定をする
 var _buttons: Array[Button] = []
 
@@ -48,6 +51,9 @@ func _ready() -> void:
 	_menu = VBoxContainer.new()
 	_menu.add_theme_constant_override("separation", 14)
 	root.add_child(_menu)
+	_players_button = _button("", func() -> void: _toggle_players())
+	_menu.add_child(_players_button)
+	_update_players_button()
 	_menu.add_child(_button("ひとりで遊ぶ(ボット相手)", func() -> void: solo_pressed.emit()))
 	_menu.add_child(_button("部屋を作る(ホスト)", func() -> void: host_pressed.emit()))
 	_menu.add_child(_button("部屋に入る(合言葉)", func() -> void: _show_join()))
@@ -77,6 +83,16 @@ func _ready() -> void:
 	show_menu()
 
 
+func _toggle_players() -> void:
+	var opts: Array = GameConfig.PLAYER_COUNT_OPTIONS
+	players = opts[(opts.find(players) + 1) % opts.size()]
+	_update_players_button()
+
+
+func _update_players_button() -> void:
+	_players_button.text = "人数: %d人(タップで変える)" % players
+
+
 func show_menu() -> void:
 	_menu.visible = true
 	_join_box.visible = false
@@ -85,11 +101,11 @@ func show_menu() -> void:
 
 
 ## ホスト: 合言葉と、入っている人数を出す
-func show_host(code: String, players: int) -> void:
+func show_host(code: String, joined: int) -> void:
 	_menu.visible = false
 	_join_box.visible = false
 	_host_box.visible = true
-	_players_label.text = "合言葉: %s\n入っている人: %d人(あなたをふくむ)\n足りない席はボットが座ります" % [code, players]
+	_players_label.text = "合言葉: %s\n入っている人: %d人(あなたをふくむ) / %d人で遊ぶ\n足りない席はボットが座ります" % [code, joined, players]
 
 
 ## 参加者: ホストがスタートするのを待つ

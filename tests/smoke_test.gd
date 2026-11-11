@@ -778,14 +778,21 @@ func _test_bots_throw_bananas() -> void:
 
 
 func _test_who_can_see_behind_whom() -> void:
-	var n := GameConfig.SEAT_COUNT
+	for players in GameConfig.PLAYER_COUNT_OPTIONS:
+		_check_visibility(players - 1)
+
+
+func _check_visibility(n: int) -> void:
+	var g := GameState.new()
+	g.start_match(1, false, n)
+	_check(g.seat_count == n and g.seat_positions.size() == n, "席が %d つ" % n)
 	for i in n:
-		_check(not GameState.can_see_behind(i, i), "自分の後ろは見えない")
-		_check(not GameState.can_see_behind(i, (i + 1) % n), "右どなりの後ろは見えない")
-		_check(not GameState.can_see_behind(i, (i + n - 1) % n), "左どなりの後ろは見えない")
+		_check(not g.can_see_behind(i, i), "自分の後ろは見えない")
+		_check(not g.can_see_behind(i, (i + 1) % n), "右どなりの後ろは見えない")
+		_check(not g.can_see_behind(i, (i + n - 1) % n), "左どなりの後ろは見えない")
 		var seen := 0
 		for j in n:
-			if GameState.can_see_behind(i, j):
+			if g.can_see_behind(i, j):
 				seen += 1
 		_check(seen == n - 3, "見えるのは向かいの %d 人" % (n - 3))
 

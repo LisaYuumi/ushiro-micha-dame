@@ -108,6 +108,8 @@ var _bot_oni_voice_left: float = 0.0
 ## 床に落ちているバナナの皮 [{"pos": Vector3, "sender": id}]
 var bananas: Array = []
 
+## 席の数(この試合。鬼は別に1人)
+var seat_count: int = GameConfig.SEAT_COUNT
 ## 鬼は人だけにするか(オンラインの試遊用)
 var humans_only_oni: bool = false
 ## ラウンドを始めるたびに1つ増える(ホスト以外の画面が、見た目を作り直す合図)
@@ -133,16 +135,19 @@ var rng := RandomNumberGenerator.new()
 
 ## 新しい試合を始める(ラウンド1から)。seed を指定すると毎回同じ展開になる(テスト用)。
 ## player_is_oni = true なら、この画面のプレイヤーが最初の鬼になる。
-func start_match(seed_value: int = -1, player_is_oni: bool = false) -> void:
-	var me := GameConfig.SEAT_COUNT if player_is_oni else 0
-	start_match_custom(seed_value, [me], me if player_is_oni else GameConfig.SEAT_COUNT, {me: "あなた"}, false)
+## seats: 席の数(鬼は別に1人。8人で遊ぶなら7、5人なら4)
+func start_match(seed_value: int = -1, player_is_oni: bool = false, seats: int = GameConfig.SEAT_COUNT) -> void:
+	var me := seats if player_is_oni else 0
+	start_match_custom(seed_value, [me], me if player_is_oni else seats, {me: "あなた"}, false, seats)
 	local_player_id = me
 
 
 ## 人とボットの組み合わせを決めて、新しい試合を始める(オンライン対戦のホストが使う)。
 ## human_ids: 人が操作する登場人物の id(0〜SEAT_COUNT)/first_oni: 最初の鬼の id/
 ## names: id -> 表示名(書かれていない人はボット名)/humans_only_oni: 鬼は人だけにする
-func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names: Dictionary, humans_only: bool) -> void:
+func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names: Dictionary, humans_only: bool,
+		seats: int = GameConfig.SEAT_COUNT) -> void:
+	seat_count = seats
 	if seed_value >= 0:
 		rng.seed = seed_value
 	else:
@@ -163,7 +168,7 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 	# 登場人物は試合のあいだ同じ。席に SEAT_COUNT 人、鬼が1人(id は 0〜SEAT_COUNT)
 	actors.clear()
 	var bot_no := 1
-	for i in GameConfig.SEAT_COUNT + 1:
+	for i in seat_count + 1:
 		var actor := Actor.new()
 		actor.id = i
 		actor.is_bot = not (i in human_ids)
@@ -180,7 +185,7 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 	round_index = 0
 	match_over = false
 	var lineup := []
-	for i in GameConfig.SEAT_COUNT + 1:
+	for i in seat_count + 1:
 		if i != first_oni:
 			lineup.append(i)
 	_begin_round(lineup, first_oni)
@@ -189,7 +194,7 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 func _init_seats() -> void:
 	seat_positions.clear()
 	seat_yaws.clear()
-	for i in GameConfig.SEAT_COUNT:
+	for i in seat_count:
 		var a := seat_angle(i)
 		seat_positions.append(_ring_point(a, GameConfig.RING_RADIUS))
 		# 輪の中心を向く向き(-Z が正面なので、角度 a がそのまま中心向き)
@@ -233,7 +238,7 @@ func item_weight() -> float:
 ## 勝敗のあとの並び: [席ごとの id の配列, 次の鬼の id]
 func _lineup_after_result() -> Array:
 	var seat_ids := []
-	seat_ids.resize(GameConfig.SEAT_COUNT)
+	seat_ids.resize(seat_count)
 	for a in actors:
 		if a.role == Role.SEATED and a.seat_index >= 0:
 			seat_ids[a.seat_index] = a.id
@@ -305,7 +310,7 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	oni_is_player = not oni_actor.is_bot
 
 	# 鬼は席と席の間から歩きはじめる
-	oni_angle = seat_angle(0) + TAU / (GameConfig.SEAT_COUNT * 2)
+	oni_angle = seat_angle(0) + TAU / (seat_count * 2)
 	oni_start_angle = oni_angle
 	oni_radius = GameConfig.ONI_WALK_RADIUS
 	oni_holding_stop = false
@@ -315,7 +320,7 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	handkerchief_on_floor = false
 	oni_pause_left = 0.0
 	seat_pass_age.clear()
-	for i in GameConfig.SEAT_COUNT:
+	for i in seat_count:
 		seat_pass_age.append(INF)
 	chaser_id = -1
 	vacant_seat = -1
@@ -327,7 +332,7 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	last_voice_age = INF
 	drop_masked = false
 	_bot_oni_voice_left = rng.randf_range(GameConfig.BOT_ONI_VOICE_INTERVAL_MIN, GameConfig.BOT_ONI_VOICE_INTERVAL_MAX)
-	var step := TAU / GameConfig.SEAT_COUNT
+	var step := TAU / seat_count
 	next_seat_crossing = ceilf(oni_angle / step) * step
 	if oni_is_player:
 		# 人が鬼のときは、いつ誰に落とすかは本人が決める
@@ -374,7 +379,7 @@ func _tick_walking(delta: float) -> void:
 	if oni_angle >= next_seat_crossing:
 		# ちょうど席の真後ろで止まれるように位置をそろえる
 		oni_angle = next_seat_crossing
-		next_seat_crossing += TAU / GameConfig.SEAT_COUNT
+		next_seat_crossing += TAU / seat_count
 		_on_pass_behind_seat()
 	_place_on_walk_ring(oni, oni_angle)
 
@@ -609,7 +614,7 @@ func _is_player_oni(actor_id: int) -> bool:
 
 ## 鬼にいちばん近い「席の真後ろ」の角度
 func _nearest_seat_crossing() -> float:
-	var step := TAU / GameConfig.SEAT_COUNT
+	var step := TAU / seat_count
 	return roundf(oni_angle / step) * step
 
 
@@ -647,7 +652,7 @@ func take_events() -> Array:
 
 ## 席 i の、輪の上での角度(ラジアン)。席0 は +Z 側。
 func seat_angle(i: int) -> float:
-	return TAU * float(i) / float(GameConfig.SEAT_COUNT)
+	return TAU * float(i) / float(seat_count)
 
 
 func get_actor(id: int) -> Actor:
@@ -663,8 +668,8 @@ func get_local_player() -> Actor:
 
 ## 席 from に座っている人から、席 to の人の後ろが見えるか。
 ## 両どなりは見えない(向かい側だけ見える)。見え方はカメラ(SEAT_CAM_HFOV)と合わせてある
-static func can_see_behind(from_seat: int, to_seat: int) -> bool:
-	var n := GameConfig.SEAT_COUNT
+func can_see_behind(from_seat: int, to_seat: int) -> bool:
+	var n := seat_count
 	var d := posmod(to_seat - from_seat, n)
 	return d >= 2 and d <= n - 2
 
@@ -716,13 +721,16 @@ func snapshot() -> Dictionary:
 		"bananas": bananas,
 		"drop_masked": drop_masked,
 		"round_serial": round_serial,
+		"seat_count": seat_count,
 	}
 
 
 ## snapshot() の中身をこの状態に写す(オンライン対戦で、ホスト以外が受け取った状態を表示するため)。
 ## 写したあとはルールを動かさず(tick しない)、表示に使うだけ。
 func apply_snapshot(s: Dictionary) -> void:
-	if seat_positions.is_empty():
+	var seats: int = s.get("seat_count", GameConfig.SEAT_COUNT)
+	if seat_positions.is_empty() or seats != seat_count:
+		seat_count = seats
 		_init_seats()
 	var list: Array = s["actors"]
 	if actors.size() != list.size():
@@ -770,7 +778,7 @@ func apply_snapshot(s: Dictionary) -> void:
 ## 落とす相手と、落とすタイミング(角度)を決める。
 ## 相手はプレイヤーもボットも含めてランダム。
 func _plan_drop() -> void:
-	drop_target_seat = rng.randi_range(0, GameConfig.SEAT_COUNT - 1)
+	drop_target_seat = rng.randi_range(0, seat_count - 1)
 	var laps := rng.randf_range(GameConfig.ONI_LAPS_BEFORE_DROP_MIN, GameConfig.ONI_LAPS_BEFORE_DROP_MAX)
 	var earliest := oni_angle + TAU * laps
 	var target := seat_angle(drop_target_seat)
@@ -966,7 +974,7 @@ func _flat_distance(a: Vector3, b: Vector3) -> float:
 
 
 func _seat_at_angle(angle: float) -> int:
-	var n := GameConfig.SEAT_COUNT
+	var n := seat_count
 	return posmod(roundi(angle / TAU * n), n)
 
 

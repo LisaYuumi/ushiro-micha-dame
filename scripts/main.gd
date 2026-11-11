@@ -19,6 +19,8 @@ var _last_sound := ""
 var _stamp_target := -1
 ## ひとりで遊ぶとき、この画面のプレイヤーが鬼をやるか
 var _player_is_oni := false
+## この試合の席の数(遊ぶ人数 - 鬼1人)
+var _seats: int = GameConfig.SEAT_COUNT
 ## ホスト: 参加者の peer id -> 登場人物の id
 var _peer_actor := {}
 ## ホスト: 状態を配るまでの時間
@@ -62,6 +64,7 @@ func _ready() -> void:
 # --- ロビー ---
 
 func _on_solo() -> void:
+	_seats = lobby.players - 1
 	mode = Mode.SOLO
 	lobby.visible = false
 	cmds = state
@@ -69,6 +72,7 @@ func _on_solo() -> void:
 
 
 func _on_host() -> void:
+	_seats = lobby.players - 1
 	mode = Mode.LOBBY
 	net.host_room()
 	lobby.show_host("(作成中)", 1)
@@ -107,7 +111,7 @@ func _on_peers_changed(peer_ids: Array) -> void:
 ## ホストが「スタート」: 人は id 0(ホスト)から順に、残りはボット。最初の鬼は人からランダム
 func _on_host_start() -> void:
 	var peers := multiplayer.get_peers()
-	var max_humans := GameConfig.SEAT_COUNT + 1
+	var max_humans := _seats + 1
 	_peer_actor.clear()
 	var humans := [0]
 	var names := {0: "プレイヤー1(ホスト)"}
@@ -120,7 +124,7 @@ func _on_host_start() -> void:
 		names[next_id] = "プレイヤー%d" % (next_id + 1)
 		next_id += 1
 	var first_oni: int = humans[randi_range(0, humans.size() - 1)]
-	state.start_match_custom(-1, humans, first_oni, names, true)
+	state.start_match_custom(-1, humans, first_oni, names, true, _seats)
 	state.local_player_id = 0
 	mode = Mode.HOST
 	cmds = state
@@ -208,7 +212,7 @@ func _start_round() -> void:
 	if mode == Mode.HOST:
 		_on_host_start()
 		return
-	state.start_match(-1, _player_is_oni)
+	state.start_match(-1, _player_is_oni, _seats)
 	_refresh_round()
 
 

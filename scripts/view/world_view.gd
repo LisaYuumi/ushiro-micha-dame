@@ -375,7 +375,7 @@ func _hide_item_if_not_visible_to_me(state: GameState) -> void:
 	var me := state.get_local_player()
 	var hidden := state.handkerchief_on_floor and me.role == GameState.Role.SEATED \
 			and state.drop_target_seat != me.seat_index \
-			and not GameState.can_see_behind(me.seat_index, state.drop_target_seat)
+			and not state.can_see_behind(me.seat_index, state.drop_target_seat)
 	var bits := 1 << (HIDDEN_LAYER - 1) if hidden else 1
 	for c in _handkerchief.get_children():
 		if c is VisualInstance3D:
@@ -490,7 +490,7 @@ func _build_cameras(state: GameState) -> void:
 	_seat_cam = Camera3D.new()
 	# 横の見える幅を固定する(横長の画面でも、両どなりの後ろが見えないように)
 	_seat_cam.keep_aspect = Camera3D.KEEP_WIDTH
-	_seat_cam.fov = GameConfig.SEAT_CAM_HFOV
+	_seat_cam.fov = GameConfig.SEAT_CAM_HFOV if state.seat_count > 5 else GameConfig.SEAT_CAM_HFOV_SMALL
 	_seat_cam.near = 0.05
 	# 自分の体のレイヤーを映さない
 	_seat_cam.cull_mask = 0xFFFFF & ~(1 << (SELF_LAYER - 1)) & ~(1 << (HIDDEN_LAYER - 1))

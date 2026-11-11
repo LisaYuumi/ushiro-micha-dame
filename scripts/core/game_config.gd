@@ -6,6 +6,8 @@ extends RefCounted
 # --- 配置 ---
 ## 席の数(座る人の数。鬼は別に1人なので、全部で SEAT_COUNT + 1 人。企画書は4〜8人)
 const SEAT_COUNT := 7
+## 選べる人数(全員の数 = 席 + 鬼1人)。ロビーで選ぶ
+const PLAYER_COUNT_OPTIONS := [8, 5]
 ## 席が並ぶ輪の半径(メートル)
 const RING_RADIUS := 3.0
 ## 鬼が歩く輪の半径(席の輪より外側)
@@ -44,6 +46,8 @@ const DROP_SOUND_RANGE := 1.2
 ## 両どなりの人の姿まで見える広さ。両どなりの後ろに落ちた物は、見え方のルール
 ## (GameState.can_see_behind)で自分の画面には映さない
 const SEAT_CAM_HFOV := 135.0
+## 5人で遊ぶ(席が4〜5つ)ときの見える幅。席が少ないほど両どなりが正面寄りになるので狭くてよい
+const SEAT_CAM_HFOV_SMALL := 120.0
 
 # --- 振り向き ---
 ## 振り向くのにかかる時間(秒)
