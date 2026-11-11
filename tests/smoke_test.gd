@@ -329,9 +329,8 @@ func _test_stamp_rules() -> void:
 	_check(_has(s.take_events(), "stamp"), "届いたお知らせが出る")
 	_check(not s.send_stamp(0, 3, Stamps.DROPPED), "表示中の人には届かない(早い者勝ち)")
 	_check(_has(s.take_events(), "stamp_blocked"), "届かなかったお知らせが出る")
-	_check(not s.send_stamp(1, 2, Stamps.SAFE), "となりの人には送れない")
-	var ev := s.take_events()
-	_check(ev.size() == 1 and ev[0].get("reason", "") == "neighbor", "となりだから送れなかった、とわかる")
+	_check(s.send_stamp(1, 2, Stamps.SAFE), "となりの人にも送れる")
+	s.take_events()
 	_check(not s.send_stamp(1, 1, Stamps.SAFE), "自分には送れない")
 	_check(not s.send_stamp(s.oni_id, 3, Stamps.SAFE), "鬼は送れない")
 	_check(not s.send_stamp(1, 4, "unknown"), "知らない種類は送れない")
@@ -790,20 +789,41 @@ func _test_otetsuki_penalty_and_forced_oni() -> void:
 	var s := GameState.new()
 	s.start_match(81)
 	var me := s.get_local_player()
-	var before: int = s.scores[me.id]
+	s.scores[me.id] = 7 # プラスの点数を持っているとする
 	s.set_looking_back(me.id, true)
-	_check(s.scores[me.id] == before + GameConfig.SCORE_OTETSUKI, "お手つきで %d 点" % GameConfig.SCORE_OTETSUKI)
+	_check(s.scores[me.id] == 7 + GameConfig.SCORE_OTETSUKI, "お手つきで %d 点" % GameConfig.SCORE_OTETSUKI)
+	_check(me.otetsuki_count == 1, "お手つき1回目")
 	for i in GameConfig.OTETSUKI_LIMIT - 1:
 		s.set_looking_back(me.id, false)
 		s.set_looking_back(me.id, true)
 	s.set_looking_back(me.id, false)
-	_check(me.otetsuki_count == GameConfig.OTETSUKI_LIMIT, "お手つきが %d 回" % GameConfig.OTETSUKI_LIMIT)
+	_check(s.scores[me.id] == 0, "お手つき %d 回で、プラスの点数が 0 になる" % GameConfig.OTETSUKI_LIMIT)
+	_check(me.otetsuki_count == 0, "そのあと回数は 0 に戻る")
+	var limit_event := false
+	for e in s.take_events():
+		if e["type"] == "otetsuki" and e["limit_reached"] and e["score_reset"]:
+			limit_event = true
+	_check(limit_event, "0点になったお知らせが出る")
+
+	# マイナスの人は、そのまま
+	var s2 := GameState.new()
+	s2.start_match(82)
+	var me2 := s2.get_local_player()
+	s2.scores[me2.id] = -4
+	for i in GameConfig.OTETSUKI_LIMIT:
+		s2.set_looking_back(me2.id, true)
+		s2.set_looking_back(me2.id, false)
+	_check(s2.scores[me2.id] == -4 + GameConfig.SCORE_OTETSUKI * GameConfig.OTETSUKI_LIMIT, "マイナスの点数はそのまま")
+
+	# 強制的に鬼(設定が ON のとき)
+	if not GameConfig.OTETSUKI_FORCES_ONI:
+		return
 	_run_until(s, "result", 200.0)
 	var loser: int = s.result["loser"]
 	_check(s.next_round(), "(確認用)次のラウンドへ")
 	_check(s.oni_id == me.id, "お手つき %d 回の人が、次は強制的に鬼" % GameConfig.OTETSUKI_LIMIT)
 	_check(s.forced_oni_id == me.id, "強制的に鬼になったことがわかる")
-	_check(me.otetsuki_count == 0, "鬼になったらお手つきの回数は 0 に戻る")
+	_check(not me.must_be_oni, "鬼になったら、強制の印は消える")
 	if loser != me.id:
 		_check(s.get_actor(loser).role == GameState.Role.SEATED, "本来鬼になるはずだった人は席に座る")
 	var seated := 0

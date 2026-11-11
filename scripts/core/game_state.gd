@@ -32,8 +32,10 @@ class Actor:
 	var color: Color = Color.WHITE
 	## 振り向いているか(全員から見える)
 	var looking_back: bool = false
-	## お手つきの回数(試合のあいだ数える。OTETSUKI_LIMIT 回で次のラウンドは強制的に鬼)
+	## お手つきの回数(OTETSUKI_LIMIT 回でペナルティ。そのあと 0 に戻る)
 	var otetsuki_count: int = 0
+	## お手つきが多すぎて、次のラウンドは強制的に鬼
+	var must_be_oni: bool = false
 	## 走る向き(追いかけるとき。長さ 0〜1)
 	var move_dir: Vector3 = Vector3.ZERO
 	## このラウンドで送れるスタンプの残り(-1 = 何回でも)
@@ -230,19 +232,16 @@ func _lineup_after_result() -> Array:
 				# 本来鬼になるはずだった人は、強制的に鬼になる人の席に座る
 				seat_ids[idx] = next_oni
 				next_oni = forced
-		get_actor(forced).otetsuki_count = 0
+		get_actor(forced).must_be_oni = false
 	return [seat_ids, next_oni]
 
 
-## お手つきが OTETSUKI_LIMIT 回以上の人(いちばん多い人。いなければ -1)
+## お手つきが多すぎて、次は強制的に鬼になる人(いなければ -1)
 func _too_many_otetsuki() -> int:
-	var best := -1
-	var best_count := GameConfig.OTETSUKI_LIMIT - 1
 	for a in actors:
-		if a.otetsuki_count > best_count:
-			best_count = a.otetsuki_count
-			best = a.id
-	return best
+		if a.must_be_oni:
+			return a.id
+	return -1
 
 
 ## seat_ids[i] の人を席 i に座らせ、oni を鬼にしてラウンドを始める
@@ -354,11 +353,21 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 	else:
 		a.otetsuki_count += 1
 		scores[a.id] = scores.get(a.id, 0) + GameConfig.SCORE_OTETSUKI
+		var reset := false
+		if a.otetsuki_count >= GameConfig.OTETSUKI_LIMIT:
+			# お手つきが多すぎる: プラスの点数は 0 に(マイナスはそのまま)
+			reset = scores[a.id] > 0
+			scores[a.id] = mini(scores[a.id], 0)
+			a.otetsuki_count = 0
+			if GameConfig.OTETSUKI_FORCES_ONI:
+				a.must_be_oni = true
 		events.append({
 			"type": "otetsuki",
 			"actor": actor_id,
 			"count": a.otetsuki_count,
 			"points": GameConfig.SCORE_OTETSUKI,
+			"limit_reached": a.otetsuki_count == 0,
+			"score_reset": reset,
 		})
 
 
@@ -406,10 +415,6 @@ func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
 	if phase != Phase.WALKING and phase != Phase.DROPPED:
 		return false
 	if sender.stamps_left == 0 or not (kind in Stamps.ALL):
-		return false
-	if not can_see_behind(sender.seat_index, target.seat_index):
-		# 後ろが見えない両どなりには送れない
-		events.append({"type": "stamp_blocked", "sender": sender_id, "target": target_id, "reason": "neighbor"})
 		return false
 	if active_stamps.has(target_id):
 		events.append({"type": "stamp_blocked", "sender": sender_id, "target": target_id})

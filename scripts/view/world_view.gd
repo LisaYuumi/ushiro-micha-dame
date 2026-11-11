@@ -412,9 +412,6 @@ func pick_actor_at(state: GameState, screen_pos: Vector2) -> int:
 	for a in state.actors:
 		if a.id == state.local_player_id or a.role != GameState.Role.SEATED:
 			continue
-		var me := state.get_local_player()
-		if me.role == GameState.Role.SEATED and not GameState.can_see_behind(me.seat_index, a.seat_index):
-			continue # 両どなりはスタンプの相手に選べない
 		for h in [0.9, 1.45]:
 			var p: Vector3 = a.position + Vector3(0, h, 0)
 			if cam.is_position_behind(p):

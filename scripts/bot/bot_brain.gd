@@ -111,16 +111,19 @@ func _update_stamp(state: GameState, a: GameState.Actor, delta: float) -> void:
 	for t in state.actors:
 		if t.id == a.id or t.role != GameState.Role.SEATED or state.active_stamps.has(t.id):
 			continue
-		if not GameState.can_see_behind(a.seat_index, t.seat_index):
-			continue # 両どなりには送れない
 		if state.seat_pass_age[t.seat_index] <= GameConfig.BOT_STAMP_RECENT_PASS:
 			targets.append(t)
 	if targets.is_empty():
 		return
 	var target: GameState.Actor = targets[rng.randi_range(0, targets.size() - 1)]
 	var honest := rng.randf() < GameConfig.BOT_STAMP_HONEST_CHANCE
-	var behind := state.has_handkerchief_behind(target)
-	var say_look := behind if honest else not behind
+	var say_look := false
+	if GameState.can_see_behind(a.seat_index, target.seat_index):
+		var behind := state.has_handkerchief_behind(target)
+		say_look = behind if honest else not behind
+	else:
+		# 両どなりの後ろは見えないので、当てずっぽう
+		say_look = rng.randf() < 0.5
 	var kind := Stamps.SAFE
 	if say_look:
 		var r := rng.randf()

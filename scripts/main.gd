@@ -200,8 +200,13 @@ func _show_event(e: Dictionary) -> void:
 				hud.show_message("4周したので\n次の席で自動で落とす", Color(0.3, 0.3, 0.3), 1.5)
 		"otetsuki":
 			if e["actor"] == me:
-				hud.show_message("お手つき! %d点\n(%d/%d回で次は強制的に鬼)" % [e["points"], e["count"], GameConfig.OTETSUKI_LIMIT],
-						Color(0.85, 0.1, 0.1), GameConfig.MESSAGE_TIME)
+				var text := "お手つき! %d点\n(%d/%d回)" % [e["points"], e["count"], GameConfig.OTETSUKI_LIMIT]
+				if e["limit_reached"]:
+					text = "お手つき%d回!\n%s" % [GameConfig.OTETSUKI_LIMIT,
+							"プラスの点数が0点に…" if e["score_reset"] else "点数はそのまま(マイナスだったので)"]
+					if GameConfig.OTETSUKI_FORCES_ONI:
+						text += "\n次のラウンドは鬼"
+				hud.show_message(text, Color(0.85, 0.1, 0.1), GameConfig.MESSAGE_TIME * 1.5)
 				_update_help()
 		"found":
 			if e["actor"] == me:
