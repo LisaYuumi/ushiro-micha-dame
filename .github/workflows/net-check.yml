@@ -1,0 +1,16 @@
+# 仲介サーバー(PeerJS の無料公開サーバー)に、ゲームと同じ形でつなげるかを確かめる
+name: Net check
+
+on:
+  push:
+    branches: [claude/cool-hopper-41qzrz]
+    paths: [".github/workflows/net-check.yml", "tools/peerjs_check.py"]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install websockets==12.0
+      - run: python3 tools/peerjs_check.py
