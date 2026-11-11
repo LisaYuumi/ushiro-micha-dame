@@ -44,6 +44,9 @@ class Actor:
 	var bananas_left: int = 0
 	## バナナで転んで止まっている残り時間(秒)
 	var slip_left: float = 0.0
+	## このラウンドで振り向ける残り回数/振り向いた回数
+	var looks_left: int = 0
+	var looks_used: int = 0
 
 
 ## 席の位置(床の上)
@@ -254,6 +257,8 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 		a.move_dir = Vector3.ZERO
 		a.stamps_left = GameConfig.STAMPS_PER_ROUND
 		a.bananas_left = GameConfig.BANANAS_PER_ROUND
+		a.looks_left = GameConfig.LOOKS_PER_ROUND
+		a.looks_used = 0
 		a.slip_left = 0.0
 	for i in seat_ids.size():
 		_sit(get_actor(seat_ids[i]), i)
@@ -344,9 +349,17 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 	var a := get_actor(actor_id)
 	if a == null or a.role != Role.SEATED or a.looking_back == value:
 		return
+	var judged := phase == Phase.WALKING or phase == Phase.DROPPED
+	if value and judged:
+		# 振り向ける回数には限りがある
+		if a.looks_left <= 0:
+			events.append({"type": "no_looks", "actor": actor_id})
+			return
+		a.looks_left -= 1
+		a.looks_used += 1
 	a.looking_back = value
 	# 追いかけっこ中・勝敗が出た後は、振り向いて見物してもお手つきにならない
-	if not value or phase == Phase.CHASE or phase == Phase.RESULT:
+	if not value or not judged:
 		return
 	if active_stamps.has(actor_id):
 		# スタンプが出ている間に振り向いた(「まだ平気」のだましは失敗)
@@ -392,6 +405,8 @@ func pick_up(actor_id: int) -> void:
 		return
 	if not a.looking_back:
 		set_looking_back(actor_id, true)
+	if not a.looking_back:
+		return # もう振り向けない
 	if phase != Phase.DROPPED or not has_handkerchief_behind(a):
 		return
 	vacant_seat = a.seat_index
@@ -636,6 +651,7 @@ func snapshot() -> Dictionary:
 			"otetsuki": a.otetsuki_count,
 			"move": a.move_dir,
 			"stamps_left": a.stamps_left,
+			"looks_left": a.looks_left,
 		})
 	return {
 		"actors": list,
@@ -832,6 +848,14 @@ func _finish(winner_id: int, loser_id: int, reason: String) -> void:
 		"touched":
 			scores[winner_id] += GameConfig.SCORE_CHASER_TOUCHED
 	scores[loser_id] += GameConfig.SCORE_LOSE
+	# 一度も振り向かずにがまんした人に点(気づかずに負けた人と、このラウンドの鬼はのぞく)
+	var patient := []
+	for a in actors:
+		if a.id == oni_id or a.id == loser_id or a.looks_used > 0:
+			continue
+		scores[a.id] += GameConfig.SCORE_PATIENCE
+		patient.append(a.id)
+	result["patient"] = patient
 	result["scores"] = scores.duplicate()
 	for a in actors:
 		a.move_dir = Vector3.ZERO

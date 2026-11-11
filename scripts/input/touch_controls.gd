@@ -11,6 +11,7 @@ var _oni_buttons: Array[Button] = []
 ## 座っていて、追いかけっこ中だけ出すボタン(バナナの皮)
 var _chase_buttons: Array[Button] = []
 var _role_button: Button
+var _look_button: Button
 var _mode := []
 ## 押している指の番号 -> 操作
 var _touch_action := {}
@@ -19,7 +20,8 @@ var _touch_action := {}
 func _ready() -> void:
 	layer = 2
 	# 右下: 振り向く(押している間)
-	_seated_buttons.append(_add_button("振り向く", "look_back", Vector2(1, 1), Rect2(-250, -250, 220, 220), 40))
+	_look_button = _add_button("振り向く", "look_back", Vector2(1, 1), Rect2(-250, -250, 220, 220), 36)
+	_seated_buttons.append(_look_button)
 	_seated_buttons.append(_add_button("拾う", "pick_up", Vector2(1, 1), Rect2(-430, -170, 160, 140), 36))
 	# 鬼のとき: 同じ場所に「止まる」(押している間)「落とす」、その左に「ふり」
 	_oni_buttons.append(_add_button("止まる", "oni_stop", Vector2(1, 1), Rect2(-250, -250, 220, 220), 40))
@@ -53,6 +55,11 @@ func _ready() -> void:
 	_add_button("音テスト", "sound_test", Vector2(1, 0), Rect2(-614, 16, 190, 64), 24)
 	_role_button = _add_button("役を変える", "toggle_role", Vector2(1, 0), Rect2(-858, 16, 230, 64), 22)
 	set_oni_mode(false)
+
+
+## 「振り向く」ボタンに、残りの回数を出す(-1 で回数を出さない)
+func set_looks_left(n: int) -> void:
+	_look_button.text = "振り向く" if n < 0 else "振り向く\n(残り%d)" % n
 
 
 ## 鬼のとき/座っているとき/座っていて追いかけっこ中で、出すボタンを切りかえる

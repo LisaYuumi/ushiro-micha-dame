@@ -46,6 +46,7 @@ func _initialize() -> void:
 	_test_who_can_see_behind_whom()
 	_test_otetsuki_penalty_and_forced_oni()
 	_test_deceiving_scores()
+	_test_look_limit_and_patience()
 
 	_main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(_main)
@@ -790,6 +791,7 @@ func _test_otetsuki_penalty_and_forced_oni() -> void:
 	var s := GameState.new()
 	s.start_match(81)
 	var me := s.get_local_player()
+	me.looks_left = 99 # お手つきを重ねるため、振り向ける回数をふやしておく
 	s.scores[me.id] = 7 # プラスの点数を持っているとする
 	s.set_looking_back(me.id, true)
 	_check(s.scores[me.id] == 7 + GameConfig.SCORE_OTETSUKI, "お手つきで %d 点" % GameConfig.SCORE_OTETSUKI)
@@ -810,6 +812,7 @@ func _test_otetsuki_penalty_and_forced_oni() -> void:
 	var s2 := GameState.new()
 	s2.start_match(82)
 	var me2 := s2.get_local_player()
+	me2.looks_left = 99
 	s2.scores[me2.id] = -4
 	for i in GameConfig.OTETSUKI_LIMIT:
 		s2.set_looking_back(me2.id, true)
@@ -927,6 +930,51 @@ func _test_deceiving_scores() -> void:
 	for i in int((GameConfig.STAMP_SHOW_TIME + 0.1) / STEP):
 		s4.tick(STEP)
 	_check(s4.scores[liar4.id] == b4, "『まだ平気』の嘘は、振り向かれたら失敗")
+
+
+func _test_look_limit_and_patience() -> void:
+	var s := GameState.new()
+	s.start_match(101)
+	var me := s.get_local_player()
+	_check(me.looks_left == GameConfig.LOOKS_PER_ROUND, "振り向ける回数は %d 回" % GameConfig.LOOKS_PER_ROUND)
+	for i in GameConfig.LOOKS_PER_ROUND:
+		s.set_looking_back(me.id, true)
+		s.set_looking_back(me.id, false)
+	s.take_events()
+	s.set_looking_back(me.id, true)
+	_check(not me.looking_back, "回数を使い切ると振り向けない")
+	_check(_has(s.take_events(), "no_looks"), "振り向けなかったお知らせが出る")
+	# 使い切ると、後ろに落とされても拾えない
+	var s2 := _dropped_state(103)
+	var target := s2.get_actor_at_seat(s2.drop_target_seat)
+	target.looks_left = 0
+	s2.pick_up(target.id)
+	_check(s2.phase == GameState.Phase.DROPPED, "振り向けないと拾えない")
+	# 次のラウンドでは回数が戻る
+	var s3 := GameState.new()
+	s3.start_match(105)
+	var p3 := s3.get_local_player()
+	p3.looks_left = 0
+	_run_until(s3, "result", 200.0)
+	s3.next_round()
+	_check(p3.looks_left == GameConfig.LOOKS_PER_ROUND, "次のラウンドで振り向ける回数が戻る")
+	# がまんした人に +1(負けた人と鬼はのぞく)
+	var s4 := GameState.new()
+	s4.start_match(107)
+	var before: Dictionary = s4.scores.duplicate()
+	var turner := s4.get_actor(1)
+	s4.set_looking_back(turner.id, true)
+	s4.set_looking_back(turner.id, false)
+	var e := _run_until(s4, "result", 200.0)
+	var loser: int = e["loser"]
+	for a in s4.actors:
+		if a.id == s4.oni_id or a.id == loser:
+			continue
+		var expected: int = before[a.id] + (GameConfig.SCORE_OTETSUKI if a.id == turner.id else GameConfig.SCORE_PATIENCE)
+		if a.id == e["winner"]:
+			continue
+		_check(s4.scores[a.id] == expected, "%s: がまんした人は +%d、振り向いた人はもらえない" % [a.display_name, GameConfig.SCORE_PATIENCE])
+	_check(not (loser in e["patient"]), "気づかずに負けた人はがまんの点をもらえない")
 
 
 # --- 道具 ---

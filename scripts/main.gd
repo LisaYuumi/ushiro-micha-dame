@@ -69,6 +69,8 @@ func _physics_process(delta: float) -> void:
 		_stamp_target = -1
 	view.set_stamp_target(state, _stamp_target)
 	var me := state.get_local_player()
+	var judged := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
+	touch.set_looks_left(me.looks_left if judged else -1)
 	touch.set_oni_mode(state.oni_is_player,
 			me.role == GameState.Role.SEATED and state.phase == GameState.Phase.CHASE)
 	if state.oni_is_player:
@@ -202,6 +204,9 @@ func _show_event(e: Dictionary) -> void:
 			hud.show_message("%s が %s にバナナ!" % [who, whom], Color(0.85, 0.7, 0.0), 1.2)
 		"slip":
 			hud.show_message("つるっ! %s が転んだ" % ("あなた" if e["actor"] == me else _name(e["actor"])), Color(0.85, 0.7, 0.0), 1.2)
+		"no_looks":
+			if e["actor"] == me:
+				hud.show_message("もう振り向けない!\n(1ラウンド%d回まで)" % GameConfig.LOOKS_PER_ROUND, Color(0.3, 0.3, 0.3), 1.2)
 		"drop_failed":
 			if e["actor"] == me:
 				hud.show_message("席の後ろで押してね", Color(0.3, 0.3, 0.3), 1.0)
@@ -264,6 +269,8 @@ func _show_result(r: Dictionary) -> void:
 				color = Color(0.9, 0.6, 0.1)
 			else:
 				text = "鬼の勝ち\n(%s が気づかなかった)" % _name(r["loser"])
+	if me in r.get("patient", []):
+		text += "\nがまんした! +%d点" % GameConfig.SCORE_PATIENCE
 	var me_score: int = state.scores.get(me, 0)
 	var last := state.round_index + 1 >= GameConfig.ROUNDS_PER_MATCH
 	var next_text := "最終結果" if last else "次のラウンド(%s)" % Items.name_of(state.round_index + 1)
@@ -281,8 +288,8 @@ func _update_help() -> void:
 	if state.oni_is_player:
 		lines.append("あなたは鬼")
 	var me := state.get_local_player()
-	var left := "何回でも" if me.stamps_left < 0 else "残り %d" % me.stamps_left
-	lines.append("お手つき: %d/%d 回 (1回 %d点) / スタンプ: %s" % [me.otetsuki_count, GameConfig.OTETSUKI_LIMIT, GameConfig.SCORE_OTETSUKI, left])
+	lines.append("振り向き: 残り %d/%d 回 (一度もしなければ +%d点) / お手つき: %d/%d 回" % [
+		me.looks_left, GameConfig.LOOKS_PER_ROUND, GameConfig.SCORE_PATIENCE, me.otetsuki_count, GameConfig.OTETSUKI_LIMIT])
 	if _stamp_target >= 0:
 		lines.append("スタンプを送る相手: %s" % _name(_stamp_target))
 	if view.is_top_camera():
