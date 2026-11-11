@@ -157,8 +157,10 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 		Color(0.9, 0.8, 0.3),
 		Color(0.75, 0.5, 0.9),
 		Color(0.85, 0.2, 0.2),
+		Color(0.3, 0.8, 0.8),
+		Color(0.6, 0.45, 0.3),
 	]
-	# 登場人物は試合のあいだ同じ。席に5人、鬼が1人(id は 0〜5)
+	# 登場人物は試合のあいだ同じ。席に SEAT_COUNT 人、鬼が1人(id は 0〜SEAT_COUNT)
 	actors.clear()
 	var bot_no := 1
 	for i in GameConfig.SEAT_COUNT + 1:
