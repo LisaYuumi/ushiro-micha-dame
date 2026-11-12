@@ -8,7 +8,8 @@ const FRAME_WIDTH := 18.0
 var _help: Label
 var _message: Label
 var _message_left := 0.0
-## 自分に届いたスタンプ(画面の下に、送り主つきで横に3つまで並べる)
+## 自分に届いたスタンプ(左下の「あなたへ」の箱に、送り主つきで3つまで積む)
+var _my_box: PanelContainer
 var _slots: Array[PanelContainer] = []
 var _slot_styles: Array[StyleBoxFlat] = []
 var _slot_senders: Array[Label] = []
@@ -84,11 +85,13 @@ func show_my_stamps(list: Array) -> void:
 		box.visible = true
 		if not (key in _shown_keys):
 			# 新しく届いた: ポンと大きくなってから元の大きさへ
-			box.pivot_offset = box.size / 2.0
+			box.pivot_offset = Vector2(0, 28) # 左の端からポンと出る
 			box.scale = Vector2(0.3, 0.3)
 			var tw := create_tween()
 			tw.tween_property(box, "scale", Vector2(1.12, 1.12), 0.12)
 			tw.tween_property(box, "scale", Vector2.ONE, 0.1)
+	# 届いた分だけ出す(1つもなければ箱ごと消す)
+	_my_box.visible = not list.is_empty()
 	# 出ていたスタンプが全部消えたら、ふちの光も消す
 	# (参加者の画面では、届いたお知らせが状態より先に来ることがあるので「全部消えたとき」だけ)
 	if list.is_empty() and not _shown_keys.is_empty():
@@ -147,49 +150,68 @@ func _build_stamp_display() -> void:
 				r.offset_left = -FRAME_WIDTH
 		_frame.append(r)
 
-	# 画面の下(スタンプボタンの上)に、横に並ぶ3つの吹き出し。
+	# 自分あてのスタンプは、左下(スティックの上)の「あなたへ」の箱に、届いた順に上から積む。
 	# ほかの人あてのスタンプは 3D の頭の上に出るので、場所で区別できる
-	var width := 240.0
-	var gap := 12.0
-	var total := width * GameConfig.STAMP_SLOTS + gap * (GameConfig.STAMP_SLOTS - 1)
+	var box_style := StyleBoxFlat.new()
+	box_style.bg_color = Color(0.1, 0.1, 0.15, 0.8)
+	box_style.set_corner_radius_all(18)
+	box_style.set_content_margin_all(10)
+	_my_box = PanelContainer.new()
+	_my_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_my_box.add_theme_stylebox_override("panel", box_style)
+	add_child(_my_box)
+	_my_box.anchor_left = 0.0
+	_my_box.anchor_right = 0.0
+	_my_box.anchor_top = 1.0
+	_my_box.anchor_bottom = 1.0
+	_my_box.offset_left = 20
+	_my_box.offset_right = 380
+	# 下の端をスティックのすぐ上に固定して、届いた数だけ上にのびる
+	_my_box.offset_top = -262
+	_my_box.offset_bottom = -262
+	_my_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_my_box.visible = false
+
+	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_theme_constant_override("separation", 6)
+	_my_box.add_child(col)
+	var header := _make_label(24, Color.WHITE)
+	header.text = "あなたへ"
+	header.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
+	col.add_child(header)
+
 	for i in GameConfig.STAMP_SLOTS:
 		var style := StyleBoxFlat.new()
-		style.set_corner_radius_all(24)
-		style.set_border_width_all(8)
-		style.content_margin_left = 10
-		style.content_margin_right = 10
-		style.content_margin_top = 4
-		style.content_margin_bottom = 8
-		var box := PanelContainer.new()
-		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		box.add_theme_stylebox_override("panel", style)
-		add_child(box)
-		box.anchor_left = 0.5
-		box.anchor_right = 0.5
-		box.anchor_top = 1.0
-		box.anchor_bottom = 1.0
-		box.offset_left = -total / 2.0 + i * (width + gap)
-		box.offset_right = box.offset_left + width
-		box.offset_top = -300
-		box.offset_bottom = -130
-		box.visible = false
+		style.set_corner_radius_all(14)
+		style.set_border_width_all(6)
+		style.content_margin_left = 12
+		style.content_margin_right = 12
+		style.content_margin_top = 2
+		style.content_margin_bottom = 4
+		var slot := PanelContainer.new()
+		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		slot.add_theme_stylebox_override("panel", style)
+		slot.visible = false
+		col.add_child(slot)
 
-		var col := VBoxContainer.new()
-		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		col.alignment = BoxContainer.ALIGNMENT_CENTER
-		box.add_child(col)
-		# 送った人の名前(体の色のふち)
-		var sender := _make_label(24, Color.WHITE)
-		sender.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		sender.add_theme_constant_override("outline_size", 8)
-		sender.clip_text = true
-		col.add_child(sender)
-		var text := _make_label(50, Color.WHITE)
-		text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var row := HBoxContainer.new()
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_theme_constant_override("separation", 10)
+		slot.add_child(row)
+		var text := _make_label(38, Color.WHITE)
 		text.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
-		text.add_theme_constant_override("outline_size", 10)
-		col.add_child(text)
-		_slots.append(box)
+		text.add_theme_constant_override("outline_size", 8)
+		row.add_child(text)
+		# 送った人の名前(体の色のふち)
+		var sender := _make_label(22, Color.WHITE)
+		sender.add_theme_constant_override("outline_size", 8)
+		sender.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		sender.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		sender.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sender.clip_text = true
+		row.add_child(sender)
+		_slots.append(slot)
 		_slot_styles.append(style)
 		_slot_senders.append(sender)
 		_slot_texts.append(text)
