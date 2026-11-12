@@ -390,7 +390,9 @@ func _attach(bone: String, node: Node3D, rest_transform: Transform3D) -> void:
 
 ## 体の部品を骨の位置に動かす。転んでいる間は、物理演算の体の位置とまぜる
 func _follow_bones() -> void:
-	var to_skel := _skel.global_transform.affine_inverse()
+	var to_skel := Transform3D.IDENTITY
+	if _ragdoll_w > 0.0:
+		to_skel = _skel.global_transform.affine_inverse()
 	for a in _attachments:
 		var bone: int = a["bone"]
 		var t := _skel.get_bone_global_pose(bone)
