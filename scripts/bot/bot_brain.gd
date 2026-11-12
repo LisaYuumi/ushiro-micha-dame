@@ -30,6 +30,9 @@ func update(state: GameState, delta: float) -> void:
 		if not a.is_bot:
 			continue
 		match a.role:
+			GameState.Role.ONI:
+				# 鬼のボットも、ときどきスタンプを送る(だいたい嘘)
+				_update_stamp(state, a, delta)
 			GameState.Role.SEATED:
 				_update_seated(state, a, delta)
 				_update_look(state, a, delta)
