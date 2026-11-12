@@ -649,7 +649,8 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 		var from := _seat_cam.position
 		if from.distance_to(want) > 6.0:
 			w = 1.0
-		_seat_cam.look_at_from_position(from.lerp(want, w), me.position + Vector3(0, 0.8, 0))
+		var look_h := GameConfig.ONI_CAM_LOOK_HEIGHT if is_oni else 0.8
+		_seat_cam.look_at_from_position(from.lerp(want, w), me.position + Vector3(0, look_h, 0))
 		return
 	var t: float = _turn.get(me.id, 0.0)
 	var back_dir := Vector3(sin(me.yaw), 0.0, cos(me.yaw))

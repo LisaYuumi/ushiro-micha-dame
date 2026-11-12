@@ -115,21 +115,23 @@ func update(state: GameState, cam: Camera3D) -> void:
 		var sz := p.get_combined_minimum_size()
 		# 画面の外にいる人の名札は出さない(端にかかっている人だけ、内側に寄せて出す)
 		var out := sz.x * 0.6
-		if sp.x < -out or sp.x > vp.x + out or sp.y < 0.0 or sp.y > vp.y + sz.y:
+		# (頭が画面の上にはみ出しているだけの人は、上の端に寄せて出す)
+		if sp.x < -out or sp.x > vp.x + out or sp.y > vp.y + sz.y or sp.y < -vp.y * 0.5:
 			p.visible = false
 			continue
 		var r := Rect2(sp - Vector2(sz.x / 2.0, sz.y), sz)
 		r.position.x = clampf(r.position.x, UiStyle.SAFE, vp.x - UiStyle.SAFE - sz.x)
 		r.position.y = clampf(r.position.y, TOP_LIMIT, vp.y - sz.y - 8.0)
-		for k in 6:
+		# 重なったら上へずらす。上の端に当たるときは下へずらす
+		for k in 8:
 			var hit := false
 			for q in placed:
 				if q.grow(2.0).intersects(r):
-					r.position.y = q.position.y - sz.y - 4.0
+					var up := q.position.y - sz.y - 4.0
+					r.position.y = up if up >= TOP_LIMIT else q.end.y + 4.0
 					hit = true
 			if not hit:
 				break
-		r.position.y = maxf(r.position.y, TOP_LIMIT)
 		placed.append(r)
 		p.visible = true
 		p.position = r.position.floor()

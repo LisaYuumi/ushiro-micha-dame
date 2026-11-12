@@ -92,8 +92,10 @@ const BOT_NOTICE_TIME_MAX := 55.0
 const CHASE_CAM_DISTANCE := 3.0
 const CHASE_CAM_HEIGHT := 3.2
 ## 自分が鬼のときのカメラ(追いかける人より近く。鬼の背中ごしに輪が見えるくらい)
-const ONI_CAM_DISTANCE := 1.7
-const ONI_CAM_HEIGHT := 2.1
+const ONI_CAM_DISTANCE := 1.9
+const ONI_CAM_HEIGHT := 2.0
+## 鬼のカメラが見る高さ(鬼の足もとからの高さ)。座っている人の頭と名札まで映るように、少し上を見る
+const ONI_CAM_LOOK_HEIGHT := 1.5
 
 # --- スタンプ ---
 ## 1人に同時に表示されるスタンプの数(早い者勝ち。空きができたら次が届く)
