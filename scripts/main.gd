@@ -468,7 +468,7 @@ func _show_event(e: Dictionary) -> void:
 	match e.get("type"):
 		"minion":
 			if e["actor"] == me:
-				hud.show_message("あなたは鬼の手下!\nだまして +1点 / 鬼が勝ったら +2点\nあなたには両どなりの後ろも見える", Color(0.55, 0.2, 0.7), 3.0)
+				hud.show_message("あなたは鬼の手下!\nだまして+1点・鬼が勝てば+2点", Color(0.55, 0.2, 0.7), 3.0)
 		"stamp":
 			if e["target"] == me:
 				hud.flash_stamp(WorldView.STAMP_COLORS[e["kind"]])
