@@ -29,8 +29,8 @@ const BODY_SCALE := 1.0
 ## 座っているとき、腰が椅子の上に来るように体全体を前へずらす量(メートル。体の向きで前)
 const SEAT_SHIFT := 0.33
 ## 転ぶ: 物理演算でぐにゃっと倒れる時間と、起き上がる(動きに戻る)時間(秒)。合わせて GameConfig.SLIP_TIME くらい
-const RAGDOLL_FALL_TIME := 0.55
-const RAGDOLL_RISE_TIME := 0.4
+const RAGDOLL_FALL_TIME := 0.7
+const RAGDOLL_RISE_TIME := 0.35
 ## 物理演算で動かす骨 [骨, 次の関節(長さを測る), 太さ]。次の関節が "" なら球
 const RAGDOLL_BONES := [
 	["DEF-hips", "DEF-spine.001", 0.17],
@@ -576,9 +576,11 @@ func slip() -> void:
 	for pb in _pbones:
 		var b := String(pb.bone_name)
 		if b.begins_with("DEF-thigh") or b.begins_with("DEF-shin"):
-			pb.apply_central_impulse((-fwd * 1.2 + Vector3.UP * 0.6) * pb.mass)
+			pb.apply_central_impulse(-fwd * 1.6 * pb.mass)
+		elif b == "DEF-hips":
+			pb.apply_central_impulse((fwd * 0.5 + Vector3.DOWN * 1.5) * pb.mass)
 		else:
-			pb.apply_central_impulse((fwd * 2.6 + Vector3.UP * 0.4) * pb.mass)
+			pb.apply_central_impulse((fwd * 3.0 + Vector3.DOWN * 1.0) * pb.mass)
 
 
 ## 転んでいる間の物理演算を進める: 倒れきったら、だんだん元の動きに戻す(起き上がる)

@@ -14,6 +14,9 @@ var _main: Node
 var _faller: CharacterModel
 var _faller_head_y := 0.0
 var _faller_min_head_y := INF
+## 転んでからの時間(秒)。-1 = まだ転んでいない
+var _fall_clock := -1.0
+var _fall_done := false
 
 
 func _initialize() -> void:
@@ -95,7 +98,7 @@ func _process(delta: float) -> bool:
 		_press("stamp_1", false)
 		_press("restart", true)
 		_press("restart", false)
-	if _frames < MAIN_SCENE_FRAMES:
+	if (_frames < MAIN_SCENE_FRAMES or not _fall_done) and _frames < 5000:
 		return false
 	if _failures == 0:
 		print("ALL TESTS PASSED")
@@ -128,12 +131,18 @@ func _check_fall(delta: float) -> void:
 	if _frames == 30:
 		_faller_head_y = y
 		_faller.slip()
-	elif _frames > 30 and _frames < 30 + int(CharacterModel.RAGDOLL_FALL_TIME * 60.0):
+		_fall_clock = 0.0
+	if _fall_clock < 0.0 or _fall_done:
+		return
+	var before := _fall_clock
+	_fall_clock += delta
+	if _fall_clock <= CharacterModel.RAGDOLL_FALL_TIME:
 		_faller_min_head_y = minf(_faller_min_head_y, y)
-	if _frames % 6 == 0 and _frames > 24 and _frames < 110:
+	if int(before * 10.0) != int(_fall_clock * 10.0):
 		var pb_y := _faller._pbones[0].global_position.y if not _faller._pbones.is_empty() else -1.0
-		print("fall frame %d: head y %.2f / hips body y %.2f / w %.2f" % [_frames, y, pb_y, _faller._ragdoll_w])
-	if _frames == 130:
+		print("fall %.1fs: head y %.2f / hips body y %.2f / w %.2f" % [_fall_clock, y, pb_y, _faller._ragdoll_w])
+	if _fall_clock > CharacterModel.RAGDOLL_FALL_TIME + CharacterModel.RAGDOLL_RISE_TIME + 0.3:
+		_fall_done = true
 		_check(_faller_min_head_y < _faller_head_y - 0.5, "転ぶと頭が下がる(%.2f → %.2f)" % [_faller_head_y, _faller_min_head_y])
 		_check(absf(y - _faller_head_y) < 0.25 and _faller._ragdoll_w == 0.0, "少しすると起き上がる(頭 %.2f)" % y)
 
