@@ -26,6 +26,8 @@ var _badge: PanelContainer
 ## 左上の札: ラウンド(黒地)・いまの落とし物・鬼の周回など
 var _round_pill: PanelContainer
 var _item_pill: PanelContainer
+## 自分の点数(自分にしか見えない)
+var _score_pill: PanelContainer
 var _extra_pill: PanelContainer
 ## ラウンドが終わったときの結果カード(全員の点数もここに出す。手下がばれないように、ふだんは出さない)
 var _result_card: PanelContainer
@@ -63,10 +65,12 @@ func set_help(text: String) -> void:
 	_help.text = text
 
 
-## 左上の札。extra が "" なら3つ目は出さない
-func set_round_info(round_text: String, item_text: String, extra_text: String) -> void:
+## 左上の札(ラウンド・いまの落とし物・自分の点数)。extra が "" なら最後の札は出さない
+func set_round_info(round_text: String, item_text: String, extra_text: String, score_text: String = "") -> void:
 	_pill_text(_round_pill, round_text)
 	_pill_text(_item_pill, item_text)
+	_pill_text(_score_pill, score_text)
+	_score_pill.visible = score_text != ""
 	_pill_text(_extra_pill, extra_text)
 	_extra_pill.visible = extra_text != ""
 
@@ -206,8 +210,10 @@ func _build_info_pills() -> void:
 	_round_pill = UiStyle.pill("ラウンド 1/5", 24, true)
 	_item_pill = UiStyle.pill("いまの落とし物:ハンカチ", 24)
 	_extra_pill = UiStyle.pill("", 24)
+	_score_pill = UiStyle.pill("", 24)
 	row.add_child(_round_pill)
 	row.add_child(_item_pill)
+	row.add_child(_score_pill)
 	row.add_child(_extra_pill)
 
 

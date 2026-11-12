@@ -275,9 +275,8 @@ func _physics_process(delta: float) -> void:
 	touch.set_oni_mode(_i_am_oni(),
 			me.role == GameState.Role.SEATED and state.phase == GameState.Phase.CHASE)
 	touch.set_stick_visible(me.role != GameState.Role.SEATED)
-	if _i_am_oni():
-		# 何周目かの表示を更新する
-		_update_help()
+	# 左上の札(鬼の周回・自分の点数)を毎回更新する(参加者の点数は状態といっしょに届く)
+	_update_help()
 
 
 func _process(delta: float) -> void:
@@ -634,6 +633,6 @@ func _update_help() -> void:
 	elif _i_am_oni():
 		extra = "あなたは鬼"
 	hud.set_round_info("ラウンド %d/%d" % [state.round_index + 1, GameConfig.ROUNDS_PER_MATCH],
-			"いまの落とし物:%s" % state.item_name(), extra)
+			"いまの落とし物:%s" % state.item_name(), extra, "あなた %d点" % state.scores.get(state.local_player_id, 0))
 
 
