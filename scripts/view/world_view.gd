@@ -404,7 +404,9 @@ func _build_chair(pos: Vector3, yaw: float) -> void:
 func _build_character(a: GameState.Actor, is_self: bool) -> Node3D:
 	var model := CharacterModel.new()
 	model.name = "Actor%d" % a.id
-	model.build(a.color, a.display_name, HudFont.get_font())
+	# ボットの性格は、⚙メニューでオンにしたときだけ名前の横に出す
+	var shown_name := a.display_name if Profile.show_personality else a.display_name.get_slice("(", 0)
+	model.build(a.color, shown_name, HudFont.get_font())
 	if is_self:
 		# 自分の体は、座っているときの自分のカメラには映さない。自分の名前は出さない
 		model.set_layers(1 << (SELF_LAYER - 1))

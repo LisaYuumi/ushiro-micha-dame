@@ -29,6 +29,7 @@ var _item_pill: PanelContainer
 var _extra_pill: PanelContainer
 ## ラウンドが終わったときの結果カード(全員の点数もここに出す。手下がばれないように、ふだんは出さない)
 var _result_card: PanelContainer
+var _next_button: Button
 
 
 func _ready() -> void:
@@ -73,7 +74,9 @@ func set_round_info(round_text: String, item_text: String, extra_text: String) -
 ## 結果カードを出す。
 ## title: 大きい見出し / sub: その下の一言 / notes: 小さい札(がまん・手下の発表など)/ color: 見出しの色 /
 ## rows: [{"name", "color", "score", "delta", "me", "mark"}](この順に並べる)/ footer: いちばん下の案内
-func show_result_card(title: String, sub: String, notes: Array, color: Color, rows: Array, footer: String) -> void:
+## next_label: 「次へ」ボタンの文字("" なら出さない。ホストとひとりのときだけ出す)
+func show_result_card(title: String, sub: String, notes: Array, color: Color, rows: Array, footer: String,
+		next_label: String = "") -> void:
 	hide_result_card()
 	_result_card = PanelContainer.new()
 	_result_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -122,6 +125,14 @@ func show_result_card(title: String, sub: String, notes: Array, color: Color, ro
 		var f := UiStyle.label(footer, 20, GameConfig.COLOR_INK.lightened(0.35))
 		f.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		col.add_child(f)
+	if next_label != "":
+		var nb := Button.new()
+		nb.text = next_label
+		nb.custom_minimum_size = Vector2(0, 60)
+		UiStyle.button(nb, true, 26)
+		nb.pressed.connect(_press_next)
+		col.add_child(nb)
+		_next_button = nb
 	# ポンと出る
 	_result_card.pivot_offset = _result_card.size / 2.0
 	_result_card.scale = Vector2(0.6, 0.6)
@@ -134,6 +145,25 @@ func hide_result_card() -> void:
 	if _result_card:
 		_result_card.queue_free()
 		_result_card = null
+		_next_button = null
+
+
+## 結果カードの「次へ」: キーボードの R と同じ操作を送る
+func _press_next() -> void:
+	for pressed in [true, false]:
+		var ev := InputEventAction.new()
+		ev.action = "restart"
+		ev.pressed = pressed
+		Input.parse_input_event(ev)
+
+
+## スマホの指: 結果カードの「次へ」をタップしたら押す
+func _input(event: InputEvent) -> void:
+	if _next_button == null or not event is InputEventScreenTouch or not event.pressed:
+		return
+	if _next_button.is_visible_in_tree() and _next_button.get_global_rect().has_point(event.position):
+		_press_next()
+		get_viewport().set_input_as_handled()
 
 
 func _score_row(r: Dictionary) -> PanelContainer:
@@ -173,7 +203,7 @@ func _build_info_pills() -> void:
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_theme_constant_override("separation", 12)
-	row.position = Vector2(16, 14)
+	row.position = Vector2(UiStyle.SAFE, 14)
 	add_child(row)
 	_round_pill = UiStyle.pill("ラウンド 1/5", 24, true)
 	_item_pill = UiStyle.pill("いまの落とし物:ハンカチ", 24)
@@ -292,8 +322,8 @@ func _build_stamp_display() -> void:
 	_my_box.anchor_right = 0.0
 	_my_box.anchor_top = 1.0
 	_my_box.anchor_bottom = 1.0
-	_my_box.offset_left = 20
-	_my_box.offset_right = 360
+	_my_box.offset_left = UiStyle.SAFE
+	_my_box.offset_right = UiStyle.SAFE + 340
 	# 下の端をスティックのすぐ上に固定して、届いた数だけ上にのびる
 	_my_box.offset_top = -262
 	_my_box.offset_bottom = -262
@@ -362,7 +392,7 @@ func _build_stamp_display() -> void:
 	_badge = UiStyle.pill("", 24, true)
 	(_badge.get_child(0) as Label).add_theme_color_override("font_color", GameConfig.COLOR_PAPER)
 	add_child(_badge)
-	_badge.position = Vector2(16, 72)
+	_badge.position = Vector2(UiStyle.SAFE, 72)
 	_badge.visible = false
 
 

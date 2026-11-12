@@ -10,8 +10,12 @@ var _seated_buttons: Array[Button] = []
 var _oni_buttons: Array[Button] = []
 ## 座っていて、追いかけっこ中だけ出すボタン(バナナの皮)
 var _chase_buttons: Array[Button] = []
-var _role_button: Button
 var _look_button: Button
+## ⚙ボタンで開くメニューと、その中の「あそびかた」
+var _menu: PanelContainer
+var _help_panel: PanelContainer
+var _personality_button: Button
+var _stick: VirtualStick
 ## 「振り向く」ボタンの目のアイコン(残りの回数ぶん見える)
 var _eyes: Array[Control] = []
 var _looks_shown := -2
@@ -52,14 +56,15 @@ func _ready() -> void:
 	stick.anchor_right = 0
 	stick.anchor_top = 1
 	stick.anchor_bottom = 1
-	stick.offset_left = 30
+	stick.offset_left = UiStyle.SAFE
 	stick.offset_top = -250
-	stick.offset_right = 250
+	stick.offset_right = UiStyle.SAFE + 220
 	stick.offset_bottom = -30
-	# 右上: 確認用の操作
-	# (左上のラウンド・落とし物の札と重ならないように、小さめ)
-	_add_button("次へ・やり直し", "restart", Vector2(1, 0), Rect2(-196, 14, 180, 54), 20)
-	_role_button = _add_button("役を変える", "toggle_role", Vector2(1, 0), Rect2(-376, 14, 170, 54), 18)
+	_stick = stick
+	# 右上: ⚙ボタン(開発用の操作や「あそびかた」はメニューの中)
+	var gear := _add_button("", "", Vector2(1, 0), Rect2(-UiStyle.SAFE - 64, 14, 64, 58), 28, toggle_menu)
+	_add_gear_icon(gear)
+	_build_menu()
 	set_oni_mode(false)
 
 
@@ -136,7 +141,6 @@ func set_oni_mode(is_oni: bool, seated_in_chase: bool = false) -> void:
 		b.visible = is_oni
 	for b in _chase_buttons:
 		b.visible = seated_in_chase
-	_role_button.text = "役を変えて新試合"
 	# 切りかえで押しっぱなしになった指を離しておく
 	for index in _touch_action.keys():
 		var entry: Dictionary = _touch_action[index]
@@ -149,7 +153,130 @@ func set_oni_mode(is_oni: bool, seated_in_chase: bool = false) -> void:
 const ACCENT_ACTIONS := ["look_back", "oni_stop", "oni_drop"]
 
 
-func _add_button(text: String, action: String, anchor: Vector2, rect: Rect2, font_size: int) -> Button:
+## ⚙の絵(歯車)
+func _add_gear_icon(b: Button) -> void:
+	var g := Control.new()
+	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	g.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	g.draw.connect(func() -> void:
+		var c := g.size / 2.0 + Vector2(-1, -2)
+		for k in 8:
+			var t := TAU * k / 8.0
+			var d := Vector2(cos(t), sin(t))
+			var side := Vector2(-d.y, d.x) * 5.0
+			g.draw_colored_polygon(PackedVector2Array([c + d * 9 - side, c + d * 9 + side, c + d * 17 + side * 0.7, c + d * 17 - side * 0.7]), GameConfig.COLOR_INK)
+		g.draw_circle(c, 12.0, GameConfig.COLOR_INK)
+		g.draw_circle(c, 5.0, GameConfig.COLOR_PAPER))
+	b.add_child(g)
+
+
+## ⚙メニュー: やり直し・役を変えて新試合・上から見る・ボットの性格の表示・あそびかた・とじる
+func _build_menu() -> void:
+	_menu = _panel(Vector2(420, 0))
+	var col: VBoxContainer = _menu.get_child(0)
+	var title := UiStyle.label("メニュー", 30, GameConfig.COLOR_INK)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+	_menu_button(col, "やり直し", _menu_action.bind("restart"))
+	_menu_button(col, "役を変えて新しい試合", _menu_action.bind("toggle_role"))
+	_menu_button(col, "上から見る(確認用)", _menu_action.bind("debug_top_camera"))
+	_personality_button = _menu_button(col, "", _toggle_personality)
+	_menu_button(col, "あそびかた", _show_help)
+	_menu_button(col, "とじる", close_menu, true)
+	_update_menu_texts()
+
+	_help_panel = _panel(Vector2(760, 0))
+	var hcol: VBoxContainer = _help_panel.get_child(0)
+	var htitle := UiStyle.label("あそびかた", 30, GameConfig.COLOR_INK)
+	htitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hcol.add_child(htitle)
+	var body := UiStyle.label(HOW_TO_PLAY, 20, GameConfig.COLOR_INK)
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.custom_minimum_size = Vector2(700, 0)
+	hcol.add_child(body)
+	_menu_button(hcol, "とじる", close_menu, true)
+
+
+const HOW_TO_PLAY := """・振り向く(長押し): 押している間だけ後ろを見る。落ちていたら、そのまま拾って走る。1ラウンド2回まで(外れても減点なし)
+・人をタップ: その人の頭の上にスタンプが出るので、選んで送る(同じ人には1ラウンド1回)
+・鬼: スティックで歩く速さ。止まる・落とす・落とす音・声(咳/口笛/手拍子/叫ぶ)
+・追いかけっこ: 自動で走る。スティックの上で内側(近道)、下で外側。座っている人はバナナを投げられる
+キーボード: スペース=振り向く/止まる 1〜4=スタンプ/声 Z X C V=鬼のスタンプ W/S=内側/外側 A/D=鬼の速さ
+ E=落とす F=落とす音 B/N=バナナ R=やり直し O=役を変える F1=上から見る K=転ぶ(確認用) Tab=メニュー"""
+
+
+func _menu_action(action: String) -> void:
+	_tap_action(action)
+	close_menu()
+
+
+func _toggle_personality() -> void:
+	_tap_action("toggle_personality")
+	_update_menu_texts()
+
+
+func _show_help() -> void:
+	_menu.visible = false
+	_help_panel.visible = true
+
+
+func _update_menu_texts() -> void:
+	_personality_button.text = "ボットの性格を表示: %s" % ("オン" if Profile.show_personality else "オフ")
+
+
+## 画面のまん中に出す白いパネル(中に縦に並べる)
+func _panel(min_size: Vector2) -> PanelContainer:
+	var p := PanelContainer.new()
+	var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 26, 5)
+	st.set_content_margin_all(20)
+	p.add_theme_stylebox_override("panel", st)
+	add_child(p)
+	p.set_anchors_preset(Control.PRESET_CENTER)
+	p.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	p.grow_vertical = Control.GROW_DIRECTION_BOTH
+	p.custom_minimum_size = min_size
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 10)
+	p.add_child(col)
+	p.visible = false
+	return p
+
+
+func _menu_button(parent: Container, text: String, on_press: Callable, accent := false) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = Vector2(0, 56)
+	UiStyle.button(b, accent, 24)
+	parent.add_child(b)
+	b.pressed.connect(on_press)
+	_buttons.append({"button": b, "action": "", "call": on_press})
+	return b
+
+
+func toggle_menu() -> void:
+	if _menu.visible or _help_panel.visible:
+		close_menu()
+	else:
+		_update_menu_texts()
+		_menu.visible = true
+
+
+func close_menu() -> void:
+	_menu.visible = false
+	_help_panel.visible = false
+
+
+func is_menu_open() -> bool:
+	return _menu.visible or _help_panel.visible
+
+
+## 操作を1回押して離す(メニューから)
+func _tap_action(action: String) -> void:
+	_send(action, true)
+	_send(action, false)
+
+
+func _add_button(text: String, action: String, anchor: Vector2, rect: Rect2, font_size: int, on_press: Callable = Callable()) -> Button:
 	var b := Button.new()
 	b.text = text
 	# A案: 白地かオレンジ地、黒い太い枠、右下の影。スタンプはスタンプの色の文字
@@ -169,26 +296,45 @@ func _add_button(text: String, action: String, anchor: Vector2, rect: Rect2, fon
 	b.offset_right = rect.position.x + rect.size.x
 	b.offset_bottom = rect.position.y + rect.size.y
 	# PC のマウス用
-	b.button_down.connect(_send.bind(action, true))
-	b.button_up.connect(_send.bind(action, false))
-	_buttons.append({"button": b, "action": action})
+	if on_press.is_valid():
+		b.pressed.connect(on_press)
+	else:
+		b.button_down.connect(_send.bind(action, true))
+		b.button_up.connect(_send.bind(action, false))
+	_buttons.append({"button": b, "action": action, "call": on_press})
 	return b
 
 
 ## スマホの指: ボタンの上に触れたら押す、その指を離したら離す
 func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("menu"):
+		toggle_menu()
+		return
 	if not event is InputEventScreenTouch:
 		return
 	var t := event as InputEventScreenTouch
 	if t.pressed:
-		for entry in _buttons:
+		# あとから足した(上に重なっている)ボタンから調べる。メニューが開いているときはメニューの中だけ
+		for k in range(_buttons.size() - 1, -1, -1):
+			var entry: Dictionary = _buttons[k]
 			var b: Button = entry["button"]
-			if b.visible and not b.disabled and b.get_global_rect().has_point(t.position):
-				_touch_action[t.index] = entry
-				UiStyle.show_pressed(b, true)
-				_send(entry["action"], true)
+			if not b.is_visible_in_tree() or b.disabled or not b.get_global_rect().has_point(t.position):
+				continue
+			if is_menu_open() and not (_menu.is_ancestor_of(b) or _help_panel.is_ancestor_of(b)):
+				continue
+			var call: Callable = entry.get("call", Callable())
+			if call.is_valid():
+				call.call()
 				get_viewport().set_input_as_handled()
 				return
+			_touch_action[t.index] = entry
+			UiStyle.show_pressed(b, true)
+			_send(entry["action"], true)
+			get_viewport().set_input_as_handled()
+			return
+		if is_menu_open():
+			# メニューの外や背景をタップしても、うしろの画面には届かない
+			get_viewport().set_input_as_handled()
 	elif _touch_action.has(t.index):
 		var entry: Dictionary = _touch_action[t.index]
 		_touch_action.erase(t.index)

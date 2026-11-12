@@ -329,6 +329,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		_player_is_oni = not _player_is_oni
 		_start_round()
 		hud.show_message("あなたが鬼で新しい試合" if _player_is_oni else "座る側で新しい試合", Color(0.3, 0.3, 0.3), 1.2)
+	elif event.is_action_pressed("toggle_personality"):
+		Profile.load_saved()
+		Profile.show_personality = not Profile.show_personality
+		Profile.save()
+		view.build(state)
 	elif event.is_action_pressed("debug_slip"):
 		view.debug_slip_all()
 	elif event.is_action_pressed("sound_test"):
@@ -397,9 +402,11 @@ func _show_match_result() -> void:
 	var me_first: bool = state.scores.get(state.local_player_id, 0) == state.scores[ids[0]]
 	var title := "ゆうしょう!" if me_first else "試合おわり!"
 	var sub := "あなたがいちばん!" if me_first else "いちばんは %s!" % top_name
-	var footer := "「次へ」で新しい試合" if mode != Mode.GUEST else "ホストが「次へ」を押すと新しい試合"
 	hud.hide_message()
-	hud.show_result_card(title, sub, [], GameConfig.COLOR_ACCENT, rows, footer)
+	if mode == Mode.GUEST:
+		hud.show_result_card(title, sub, [], GameConfig.COLOR_ACCENT, rows, "ホストが「次へ」を押すと新しい試合")
+	else:
+		hud.show_result_card(title, sub, [], GameConfig.COLOR_ACCENT, rows, "", "新しい試合へ ▶")
 
 
 ## 結果カードの1行。delta: このラウンドで増えた分も出すか
@@ -563,9 +570,11 @@ func _show_result(r: Dictionary) -> void:
 		rows.append(_score_row_for(id, scores, true))
 	var last := state.round_index + 1 >= GameConfig.ROUNDS_PER_MATCH
 	var next_text := "さいごの結果へ" if last else "次のラウンド(%s)へ" % Items.name_of(state.round_index + 1)
-	var footer := "「次へ」で" + next_text if mode != Mode.GUEST else "ホストが「次へ」を押すと" + next_text
 	hud.hide_message()
-	hud.show_result_card(title, sub, notes, color, rows, footer)
+	if mode == Mode.GUEST:
+		hud.show_result_card(title, sub, notes, color, rows, "ホストが「次へ」を押すと" + next_text)
+	else:
+		hud.show_result_card(title, sub, notes, color, rows, "", "次へ ▶ " + next_text)
 
 
 ## 札に出す短い名前(「ボット2(せっかち)」→「ボット2」、鬼は「鬼」)

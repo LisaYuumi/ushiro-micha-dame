@@ -15,6 +15,8 @@ const DEFAULT_NAME := "プレイヤー"
 
 static var player_name := DEFAULT_NAME
 static var color: Color = COLORS[4]
+## ボットの性格(「(せっかち)」など)を名前の横に出すか(⚙メニューで切りかえ。はじめはオフ)
+static var show_personality := false
 static var _loaded := false
 
 
@@ -27,12 +29,14 @@ static func load_saved() -> void:
 		return
 	player_name = clean_name(str(cfg.get_value("profile", "name", DEFAULT_NAME)))
 	color = parse_color(str(cfg.get_value("profile", "color", "")), color)
+	show_personality = bool(cfg.get_value("profile", "show_personality", false))
 
 
 static func save() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("profile", "name", player_name)
 	cfg.set_value("profile", "color", "#" + color.to_html(false))
+	cfg.set_value("profile", "show_personality", show_personality)
 	cfg.save(PATH)
 
 

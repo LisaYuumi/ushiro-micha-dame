@@ -3,6 +3,8 @@ extends RefCounted
 ## A案「放課後ポップ」の画面の部品: 白地か #FF6B4A の地、黒い太い枠、角丸、右下にずらした黒い影。
 ## 押すと影が消えて、影のあった所へ沈む。
 
+## 画面の端からの余白(iPhone の角の丸みやカメラ部分にかからないように)
+const SAFE := 40
 const BORDER := 4
 const RADIUS := 18
 ## 影のずれ(右下)
