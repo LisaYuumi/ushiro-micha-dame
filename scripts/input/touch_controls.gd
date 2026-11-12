@@ -16,8 +16,11 @@ var _menu: PanelContainer
 var _help_panel: PanelContainer
 var _personality_button: Button
 var _stick: VirtualStick
-## 「振り向く」ボタンの目のアイコン(残りの回数ぶん見える)
-var _eyes: Array[Control] = []
+## 「振り向く」ボタンの矢印・文字・残りの回数のバッジ
+var _look_arrow: Control
+var _look_title: Label
+var _look_badge: PanelContainer
+var _look_badge_label: Label
 var _looks_shown := -2
 var _mode := []
 ## 押している指の番号 -> 操作
@@ -29,6 +32,9 @@ func _ready() -> void:
 	# 右下: 振り向く(押している間)
 	_look_button = _add_button("", "look_back", Vector2(1, 1), Rect2(-UiStyle.SAFE - 220, -250, 220, 220), 36)
 	_seated_buttons.append(_look_button)
+	# 0 回のときは灰色(押せない)
+	var gray := UiStyle.box(Color("B9B4AC"))
+	_look_button.add_theme_stylebox_override("disabled", gray)
 	_build_look_face(_look_button)
 	# 鬼のとき: 同じ場所に「止まる」(押している間)「落とす」、その左に「ふり」
 	_oni_buttons.append(_add_button("止まる", "oni_stop", Vector2(1, 1), Rect2(-UiStyle.SAFE - 220, -250, 220, 220), 40))
@@ -68,64 +74,75 @@ func _ready() -> void:
 	set_oni_mode(false)
 
 
-## 「振り向く」ボタンの中身: 文字と、残りの回数ぶんの目のアイコン、「長押し」
+## 「振り向く」ボタンの中身: まん中に回る矢印(↻)と「振り向く」、右上の角に残りの回数のバッジ
 func _build_look_face(b: Button) -> void:
 	var col := VBoxContainer.new()
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	col.add_theme_constant_override("separation", 6)
+	col.add_theme_constant_override("separation", 2)
 	b.add_child(col)
-	var title := UiStyle.label("振り向く", 36, GameConfig.COLOR_PAPER)
+	var arrow := Control.new()
+	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	arrow.custom_minimum_size = Vector2(0, 110)
+	arrow.draw.connect(_draw_turn_arrow.bind(arrow))
+	col.add_child(arrow)
+	_look_arrow = arrow
+	var title := UiStyle.label("振り向く", 30, GameConfig.COLOR_PAPER)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title)
-	var row := HBoxContainer.new()
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 10)
-	col.add_child(row)
-	for i in GameConfig.LOOKS_PER_ROUND:
-		var eye := Control.new()
-		eye.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		eye.custom_minimum_size = Vector2(58, 36)
-		eye.draw.connect(_draw_eye.bind(eye))
-		row.add_child(eye)
-		_eyes.append(eye)
-	# 押している間だけ振り向く、とわかるように
-	var hint := UiStyle.label("長押し", 20, GameConfig.COLOR_PAPER)
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(hint)
+	_look_title = title
+	# 右上の角の数字バッジ(白い丸に黒枠)
+	var badge := PanelContainer.new()
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var st := StyleBoxFlat.new()
+	st.bg_color = GameConfig.COLOR_PAPER
+	st.border_color = GameConfig.COLOR_INK
+	st.set_border_width_all(4)
+	st.set_corner_radius_all(32)
+	badge.add_theme_stylebox_override("panel", st)
+	badge.custom_minimum_size = Vector2(64, 64)
+	var num := UiStyle.label("2", 36, GameConfig.COLOR_INK)
+	num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	badge.add_child(num)
+	b.add_child(badge)
+	badge.position = Vector2(220 - 44, -20)
+	_look_badge = badge
+	_look_badge_label = num
 
 
-## 目のアイコン: 白目と黒目。押している間は黒目が上(後ろ)を見る
-func _draw_eye(eye: Control) -> void:
-	var c := eye.size / 2.0
-	var r := Vector2(eye.size.x * 0.45, eye.size.y * 0.42)
-	var pts := PackedVector2Array()
-	for k in 24:
-		var t := TAU * k / 24.0
-		pts.append(c + Vector2(cos(t) * r.x, sin(t) * r.y))
-	eye.draw_colored_polygon(pts, GameConfig.COLOR_PAPER)
-	pts.append(pts[0])
-	eye.draw_polyline(pts, GameConfig.COLOR_INK, 3.0, true)
-	var looking := Input.is_action_pressed("look_back")
-	var pupil := c + (Vector2(0, -r.y * 0.35) if looking else Vector2.ZERO)
-	eye.draw_circle(pupil, r.y * 0.55, GameConfig.COLOR_INK)
+## 回る矢印(↻): 太い弧と、その先の三角。押している間は少し回る
+func _draw_turn_arrow(c: Control) -> void:
+	var center := c.size / 2.0
+	var r := 36.0
+	var color := GameConfig.COLOR_PAPER
+	var spin := 0.5 if Input.is_action_pressed("look_back") else 0.0
+	var start := deg_to_rad(-60.0) + spin
+	var end := deg_to_rad(230.0) + spin
+	c.draw_arc(center, r, start, end, 40, color, 12.0, true)
+	# 矢じり(弧の終わりの向きに)
+	var tip := center + Vector2(cos(end), sin(end)) * r
+	var along := Vector2(-sin(end), cos(end))
+	var out := Vector2(cos(end), sin(end))
+	c.draw_colored_polygon(PackedVector2Array([
+		tip + along * 20.0,
+		tip - out * 18.0 - along * 4.0,
+		tip + out * 18.0 - along * 4.0,
+	]), color)
 
 
 ## 「振り向く」ボタンの残りの回数(-1 = 数えない場面: 追いかけっこ中・勝敗のあと)。
-## 目が1つずつ消え、0 になったらボタンを薄くして押せなくする
+## 右上のバッジに数字で出し、0 回になったらボタン全体を灰色にして押せなくする
 func set_looks_left(n: int) -> void:
-	for e in _eyes:
-		e.queue_redraw()
+	if _look_arrow:
+		_look_arrow.queue_redraw()
 	if n == _looks_shown:
 		return
 	_looks_shown = n
-	for i in _eyes.size():
-		_eyes[i].modulate.a = 1.0 if n < 0 or i < n else 0.0
+	_look_badge.visible = n >= 0
+	_look_badge_label.text = str(maxi(n, 0))
 	var empty := n == 0
 	_look_button.disabled = empty
-	_look_button.modulate.a = 0.45 if empty else 1.0
 	if empty:
 		_release_action("look_back")
 
