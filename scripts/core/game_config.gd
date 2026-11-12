@@ -45,15 +45,21 @@ const DROP_SOUND_RANGE := 1.2
 ## 自分の席から見える左右の幅(度)。画面の形(横長のスマホなど)に関係なく同じになる。
 ## 両どなりの人の姿まで見える広さ。両どなりの後ろに落ちた物は、見え方のルール
 ## (GameState.can_see_behind)で自分の画面には映さない
-const SEAT_CAM_HFOV := 135.0
+const SEAT_CAM_HFOV := 100.0
 ## 5人で遊ぶ(席が4〜5つ)ときの見える幅。席が少ないほど両どなりが正面寄りになるので狭くてよい
-const SEAT_CAM_HFOV_SMALL := 120.0
+const SEAT_CAM_HFOV_SMALL := 80.0
 
 # --- 振り向き ---
 ## 振り向くのにかかる時間(秒)
 const LOOK_BACK_TIME := 0.15
 ## 前を向いているときのカメラの下向き角度(度)
-const SEAT_CAM_PITCH_FRONT := -12.0
+const SEAT_CAM_PITCH_FRONT := -16.0
+## 前を向いているとき、カメラを頭より後ろ・上に引く量(メートル)。輪の全体と正面の人の顔が見えるように。
+## 両どなりは画面の端に少し見えるくらいになる
+const SEAT_CAM_BACK := 0.6
+const SEAT_CAM_HEIGHT := 1.8
+## 振り向いたときのカメラの高さ(頭の位置)
+const SEAT_CAM_HEIGHT_BACK := 1.45
 ## 振り向いたときのカメラの下向き角度(度)。床のハンカチが見えるように深く
 const SEAT_CAM_PITCH_BACK := -55.0
 ## 振り向いたとき、頭が後ろへ乗り出す距離(メートル)

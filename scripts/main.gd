@@ -273,6 +273,7 @@ func _physics_process(delta: float) -> void:
 	touch.set_looks_left(me.looks_left if judged else -1)
 	touch.set_oni_mode(_i_am_oni(),
 			me.role == GameState.Role.SEATED and state.phase == GameState.Phase.CHASE)
+	touch.set_stick_visible(me.role != GameState.Role.SEATED)
 	if _i_am_oni():
 		# 何周目かの表示を更新する
 		_update_help()

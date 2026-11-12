@@ -10,12 +10,17 @@ var _knob := Vector2.ZERO # -1〜1
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	visibility_changed.connect(func() -> void:
+		# 隠れたら、押していた向きを離す
+		if not visible:
+			_touch_index = -1
+			_set_knob(Vector2.ZERO))
 
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var t := event as InputEventScreenTouch
-		if t.pressed and _touch_index == -1 and get_global_rect().has_point(t.position):
+		if t.pressed and _touch_index == -1 and is_visible_in_tree() and get_global_rect().has_point(t.position):
 			_touch_index = t.index
 			_update_knob(t.position)
 			get_viewport().set_input_as_handled()

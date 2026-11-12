@@ -24,8 +24,8 @@ var _oni_shadow: MeshInstance3D
 var _oni_shadow_mat: StandardMaterial3D
 ## 頭の上のスタンプ表示(id -> Label3D の配列。STAMP_SLOTS 個)
 var _stamp_labels := {}
-## 頭の上の「送れない」「送った」の表示(id -> Label3D)
-var _info_labels := {}
+## 頭の上の名札(2D で重ねる)
+var _overlay: HeadOverlay
 ## スタンプを送る相手の目印
 var _target_marker: MeshInstance3D
 
@@ -75,7 +75,6 @@ func build(state: GameState) -> void:
 	_last_pos.clear()
 	_still_time.clear()
 	_stamp_labels.clear()
-	_info_labels.clear()
 	_banana_nodes.clear()
 
 	_build_environment()
@@ -91,6 +90,10 @@ func build(state: GameState) -> void:
 	_build_oni_shadow()
 	_build_sounds(state)
 	_build_cameras(state)
+	# 名札(送れない相手は薄く出る)
+	_overlay = HeadOverlay.new()
+	add_child(_overlay)
+	_overlay.build(state, _actor_nodes, Profile.show_personality)
 	sync(state, 0.0)
 
 
@@ -112,6 +115,8 @@ func sync(state: GameState, delta: float) -> void:
 			_update_expression(state, a, model, delta)
 	_update_seat_camera(state, delta)
 	_update_stamp_labels(state)
+	if _overlay:
+		_overlay.update(state, get_viewport().get_camera_3d())
 	_update_bananas(state)
 	_update_oni_shadow(state)
 	_clock += delta
@@ -294,9 +299,10 @@ func _build_floor() -> void:
 ## 前: 黒板(チョークの文字つき)と時計
 func _build_front_wall(wall: Node3D, half: float) -> void:
 	var z := -half + 0.12
-	_part(Vector3(5.6, 2.0, 0.1), Vector3(0, 2.0, z), COLOR_WOOD, 0.03, wall)
-	_part(Vector3(5.2, 1.6, 0.1), Vector3(0, 2.0, z + 0.04), COLOR_BOARD, 0.02, wall)
-	_part(Vector3(5.2, 0.06, 0.18), Vector3(0, 1.17, z + 0.1), COLOR_WOOD, 0.02, wall)
+	# 黒板は高めに(手前の人の名札と重なりにくいように)
+	_part(Vector3(5.6, 1.7, 0.1), Vector3(0, 2.75, z), COLOR_WOOD, 0.03, wall)
+	_part(Vector3(5.2, 1.35, 0.1), Vector3(0, 2.75, z + 0.04), COLOR_BOARD, 0.02, wall)
+	_part(Vector3(5.2, 0.06, 0.18), Vector3(0, 2.05, z + 0.1), COLOR_WOOD, 0.02, wall)
 	var chalk := Label3D.new()
 	chalk.text = "うしろ見ちゃダメ!"
 	chalk.font = HudFont.get_font()
@@ -304,7 +310,7 @@ func _build_front_wall(wall: Node3D, half: float) -> void:
 	chalk.pixel_size = 0.006
 	chalk.outline_size = 0
 	chalk.modulate = Color(0.97, 0.97, 0.92)
-	chalk.position = Vector3(0, 2.15, z + 0.1)
+	chalk.position = Vector3(0, 2.85, z + 0.1)
 	wall.add_child(chalk)
 	# 時計
 	var face := CylinderMesh.new()
@@ -313,10 +319,10 @@ func _build_front_wall(wall: Node3D, half: float) -> void:
 	face.height = 0.06
 	var clock := Toon.mesh(face, GameConfig.COLOR_PAPER)
 	clock.rotation.x = PI / 2.0
-	clock.position = Vector3(0, 3.55, z + 0.02)
+	clock.position = Vector3(3.6, 3.3, z + 0.02)
 	wall.add_child(clock)
-	_part(Vector3(0.04, 0.26, 0.02), Vector3(0, 3.65, z + 0.07), GameConfig.COLOR_INK, 0.0, wall)
-	var minute := _part(Vector3(0.03, 0.32, 0.02), Vector3(0.1, 3.6, z + 0.08), GameConfig.COLOR_INK, 0.0, wall)
+	_part(Vector3(0.04, 0.26, 0.02), Vector3(3.6, 3.4, z + 0.07), GameConfig.COLOR_INK, 0.0, wall)
+	var minute := _part(Vector3(0.03, 0.32, 0.02), Vector3(3.7, 3.35, z + 0.08), GameConfig.COLOR_INK, 0.0, wall)
 	minute.rotation.z = -1.0
 
 
@@ -484,11 +490,6 @@ func _build_stamp_labels(state: GameState) -> void:
 			node.add_child(l)
 			list.append(l)
 		_stamp_labels[a.id] = list
-		# 「送れない」(8人のときの両どなり)/「送った」(このラウンドもう送った)
-		var info := _make_label3d(30)
-		info.position = Vector3(0, 2.32, 0)
-		node.add_child(info)
-		_info_labels[a.id] = info
 
 	var cone := CylinderMesh.new()
 	cone.top_radius = 0.18
@@ -527,23 +528,6 @@ func _update_stamp_labels(state: GameState) -> void:
 			l.text = "%s ←%s" % [Stamps.LABELS[st["kind"]], _short_name(state, sender)]
 			l.modulate = STAMP_COLORS[st["kind"]]
 			l.outline_modulate = sender.color.darkened(0.3) if sender else Color.BLACK
-	# 自分がスタンプを送れない人・もう送った人の印
-	var me := state.get_local_player()
-	var stamping := me != null and (me.role == GameState.Role.SEATED or me.role == GameState.Role.ONI) \
-			and (state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED)
-	for id in _info_labels:
-		var info: Label3D = _info_labels[id]
-		var text := ""
-		if stamping and id != me.id:
-			match state.stamp_block_reason(me.id, id):
-				"neighbor":
-					text = "× 送れない"
-				"already":
-					text = "送った"
-		info.text = text
-		info.visible = text != ""
-		info.modulate = Color(0.55, 0.55, 0.55) if text == "× 送れない" else Color(0.3, 0.6, 1.0)
-		info.outline_modulate = Color.WHITE
 
 
 ## 頭の上に出す短い名前(「ボット2(せっかち)」→「ボット2」、鬼は「鬼」)
@@ -737,7 +721,10 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 		return
 	var t: float = _turn.get(me.id, 0.0)
 	var back_dir := Vector3(sin(me.yaw), 0.0, cos(me.yaw))
-	_seat_cam.position = me.position + Vector3(0, 1.45, 0) + back_dir * GameConfig.LOOK_BACK_LEAN * t
+	# 前を向いているときは少し後ろ・上から、振り向くと頭の位置から後ろをのぞきこむ
+	var back := lerpf(GameConfig.SEAT_CAM_BACK, GameConfig.LOOK_BACK_LEAN, t)
+	var height := lerpf(GameConfig.SEAT_CAM_HEIGHT, GameConfig.SEAT_CAM_HEIGHT_BACK, t)
+	_seat_cam.position = me.position + Vector3(0, height, 0) + back_dir * back
 	var pitch := lerpf(GameConfig.SEAT_CAM_PITCH_FRONT, GameConfig.SEAT_CAM_PITCH_BACK, t)
 	_seat_cam.rotation = Vector3(deg_to_rad(pitch), me.yaw + PI * t, 0.0)
 

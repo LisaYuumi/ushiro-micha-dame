@@ -27,13 +27,13 @@ var _touch_action := {}
 func _ready() -> void:
 	layer = 2
 	# 右下: 振り向く(押している間)
-	_look_button = _add_button("", "look_back", Vector2(1, 1), Rect2(-250, -250, 220, 220), 36)
+	_look_button = _add_button("", "look_back", Vector2(1, 1), Rect2(-UiStyle.SAFE - 220, -250, 220, 220), 36)
 	_seated_buttons.append(_look_button)
 	_build_look_face(_look_button)
 	# 鬼のとき: 同じ場所に「止まる」(押している間)「落とす」、その左に「ふり」
-	_oni_buttons.append(_add_button("止まる", "oni_stop", Vector2(1, 1), Rect2(-250, -250, 220, 220), 40))
-	_oni_buttons.append(_add_button("落とす", "oni_drop", Vector2(1, 1), Rect2(-430, -170, 160, 140), 36))
-	_oni_buttons.append(_add_button("落とす音", "oni_feint", Vector2(1, 1), Rect2(-430, -330, 160, 140), 30))
+	_oni_buttons.append(_add_button("止まる", "oni_stop", Vector2(1, 1), Rect2(-UiStyle.SAFE - 220, -250, 220, 220), 40))
+	_oni_buttons.append(_add_button("落とす", "oni_drop", Vector2(1, 1), Rect2(-UiStyle.SAFE - 400, -170, 160, 140), 36))
+	_oni_buttons.append(_add_button("落とす音", "oni_feint", Vector2(1, 1), Rect2(-UiStyle.SAFE - 400, -330, 160, 140), 30))
 	# 鬼の声(下のまん中。座っているときのスタンプと同じ場所)
 	for i in Voices.ALL.size():
 		var v: String = Voices.ALL[i]
@@ -249,6 +249,12 @@ func _menu_button(parent: Container, text: String, on_press: Callable, accent :=
 	b.pressed.connect(on_press)
 	_buttons.append({"button": b, "action": "", "call": on_press})
 	return b
+
+
+## ジョイスティックは、立っているとき(鬼・追いかける人)だけ出す
+func set_stick_visible(v: bool) -> void:
+	if _stick.visible != v:
+		_stick.visible = v
 
 
 func toggle_menu() -> void:

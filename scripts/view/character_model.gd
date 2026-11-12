@@ -49,36 +49,7 @@ const RAGDOLL_BONES := [
 const FLOOR_LAYER := 1
 const RAGDOLL_LAYER := 2
 
-## 名札(白地・黒枠の丸い札)の絵: カメラのほうを向く四角に、角の丸い札を描く
-const _TAG_SHADER := """
-shader_type spatial;
-render_mode unshaded, cull_disabled, shadows_disabled, depth_draw_never;
 
-uniform vec2 size = vec2(0.6, 0.2);
-uniform vec4 paper : source_color = vec4(1.0);
-uniform vec4 ink : source_color = vec4(0.118, 0.106, 0.094, 1.0);
-uniform float border = 0.022;
-
-void vertex() {
-	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);
-}
-
-float round_box(vec2 p, vec2 b, float r) {
-	vec2 q = abs(p) - b + r;
-	return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
-}
-
-void fragment() {
-	vec2 p = (UV - 0.5) * size;
-	float d = round_box(p, size * 0.5, size.y * 0.5);
-	if (d > 0.0) {
-		discard;
-	}
-	ALBEDO = d > -border ? ink.rgb : paper.rgb;
-	ALPHA = 1.0;
-}
-"""
-static var _tag_shader: Shader
 ## 頭の球の大きさと、首の骨からの高さ(素材の大きさで。BODY_SCALE がかかる)
 const HEAD_RADIUS := 0.22
 const HEAD_LIFT := 0.16
@@ -215,45 +186,19 @@ func build(color: Color, display_name: String, font: Font) -> void:
 	set_pose("sit")
 
 
-## 頭の上の名札: 白地・黒枠の丸い札に、黒い文字。頭といっしょに動き、いつもカメラのほうを向く
-func _build_name_tag(display_name: String, font: Font) -> void:
-	var font_size := 40
-	var px := 0.0042
-	var text_w := font.get_string_size(display_name, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x * px
-	var size := Vector2(text_w + 0.18, font_size * px * 1.45)
+## 頭の上の名札の位置の目印(名札そのものは HeadOverlay が 2D で出す)。頭といっしょに動く
+func _build_name_tag(_display_name: String, _font: Font) -> void:
 	var tag := Node3D.new()
 	var at := _head_transform()
-	at.origin += Vector3(0, HEAD_RADIUS + 0.26, 0)
+	at.origin += Vector3(0, HEAD_RADIUS + 0.22, 0)
 	at.basis = Basis.IDENTITY
 	_attach("DEF-head", tag, at)
-	if _tag_shader == null:
-		_tag_shader = Shader.new()
-		_tag_shader.code = _TAG_SHADER
-	var mat := ShaderMaterial.new()
-	mat.shader = _tag_shader
-	mat.set_shader_parameter("size", size)
-	mat.set_shader_parameter("paper", GameConfig.COLOR_PAPER)
-	mat.set_shader_parameter("ink", GameConfig.COLOR_INK)
-	var quad := QuadMesh.new()
-	quad.size = size
-	var plate := MeshInstance3D.new()
-	plate.mesh = quad
-	plate.material_override = mat
-	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	tag.add_child(plate)
-	var label := Label3D.new()
-	_name_label = label
-	label.text = display_name
-	label.font = font
-	label.font_size = font_size
-	label.pixel_size = px
-	label.outline_size = 0
-	label.modulate = GameConfig.COLOR_INK
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	# 札の上に文字を描く(札は奥行きを書かないので、文字が隠れない)
-	label.render_priority = 1
-	tag.add_child(label)
 	_name_tag = tag
+
+
+## 名札を出す位置(世界の座標)
+func tag_anchor() -> Vector3:
+	return _name_tag.global_position if _name_tag and _name_tag.is_inside_tree() else global_position + Vector3(0, 2.0, 0)
 
 
 ## 転ぶときの物理演算の体: 骨ごとにカプセルの当たりをつけ、関節は自由に曲がる(ぐにゃっと倒れる)
