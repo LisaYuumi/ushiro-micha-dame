@@ -310,7 +310,7 @@ func _set_ui_hidden(v: bool) -> void:
 
 ## スマホの指: パネルのボタンを押す/UI を消しているときは、どこかをタップすると戻る
 func _input(event: InputEvent) -> void:
-	var pressed := (event is InputEventScreenTouch and event.pressed) \
+	var pressed: bool = (event is InputEventScreenTouch and event.pressed) \
 			or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT) \
 			or (event is InputEventKey and event.pressed and not event.echo)
 	if not pressed:
