@@ -1240,12 +1240,14 @@ func _test_character_model() -> void:
 	var m := CharacterModel.new()
 	m.build(Color(0.3, 0.5, 0.9), "テスト", HudFont.get_font())
 	_check(m._skel != null and m._anim != null, "キャラの骨組みと動きが読める")
+	if m._anim:
+		print("character animations: ", m._anim.get_animation_list().slice(0, 8))
 	if m._anim == null:
 		m.free()
 		return
 	for anim_name in [CharacterModel.ANIM_SIT, CharacterModel.ANIM_SIT_DOWN, CharacterModel.ANIM_STAND_UP,
 			CharacterModel.ANIM_RUN, CharacterModel.ANIM_WALK, CharacterModel.ANIM_IDLE]:
-		_check(m._anim.has_animation(anim_name), "動き %s がある" % anim_name)
+		_check(m.anim_of(anim_name) != "", "動き %s がある" % anim_name)
 	for bone in CharacterModel.LOOK_TWIST:
 		_check(m._skel.find_bone(bone) >= 0, "骨 %s がある" % bone)
 	_check(m._twist_bones.size() == CharacterModel.LOOK_TWIST.size(), "振り向きでひねる骨がそろう")

@@ -56,6 +56,8 @@ var _look_head := 0.0
 var _look_body := 0.0
 ## ひねる骨の番号 -> 角度(ラジアン)
 var _twist_bones := {}
+## 動きの名前(小文字、「_loop」なしも)-> 読みこんだあとの本当の名前
+var _anim_names := {}
 var _eyes: Array[MeshInstance3D] = []
 var _happy_eyes: Array[Node3D] = []
 var _mouth_flat: MeshInstance3D
@@ -168,9 +170,14 @@ func _build_rig() -> void:
 	_anim = _rig.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
 	# 動きはこちらで進める(振り向きのひねりを、動きのあとに足すため)
 	_anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+	# 読みこむときに名前の「_Loop」が外れることがあるので、どちらの名前でも探せるようにする
 	for anim_name in _anim.get_animation_list():
-		if anim_name.ends_with("_Loop"):
-			_anim.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
+		_anim_names[anim_name.to_lower()] = anim_name
+		_anim_names[anim_name.to_lower().trim_suffix("_loop")] = anim_name
+	for base in [ANIM_SIT, ANIM_RUN, ANIM_WALK, ANIM_IDLE]:
+		var real := anim_of(base)
+		if real != "":
+			_anim.get_animation(real).loop_mode = Animation.LOOP_LINEAR
 	for bone_name in LOOK_TWIST:
 		var i := _skel.find_bone(bone_name)
 		if i >= 0:
@@ -242,6 +249,24 @@ func _bone_dir(bone: String) -> Vector3:
 	return _skel.get_bone_global_rest(_skel.find_bone(bone)).basis.y.normalized()
 
 
+## 素材の動きの名前から、読みこんだあとの本当の名前を返す(なければ "")
+func anim_of(base: String) -> String:
+	var k := base.to_lower()
+	return _anim_names.get(k, _anim_names.get(k.trim_suffix("_loop"), ""))
+
+
+func _play(base: String, blend: float = -1.0, speed: float = 1.0) -> void:
+	var real := anim_of(base)
+	if real != "":
+		_anim.play(real, blend, speed)
+
+
+func _queue(base: String) -> void:
+	var real := anim_of(base)
+	if real != "":
+		_anim.queue(real)
+
+
 ## 姿勢: "sit"(座る)/"walk"(歩く)/"run"(走る)/"idle"(立っている)
 ## 座っている→走るときは立ち上がってから、立っている→座るときは座ってから続ける
 func set_pose(pose: String) -> void:
@@ -253,20 +278,20 @@ func set_pose(pose: String) -> void:
 	match pose:
 		"sit":
 			if prev == "":
-				_anim.play(ANIM_SIT)
+				_play(ANIM_SIT)
 			else:
-				_anim.play(ANIM_SIT_DOWN, 0.15, 2.0)
-				_anim.queue(ANIM_SIT)
+				_play(ANIM_SIT_DOWN, 0.15, 2.0)
+				_queue(ANIM_SIT)
 		"run":
 			if prev == "sit":
-				_anim.play(ANIM_STAND_UP, 0.1, 3.0)
-				_anim.queue(ANIM_RUN)
+				_play(ANIM_STAND_UP, 0.1, 3.0)
+				_queue(ANIM_RUN)
 			else:
-				_anim.play(ANIM_RUN, 0.2)
+				_play(ANIM_RUN, 0.2)
 		"walk":
-			_anim.play(ANIM_WALK, 0.25)
+			_play(ANIM_WALK, 0.25)
 		_:
-			_anim.play(ANIM_IDLE, 0.25)
+			_play(ANIM_IDLE, 0.25)
 	if prev == "":
 		_anim.advance(0.0)
 
