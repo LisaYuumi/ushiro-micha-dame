@@ -52,6 +52,11 @@ func update(state: GameState, cam: Camera3D) -> void:
 			continue
 		var sp := cam.unproject_position(anchor)
 		var sz := p.get_combined_minimum_size()
+		# 画面の外にいる人の名札は出さない(端にかかっている人だけ、内側に寄せて出す)
+		var out := sz.x * 0.6
+		if sp.x < -out or sp.x > vp.x + out or sp.y < 0.0 or sp.y > vp.y + sz.y:
+			p.visible = false
+			continue
 		var r := Rect2(sp - Vector2(sz.x / 2.0, sz.y), sz)
 		r.position.x = clampf(r.position.x, UiStyle.SAFE, vp.x - UiStyle.SAFE - sz.x)
 		r.position.y = clampf(r.position.y, TOP_LIMIT, vp.y - sz.y - 8.0)
