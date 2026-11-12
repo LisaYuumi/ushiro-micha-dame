@@ -31,6 +31,10 @@ func _ready() -> void:
 	for i in Voices.ALL.size():
 		var v: String = Voices.ALL[i]
 		_oni_buttons.append(_add_button(Voices.LABELS[v], "voice_%d" % i, Vector2(0.5, 1), Rect2(-385 + i * 150, -100, 140, 80), 26))
+	# 鬼のスタンプ(声の上の列。先に相手をタップして選ぶ)
+	for i in Stamps.ALL.size():
+		var kind: String = Stamps.ALL[i]
+		_oni_buttons.append(_add_button(Stamps.LABELS[kind], "oni_stamp_%d" % i, Vector2(0.5, 1), Rect2(-370 + i * 140, -190, 130, 80), 22))
 	# 追いかけっこ中のバナナの皮(下のまん中)
 	_chase_buttons.append(_add_button("鬼にバナナ", "banana_oni", Vector2(0.5, 1), Rect2(-300, -110, 280, 90), 28))
 	_chase_buttons.append(_add_button("追う人にバナナ", "banana_chaser", Vector2(0.5, 1), Rect2(20, -110, 280, 90), 28))

@@ -109,6 +109,18 @@ func broadcast_events(events: Array) -> void:
 		_rpc_events.rpc(events)
 
 
+## ホスト → 1人: 状態(その人に見せてよい分だけ)
+func send_snapshot(peer_id: int, snap: Dictionary) -> void:
+	if is_host:
+		_rpc_snapshot.rpc_id(peer_id, snap)
+
+
+## ホスト → 1人: お知らせ(その人が知ってよい分だけ)
+func send_events(peer_id: int, events: Array) -> void:
+	if is_host and not events.is_empty():
+		_rpc_events.rpc_id(peer_id, events)
+
+
 ## ホスト → 1人: 部屋の様子(だれが入っているか、あなたは何番か、始まったか)
 func send_lobby(peer_id: int, info: Dictionary) -> void:
 	if is_host:

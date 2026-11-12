@@ -87,17 +87,29 @@ const CHASE_CAM_DISTANCE := 3.0
 const CHASE_CAM_HEIGHT := 3.2
 
 # --- スタンプ ---
-## 届いたスタンプが表示される時間(秒)。表示中はほかのスタンプは届かない(早い者勝ち)
-const STAMP_SHOW_TIME := 5.0
-## 1人が1ラウンドに送れる数。-1 = 何回でも送れる
+## 1人に同時に表示されるスタンプの数(早い者勝ち。空きができたら次が届く)
+const STAMP_SLOTS := 3
+## 届いたスタンプは、鬼がこの周数だけ歩いたら消える(0.5 = 半周)
+const STAMP_EXPIRE_LAPS := 0.5
+## 1人が1ラウンドに送れる数。-1 = 何回でも送れる(同じ相手には1ラウンド1回まで)
 const STAMPS_PER_ROUND := -1
-## 誰が送ったかを表示するか(企画書: 試遊で決める)
-const SHOW_STAMP_SENDER := false
-## ボットが本当のことを言う確率(0〜1)
-const BOT_STAMP_HONEST_CHANCE := 0.5
-## ボットが届いたスタンプを信じて振り向く確率(0〜1)
-const BOT_TRUST_CHANCE := 0.5
-## ボットがスタンプを送る間隔(秒)。この範囲でランダム
+## 席がこの数以上のとき(8人で遊ぶとき)は、両どなりにはスタンプを送れない
+const STAMP_NEIGHBOR_BLOCK_MIN_SEATS := 6
+## 普通のボットが、見える相手に本当のことを言う確率(0〜1)
+const BOT_NORMAL_HONEST_CHANCE := 0.9
+## 普通のボットが、後ろが見えない相手(5人のときの両どなり)に当てずっぽうで「落ちてる!」と言う確率
+const BOT_GUESS_LOOK_CHANCE := 0.3
+## 手下ボットが本当のことを言う確率(怪しまれないように、ときどき本当も混ぜる)
+const BOT_MINION_HONEST_CHANCE := 0.3
+## 鬼ボットが本当のことを言う確率と、スタンプを送る間隔(秒)
+const BOT_ONI_HONEST_CHANCE := 0.3
+const BOT_ONI_STAMP_INTERVAL_MIN := 10.0
+const BOT_ONI_STAMP_INTERVAL_MAX := 20.0
+## ボットが届いたスタンプを信じて振り向く確率のもと(性格でかわる)
+const BOT_TRUST_CHANCE := 0.7
+## ボットが、前のラウンドで手下だった人のスタンプを数えるときの重さ(1 = ふつう)
+const BOT_PREV_MINION_WEIGHT := 0.3
+## ボットがスタンプを送る間隔(秒)。この範囲でランダム(性格でかわる)
 const BOT_STAMP_INTERVAL_MIN := 8.0
 const BOT_STAMP_INTERVAL_MAX := 18.0
 ## ボットは、鬼がこの秒数以内に後ろを通った人にだけスタンプを送る
@@ -127,12 +139,17 @@ const SCORE_CHASER_TOUCHED := 3
 const SCORE_LOSE := -3
 ## スタンプの点数(教えた・だました)は、鬼が相手の後ろを通ってからこの秒数以内に送ったものだけ
 const STAMP_SCORE_RECENT_PASS := 10.0
-## スタンプでだました人の点数
-## (「まだ平気」→本当は落ちていた→振り向かなかった / 「落ちてる!」など→本当は落ちていない→お手つき)
-const SCORE_DECEIVE := 1
-## スタンプで正しく教えた人の点数
-## (本当の「落ちてる!」などで相手が振り向けた / 本当の「まだ平気」で相手が振り向かずにすんだ)
-const SCORE_HELP := 1
+## スタンプの点数(送った人の役ごと)。
+## 教えた: 本当の「落ちてる!」などで相手が振り向けた / 本当の「まだ平気」で相手が振り向かずにすんだ
+## だました: 嘘の「落ちてる!」などで相手がお手つき / 嘘の「まだ平気」で相手が振り向かなかった
+const SCORE_HELP_NORMAL := 1
+const SCORE_DECEIVE_NORMAL := 0
+const SCORE_HELP_MINION := 0
+const SCORE_DECEIVE_MINION := 1
+const SCORE_HELP_ONI := 0
+const SCORE_DECEIVE_ONI := 1
+## 鬼が勝った(席に座れた・最後まで気づかれなかった)とき、手下の点数(手下が負けた本人のときはもらえない)
+const SCORE_MINION_ONI_WIN := 2
 ## 1ラウンドに振り向ける回数(「拾う」も1回使う)。追いかけっこ中・勝敗が出た後は数えない
 const LOOKS_PER_ROUND := 2
 ## 1ラウンドに一度も振り向かずにがまんした人の点数。ただし「見える所にハンカチが落ちていないときに、

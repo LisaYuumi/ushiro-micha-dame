@@ -8,14 +8,18 @@ const FRAME_WIDTH := 18.0
 var _help: Label
 var _message: Label
 var _message_left := 0.0
-## 自分に届いたスタンプ(画面の下に色付きの吹き出しで)
-var _stamp_box: PanelContainer
-var _stamp_style: StyleBoxFlat
-var _stamp_header: Label
-var _stamp: Label
+## 自分に届いたスタンプ(画面の下に、送り主つきで横に3つまで並べる)
+var _slots: Array[PanelContainer] = []
+var _slot_styles: Array[StyleBoxFlat] = []
+var _slot_senders: Array[Label] = []
+var _slot_texts: Array[Label] = []
+## 前のフレームに出ていたスタンプ(新しく届いたものだけポンと飛び出させる)
+var _shown_keys: Array = []
 ## 自分に届いたスタンプの間、画面のふちを光らせる枠
 var _frame: Array[ColorRect] = []
-var _stamp_tween: Tween
+var _frame_tween: Tween
+## 役の表示(手下のとき)
+var _badge: Label
 
 
 func _ready() -> void:
@@ -59,36 +63,61 @@ func hide_message() -> void:
 	_message_left = 0.0
 
 
-## 自分に届いたスタンプを出す(空文字で消す)。
-## 「あなたへ」の見出し+ポンと飛び出す動き+画面のふちが光る、で他人宛てと区別する
-func show_stamp(text: String, color: Color) -> void:
-	if _stamp_tween:
-		_stamp_tween.kill()
-		_stamp_tween = null
-	if text == "":
-		_stamp_box.visible = false
+## 自分に届いているスタンプを並べる。list: [{"text", "color", "sender", "sender_color"}](届いた順)
+func show_my_stamps(list: Array) -> void:
+	var keys := []
+	for i in _slots.size():
+		var box := _slots[i]
+		if i >= list.size():
+			box.visible = false
+			continue
+		var st: Dictionary = list[i]
+		var key := "%s|%s" % [st["sender"], st["text"]]
+		keys.append(key)
+		_slot_texts[i].text = st["text"]
+		_slot_senders[i].text = st["sender"]
+		_slot_styles[i].bg_color = st["color"]
+		# ふちの色と名前の色 = 送った人の体の色
+		var sender_color: Color = st["sender_color"]
+		_slot_styles[i].border_color = sender_color
+		_slot_senders[i].add_theme_color_override("font_outline_color", sender_color.darkened(0.5))
+		box.visible = true
+		if not (key in _shown_keys):
+			# 新しく届いた: ポンと大きくなってから元の大きさへ
+			box.pivot_offset = box.size / 2.0
+			box.scale = Vector2(0.3, 0.3)
+			var tw := create_tween()
+			tw.tween_property(box, "scale", Vector2(1.12, 1.12), 0.12)
+			tw.tween_property(box, "scale", Vector2.ONE, 0.1)
+	# 出ていたスタンプが全部消えたら、ふちの光も消す
+	# (参加者の画面では、届いたお知らせが状態より先に来ることがあるので「全部消えたとき」だけ)
+	if list.is_empty() and not _shown_keys.is_empty():
 		for r in _frame:
 			r.visible = false
-		return
+	_shown_keys = keys
 
-	_stamp.text = text
-	_stamp_style.bg_color = color
-	_stamp_box.visible = true
+
+## 自分あてにスタンプが届いたとき、画面のふちを光らせる
+func flash_stamp(color: Color) -> void:
+	if _frame_tween:
+		_frame_tween.kill()
 	for r in _frame:
 		r.color = color
 		r.visible = true
-
-	# ポンと大きくなってから元の大きさへ。枠は点滅させる
-	_stamp_box.pivot_offset = _stamp_box.size / 2.0
-	_stamp_box.scale = Vector2(0.3, 0.3)
-	_stamp_tween = create_tween()
-	_stamp_tween.tween_property(_stamp_box, "scale", Vector2(1.15, 1.15), 0.12)
-	_stamp_tween.tween_property(_stamp_box, "scale", Vector2.ONE, 0.1)
+	_frame_tween = create_tween()
 	for i in 3:
-		_stamp_tween.tween_callback(_set_frame_alpha.bind(0.25))
-		_stamp_tween.tween_interval(0.15)
-		_stamp_tween.tween_callback(_set_frame_alpha.bind(0.9))
-		_stamp_tween.tween_interval(0.15)
+		_frame_tween.tween_callback(_set_frame_alpha.bind(0.25))
+		_frame_tween.tween_interval(0.15)
+		_frame_tween.tween_callback(_set_frame_alpha.bind(0.9))
+		_frame_tween.tween_interval(0.15)
+	_frame_tween.tween_callback(_set_frame_alpha.bind(0.5))
+
+
+## 画面の上のまん中に、役を出す(空文字で消す)
+func set_role_badge(text: String, color: Color) -> void:
+	_badge.text = text
+	_badge.visible = text != ""
+	_badge.add_theme_color_override("font_outline_color", color)
 
 
 func _set_frame_alpha(a: float) -> void:
@@ -118,46 +147,63 @@ func _build_stamp_display() -> void:
 				r.offset_left = -FRAME_WIDTH
 		_frame.append(r)
 
-	# 画面の下(スタンプボタンの上)に出す、色付きの吹き出し。
-	# ほかの人あてのスタンプは 3D の頭の上(画面の上のほう)に出るので、場所で区別できる
-	_stamp_style = StyleBoxFlat.new()
-	_stamp_style.set_corner_radius_all(28)
-	_stamp_style.set_border_width_all(6)
-	_stamp_style.border_color = Color.WHITE
-	_stamp_style.content_margin_left = 24
-	_stamp_style.content_margin_right = 24
-	_stamp_style.content_margin_top = 8
-	_stamp_style.content_margin_bottom = 12
-	_stamp_box = PanelContainer.new()
-	_stamp_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_stamp_box.add_theme_stylebox_override("panel", _stamp_style)
-	add_child(_stamp_box)
-	_stamp_box.anchor_left = 0.5
-	_stamp_box.anchor_right = 0.5
-	_stamp_box.anchor_top = 1.0
-	_stamp_box.anchor_bottom = 1.0
-	_stamp_box.offset_left = -210
-	_stamp_box.offset_right = 210
-	_stamp_box.offset_top = -330
-	_stamp_box.offset_bottom = -130
-	_stamp_box.visible = false
+	# 画面の下(スタンプボタンの上)に、横に並ぶ3つの吹き出し。
+	# ほかの人あてのスタンプは 3D の頭の上に出るので、場所で区別できる
+	var width := 240.0
+	var gap := 12.0
+	var total := width * GameConfig.STAMP_SLOTS + gap * (GameConfig.STAMP_SLOTS - 1)
+	for i in GameConfig.STAMP_SLOTS:
+		var style := StyleBoxFlat.new()
+		style.set_corner_radius_all(24)
+		style.set_border_width_all(8)
+		style.content_margin_left = 10
+		style.content_margin_right = 10
+		style.content_margin_top = 4
+		style.content_margin_bottom = 8
+		var box := PanelContainer.new()
+		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_theme_stylebox_override("panel", style)
+		add_child(box)
+		box.anchor_left = 0.5
+		box.anchor_right = 0.5
+		box.anchor_top = 1.0
+		box.anchor_bottom = 1.0
+		box.offset_left = -total / 2.0 + i * (width + gap)
+		box.offset_right = box.offset_left + width
+		box.offset_top = -300
+		box.offset_bottom = -130
+		box.visible = false
 
-	var col := VBoxContainer.new()
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	_stamp_box.add_child(col)
+		var col := VBoxContainer.new()
+		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.alignment = BoxContainer.ALIGNMENT_CENTER
+		box.add_child(col)
+		# 送った人の名前(体の色のふち)
+		var sender := _make_label(24, Color.WHITE)
+		sender.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sender.add_theme_constant_override("outline_size", 8)
+		sender.clip_text = true
+		col.add_child(sender)
+		var text := _make_label(50, Color.WHITE)
+		text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		text.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
+		text.add_theme_constant_override("outline_size", 10)
+		col.add_child(text)
+		_slots.append(box)
+		_slot_styles.append(style)
+		_slot_senders.append(sender)
+		_slot_texts.append(text)
 
-	_stamp_header = _make_label(28, Color.WHITE)
-	_stamp_header.text = "あなたへ"
-	_stamp_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_stamp_header.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
-	col.add_child(_stamp_header)
-
-	_stamp = _make_label(72, Color.WHITE)
-	_stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_stamp.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
-	_stamp.add_theme_constant_override("outline_size", 10)
-	col.add_child(_stamp)
+	_badge = _make_label(30, Color.WHITE)
+	_badge.add_theme_constant_override("outline_size", 12)
+	add_child(_badge)
+	_badge.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_badge.offset_left = -400
+	_badge.offset_right = 400
+	_badge.offset_top = 96
+	_badge.offset_bottom = 140
+	_badge.visible = false
 
 
 func _make_label(size: int, color: Color) -> Label:

@@ -46,6 +46,8 @@ func _initialize() -> void:
 	_test_who_can_see_behind_whom()
 	_test_otetsuki_penalty_and_forced_oni()
 	_test_deceiving_scores()
+	_test_minion()
+	_test_bot_personalities()
 	_test_look_limit_and_patience()
 	_test_online_match_setup()
 	_test_humans_only_oni()
@@ -326,26 +328,51 @@ func _test_rounds_with_bots_always_finish() -> void:
 
 
 func _test_stamp_rules() -> void:
-	# 席は 0〜4 の輪。両どなり(差が1)には送れず、向かい(差が2か3)には送れる
+	# 8人(席 0〜6 の輪、鬼は id 7)。両どなり(差が1)には送れず、それ以外には送れる
 	var s := GameState.new()
 	s.start_round(41)
+	s.minion_id = -1
 	s.take_events()
 	_check(s.send_stamp(1, 3, Stamps.SAFE), "向かいの人にスタンプが届く")
 	_check(_has(s.take_events(), "stamp"), "届いたお知らせが出る")
-	_check(not s.send_stamp(0, 3, Stamps.DROPPED), "表示中の人には届かない(早い者勝ち)")
-	_check(_has(s.take_events(), "stamp_blocked"), "届かなかったお知らせが出る")
-	_check(s.send_stamp(1, 2, Stamps.SAFE), "となりの人にも送れる")
+	_check(not s.send_stamp(1, 3, Stamps.DROPPED), "同じ相手には1ラウンド1回")
+	_check(_blocked_reason(s.take_events()) == "already", "もう送ったお知らせが出る")
+	_check(not s.send_stamp(1, 2, Stamps.SAFE), "8人のとき、右どなりには送れない")
+	_check(_blocked_reason(s.take_events()) == "neighbor", "となりには送れないお知らせが出る")
+	_check(not s.send_stamp(1, 0, Stamps.SAFE), "8人のとき、左どなりには送れない")
 	s.take_events()
+	_check(s.send_stamp(0, 3, Stamps.DROPPED) and s.send_stamp(5, 3, Stamps.NOW), "1人に何人もスタンプを送れる")
+	_check(s.active_stamps[3].size() == 3, "3つ同時に表示される")
+	_check(s.active_stamps[3][0]["sender"] == 1 and s.active_stamps[3][2]["sender"] == 5, "届いた順に並ぶ")
+	s.take_events()
+	_check(not s.send_stamp(6, 3, Stamps.SAFE), "表示中が %d つなら届かない" % GameConfig.STAMP_SLOTS)
+	_check(_blocked_reason(s.take_events()) == "full", "いっぱいのお知らせが出る")
+	_check(not (3 in s.get_actor(6).stamped_targets), "届かなかったら、その相手への1回は使わない")
+	_check(s.send_stamp(s.oni_id, 4, Stamps.DROPPED), "鬼もスタンプを送れる")
 	_check(not s.send_stamp(1, 1, Stamps.SAFE), "自分には送れない")
-	_check(not s.send_stamp(s.oni_id, 3, Stamps.SAFE), "鬼は送れない")
+	_check(not s.send_stamp(2, s.oni_id, Stamps.SAFE), "鬼には送れない")
 	_check(not s.send_stamp(1, 4, "unknown"), "知らない種類は送れない")
-	for i in int((GameConfig.STAMP_SHOW_TIME + 0.1) / STEP):
+	var born: float = s.active_stamps[3][0]["born_angle"]
+	var gone := false
+	var walked := 0.0
+	for i in int(80.0 / STEP):
 		s.tick(STEP)
-	_check(_has(s.take_events(), "stamp_end"), "3秒で消える")
-	_check(not s.active_stamps.has(3), "消えたら表示中ではない")
-	_check(s.send_stamp(1, 3, Stamps.DROPPED), "消えたあとはまた届く")
-	_check(s.send_stamp(1, 4, Stamps.NOW), "3つ目も送れる(何回でも送れる)")
+		if not s.active_stamps.has(3):
+			gone = true
+			walked = s.oni_angle - born
+			break
+	_check(gone, "届いたスタンプは消える")
+	_check(walked >= GameConfig.STAMP_EXPIRE_LAPS * TAU - 0.01 and walked < GameConfig.STAMP_EXPIRE_LAPS * TAU + 0.1,
+			"鬼が半周したら消える(%.2f 周)" % (walked / TAU))
+	_check(_has(s.take_events(), "stamp_end"), "消えたお知らせが出る")
+	if s.phase == GameState.Phase.WALKING or s.phase == GameState.Phase.DROPPED:
+		_check(s.send_stamp(6, 3, Stamps.SAFE), "消えたら、届かなかった人がまた送れる")
 	_check(s.get_actor(1).stamps_left == GameConfig.STAMPS_PER_ROUND, "何回でもの設定なら残りは減らない")
+
+	# 5人(席 0〜3)のときは、両どなりにも送れる
+	var s5 := GameState.new()
+	s5.start_match(41, false, 4)
+	_check(s5.send_stamp(1, 2, Stamps.SAFE) and s5.send_stamp(1, 0, Stamps.SAFE), "5人のときは両どなりにも送れる")
 
 
 func _test_stamp_truthfulness() -> void:
@@ -355,9 +382,9 @@ func _test_stamp_truthfulness() -> void:
 	var sender := s.get_actor_at_seat((s.drop_target_seat + 2) % GameConfig.SEAT_COUNT)
 	var sender2 := s.get_actor_at_seat((s.drop_target_seat + 3) % GameConfig.SEAT_COUNT)
 	s.send_stamp(sender.id, target.id, Stamps.DROPPED)
-	_check(s.active_stamps[target.id]["truthful"], "落とされた人に『落ちてる!』は本当")
+	_check(s.active_stamps[target.id][0]["truthful"], "落とされた人に『落ちてる!』は本当")
 	s.send_stamp(sender2.id, other.id, Stamps.DROPPED)
-	_check(not s.active_stamps[other.id]["truthful"], "落とされていない人に『落ちてる!』は嘘")
+	_check(not s.active_stamps[other.id][0]["truthful"], "落とされていない人に『落ちてる!』は嘘")
 	s.set_looking_back(target.id, true)
 	s.pick_up(target.id)
 	_check(s.active_stamps.is_empty(), "追いかけっこが始まるとスタンプは消える")
@@ -366,12 +393,14 @@ func _test_stamp_truthfulness() -> void:
 
 func _test_bots_send_and_trust_stamps() -> void:
 	var sent := 0
+	var from_oni := 0
 	var otetsuki_after_stamp := 0
 	for seed_value in 30:
 		var s := GameState.new()
 		s.start_round(seed_value)
 		var b := BotBrain.new()
 		b.reset(seed_value)
+		var pairs := {}
 		for i in int(40.0 / STEP):
 			b.update(s, STEP)
 			s.tick(STEP)
@@ -380,6 +409,14 @@ func _test_bots_send_and_trust_stamps() -> void:
 					sent += 1
 					# ボットが反応する(拾って席を立つ)前に確かめる
 					var t := s.get_actor(e["target"])
+					var from := s.get_actor(e["sender"])
+					if from.id == s.oni_id:
+						from_oni += 1
+					else:
+						_check(not s.is_stamp_neighbor(from.seat_index, t.seat_index), "8人のとき、ボットは両どなりに送らない")
+					var key := "%d>%d" % [from.id, t.id]
+					_check(not pairs.has(key), "ボットは同じ相手に1ラウンド2回送らない")
+					pairs[key] = true
 					_check(s.seat_pass_age[t.seat_index] <= GameConfig.BOT_STAMP_RECENT_PASS + STEP * 1.5,
 							"ボットは鬼がついさっき後ろを通った人にだけスタンプを送る")
 				elif e["type"] == "otetsuki":
@@ -390,6 +427,7 @@ func _test_bots_send_and_trust_stamps() -> void:
 		for a in s.actors:
 			_check(a.stamps_left == GameConfig.STAMPS_PER_ROUND or a.stamps_left >= 0, "スタンプの残りの数がおかしくならない")
 	_check(sent > 0, "ボットがスタンプを送る")
+	_check(from_oni > 0, "鬼のボットもスタンプを送る")
 	_check(otetsuki_after_stamp > 0, "ボットがスタンプを信じて振り向き、お手つきすることがある")
 	print("bot stamps sent: %d, otetsuki: %d" % [sent, otetsuki_after_stamp])
 
@@ -853,15 +891,16 @@ func _test_otetsuki_penalty_and_forced_oni() -> void:
 
 
 func _test_deceiving_scores() -> void:
-	# 鬼が通っていない人に嘘の「落ちてる!」→ お手つきさせても点は入らない
+	# 鬼が通っていない人に嘘の「落ちてる!」→ お手つきさせても点は入らない(手下でも)
 	var s0 := GameState.new()
 	s0.start_match(91)
+	s0.minion_id = 1
 	var b0: int = s0.scores[1]
 	s0.send_stamp(1, 3, Stamps.DROPPED)
 	s0.set_looking_back(3, true)
 	_check(s0.scores[1] == b0, "鬼が通ってから %d 秒より前のスタンプは点にならない" % int(GameConfig.STAMP_SCORE_RECENT_PASS))
 
-	# 鬼が通った直後(落とされていない人)に嘘の「落ちてる!」→ お手つき → 送った人 +1
+	# 鬼が通った直後(落とされていない人)に嘘の「落ちてる!」→ お手つき → 手下は +1、普通の人は 0
 	var s := GameState.new()
 	s.start_match(91)
 	var victim_seat := -1
@@ -875,14 +914,26 @@ func _test_deceiving_scores() -> void:
 	s.take_events()
 	var victim := s.get_actor_at_seat(victim_seat)
 	var liar := s.get_actor_at_seat((victim_seat + 2) % GameConfig.SEAT_COUNT)
+	var normal_liar := s.get_actor_at_seat((victim_seat + 3) % GameConfig.SEAT_COUNT)
+	s.minion_id = liar.id
 	var before: int = s.scores[liar.id]
+	var before_n: int = s.scores[normal_liar.id]
+	var before_oni: int = s.scores[s.oni_id]
 	s.send_stamp(liar.id, victim.id, Stamps.DROPPED)
+	s.send_stamp(normal_liar.id, victim.id, Stamps.NOW)
+	s.send_stamp(s.oni_id, victim.id, Stamps.TRUST)
 	s.set_looking_back(victim.id, true)
-	_check(s.scores[liar.id] == before + GameConfig.SCORE_DECEIVE, "嘘の『落ちてる!』で振り向かせたら +%d" % GameConfig.SCORE_DECEIVE)
-	_check(_has(s.take_events(), "deceived"), "だましたお知らせが出る")
+	_check(s.scores[liar.id] == before + GameConfig.SCORE_DECEIVE_MINION, "手下が嘘の『落ちてる!』で振り向かせたら +%d" % GameConfig.SCORE_DECEIVE_MINION)
+	_check(s.scores[normal_liar.id] == before_n + GameConfig.SCORE_DECEIVE_NORMAL, "普通の人がだましても +%d" % GameConfig.SCORE_DECEIVE_NORMAL)
+	_check(s.scores[s.oni_id] == before_oni + GameConfig.SCORE_DECEIVE_ONI, "鬼がだましたら +%d" % GameConfig.SCORE_DECEIVE_ONI)
+	var ev := s.take_events()
+	_check(_has(ev, "deceived"), "だましたお知らせが出る")
+	for e in ev:
+		if e["type"] == "deceived":
+			_check(e.get("private_to", -1) == e["sender"], "だましたお知らせは、送った本人にだけ")
 	s.set_looking_back(victim.id, false)
 
-	# 鬼が通った直後(落とされていない人)に本当の「まだ平気」→ 振り向かない → +1(教えた)
+	# 鬼が通った直後(落とされていない人)に本当の「まだ平気」→ 振り向かない → 普通の人は +1(教えた)
 	var other_seat := -1
 	for i in int(60.0 / STEP):
 		s.tick(STEP)
@@ -894,57 +945,158 @@ func _test_deceiving_scores() -> void:
 	if other_seat >= 0:
 		var safe_target := s.get_actor_at_seat(other_seat)
 		var helper := s.get_actor_at_seat((other_seat + 2) % GameConfig.SEAT_COUNT)
+		if helper.id == liar.id:
+			helper = s.get_actor_at_seat((other_seat + 3) % GameConfig.SEAT_COUNT)
 		var bh: int = s.scores[helper.id]
 		s.send_stamp(helper.id, safe_target.id, Stamps.SAFE)
-		for i in int((GameConfig.STAMP_SHOW_TIME + 0.1) / STEP):
-			s.tick(STEP)
-		_check(s.scores[helper.id] == bh + GameConfig.SCORE_HELP, "鬼が通った直後の本当の『まだ平気』で、振り向かずにすんだら +%d" % GameConfig.SCORE_HELP)
+		_tick_until_no_stamps(s)
+		if s.phase == GameState.Phase.RESULT and helper.id in s.result.get("patient", []):
+			bh += GameConfig.SCORE_PATIENCE # 待っている間にラウンドが終わったら、がまんの点も入る
+		_check(s.scores[helper.id] == bh + GameConfig.SCORE_HELP_NORMAL, "鬼が通った直後の本当の『まだ平気』で、振り向かずにすんだら +%d" % GameConfig.SCORE_HELP_NORMAL)
 
-	# 本当の「落ちてる!」で振り向けたら、教えた人に +1(だましの点ではない)
+	# 本当の「落ちてる!」で振り向けたら、普通の人に +1(だましの点ではない)。手下が教えても 0
 	var s2 := _dropped_state(93)
 	var target := s2.get_actor_at_seat(s2.drop_target_seat)
 	var sender := s2.get_actor_at_seat((s2.drop_target_seat + 2) % GameConfig.SEAT_COUNT)
+	var minion2 := s2.get_actor_at_seat((s2.drop_target_seat + 3) % GameConfig.SEAT_COUNT)
+	s2.minion_id = minion2.id
 	var b2: int = s2.scores[sender.id]
+	var bm2: int = s2.scores[minion2.id]
 	s2.send_stamp(sender.id, target.id, Stamps.DROPPED)
+	s2.send_stamp(minion2.id, target.id, Stamps.DROPPED)
 	s2.set_looking_back(target.id, true)
 	var ev2 := s2.take_events()
-	_check(s2.scores[sender.id] == b2 + GameConfig.SCORE_HELP, "本当の『落ちてる!』で教えたら +%d" % GameConfig.SCORE_HELP)
+	_check(s2.scores[sender.id] == b2 + GameConfig.SCORE_HELP_NORMAL, "本当の『落ちてる!』で教えたら +%d" % GameConfig.SCORE_HELP_NORMAL)
+	_check(s2.scores[minion2.id] == bm2 + GameConfig.SCORE_HELP_MINION, "手下が教えても +%d" % GameConfig.SCORE_HELP_MINION)
 	_check(_has(ev2, "helped") and not _has(ev2, "deceived"), "教えたお知らせが出る(だましではない)")
 	s2.set_looking_back(target.id, false)
 	s2.set_looking_back(target.id, true)
-	_check(s2.scores[sender.id] == b2 + GameConfig.SCORE_HELP, "同じスタンプで2回は点が入らない")
+	_check(s2.scores[sender.id] == b2 + GameConfig.SCORE_HELP_NORMAL, "同じスタンプで2回は点が入らない")
 
-	# 本当の「まだ平気」では点は入らない
+	# 鬼が通っていない人への本当の「まだ平気」では点は入らない
 	var s5 := GameState.new()
 	s5.start_match(99)
+	s5.minion_id = -1
 	var b5: int = s5.scores[1]
 	s5.send_stamp(1, 3, Stamps.SAFE)
-	for i in int((GameConfig.STAMP_SHOW_TIME + 0.1) / STEP):
-		s5.tick(STEP)
+	_tick_until_no_stamps(s5)
 	_check(s5.scores[1] == b5, "鬼が通っていない人への『まだ平気』では点は入らない(連打で稼げない)")
 
-	# 嘘の「まだ平気」(本当は落ちていた)→ 3秒振り向かない → +1
+	# 嘘の「まだ平気」(本当は落ちていた)→ 消えるまで振り向かない → 手下と鬼は +1、普通の人は 0
 	var s3 := _dropped_state(95)
 	var t3 := s3.get_actor_at_seat(s3.drop_target_seat)
 	var liar3 := s3.get_actor_at_seat((s3.drop_target_seat + 2) % GameConfig.SEAT_COUNT)
+	var normal3 := s3.get_actor_at_seat((s3.drop_target_seat + 3) % GameConfig.SEAT_COUNT)
+	s3.minion_id = liar3.id
 	var b3: int = s3.scores[liar3.id]
+	var bn3: int = s3.scores[normal3.id]
+	var bo3: int = s3.scores[s3.oni_id]
 	s3.send_stamp(liar3.id, t3.id, Stamps.SAFE)
-	for i in int((GameConfig.STAMP_SHOW_TIME + 0.1) / STEP):
-		s3.tick(STEP)
-	_check(s3.scores[liar3.id] == b3 + GameConfig.SCORE_DECEIVE, "嘘の『まだ平気』で振り向かせなかったら +%d" % GameConfig.SCORE_DECEIVE)
+	s3.send_stamp(normal3.id, t3.id, Stamps.SAFE)
+	s3.send_stamp(s3.oni_id, t3.id, Stamps.SAFE)
+	_tick_until_no_stamps(s3)
+	_check(s3.scores[liar3.id] == b3 + GameConfig.SCORE_DECEIVE_MINION, "手下が嘘の『まだ平気』で振り向かせなかったら +%d" % GameConfig.SCORE_DECEIVE_MINION)
+	_check(s3.scores[normal3.id] == bn3 + GameConfig.SCORE_DECEIVE_NORMAL, "普通の人の嘘の『まだ平気』は +%d" % GameConfig.SCORE_DECEIVE_NORMAL)
+	# (鬼は、このあと見逃しで勝つと勝ちの点も入るので、だましの分が入ったかだけ確かめる)
+	_check(s3.scores[s3.oni_id] - bo3 >= GameConfig.SCORE_DECEIVE_ONI, "鬼の嘘の『まだ平気』も点になる")
 
 	# 嘘の「まだ平気」でも、振り向かれたら点は入らない
 	var s4 := _dropped_state(97)
 	var t4 := s4.get_actor_at_seat(s4.drop_target_seat)
 	var liar4 := s4.get_actor_at_seat((s4.drop_target_seat + 2) % GameConfig.SEAT_COUNT)
+	s4.minion_id = liar4.id
 	var b4: int = s4.scores[liar4.id]
 	s4.send_stamp(liar4.id, t4.id, Stamps.SAFE)
 	s4.tick(STEP)
 	s4.set_looking_back(t4.id, true)
 	s4.set_looking_back(t4.id, false)
-	for i in int((GameConfig.STAMP_SHOW_TIME + 0.1) / STEP):
-		s4.tick(STEP)
+	_tick_until_no_stamps(s4)
 	_check(s4.scores[liar4.id] == b4, "『まだ平気』の嘘は、振り向かれたら失敗")
+
+
+func _test_minion() -> void:
+	for seed_value in 10:
+		var s := GameState.new()
+		s.start_match(200 + seed_value)
+		var m := s.get_actor(s.minion_id)
+		_check(m != null and m.role == GameState.Role.SEATED and m.id != s.oni_id, "手下は座っている人から選ばれる")
+		var ev := s.take_events()
+		var told := false
+		for e in ev:
+			if e["type"] == "minion":
+				told = e["actor"] == m.id and e["private_to"] == m.id
+		_check(told, "手下は本人にだけ知らされる")
+		var other := s.get_actor_at_seat((m.seat_index + 2) % GameConfig.SEAT_COUNT)
+		_check(s.snapshot(other.id)["minion_id"] == -1, "ほかの人に送る状態には、手下がだれかは入らない")
+		_check(s.snapshot(m.id)["minion_id"] == m.id, "手下本人に送る状態には入る")
+		var right := (m.seat_index + 1) % GameConfig.SEAT_COUNT
+		_check(s.sees_behind(m.id, right), "手下は両どなりの後ろも見える")
+		_check(not s.sees_behind(m.id, m.seat_index), "手下も自分の後ろは見えない")
+		var n := s.get_actor_at_seat(right)
+		_check(not s.sees_behind(n.id, (right + 1) % GameConfig.SEAT_COUNT), "普通の人は両どなりの後ろが見えない")
+
+	# 鬼が見逃しで勝つ → 手下は +2(負けた本人でなければ)。勝敗のあとは全員に発表
+	var s2 := GameState.new()
+	s2.start_match(63)
+	var minion := s2.get_actor_at_seat((s2.drop_target_seat + 2) % GameConfig.SEAT_COUNT)
+	s2.minion_id = minion.id
+	var before: int = s2.scores[minion.id]
+	var e2 := _run_until(s2, "result", 200.0)
+	_check(e2["reason"] == "missed", "(確認用)見逃しで鬼の勝ち")
+	var patience := GameConfig.SCORE_PATIENCE if minion.id in e2["patient"] else 0
+	_check(s2.scores[minion.id] == before + GameConfig.SCORE_MINION_ONI_WIN + patience, "鬼が勝ったら手下は +%d" % GameConfig.SCORE_MINION_ONI_WIN)
+	_check(e2["minion"] == minion.id and e2["minion_bonus"], "勝敗のお知らせで手下を発表する")
+	var other2 := s2.get_actor_at_seat((minion.seat_index + 2) % GameConfig.SEAT_COUNT)
+	_check(s2.snapshot(other2.id)["minion_id"] == minion.id, "勝敗のあとは、だれにでも手下がわかる")
+	s2.next_round()
+	_check(s2.last_minion_id == minion.id, "前のラウンドの手下を覚えている")
+
+	# 手下が落とされて気づかなかった → 負けの -3 だけ
+	var s3 := GameState.new()
+	s3.start_match(63)
+	var loser := s3.get_actor_at_seat(s3.drop_target_seat)
+	s3.minion_id = loser.id
+	var b3: int = s3.scores[loser.id]
+	var e3 := _run_until(s3, "result", 200.0)
+	_check(e3["loser"] == loser.id and not e3["minion_bonus"], "(確認用)手下が負けた本人")
+	_check(s3.scores[loser.id] == b3 + GameConfig.SCORE_LOSE, "手下が負けたら %d 点だけ" % GameConfig.SCORE_LOSE)
+
+	# 鬼がタッチされて負け → 手下の +2 はない
+	var s4 := _chasing_state(65)
+	var c := s4.get_actor(s4.chaser_id)
+	var m4: GameState.Actor = null
+	for a in s4.actors:
+		if a.role == GameState.Role.SEATED:
+			m4 = a
+			break
+	s4.minion_id = m4.id
+	var b4: int = s4.scores[m4.id]
+	var e4 := {}
+	for i in int(60.0 / STEP):
+		s4.set_move(c.id, BotBrain.chase_steer(s4, c))
+		s4.tick(STEP)
+		for ev in s4.take_events():
+			if ev["type"] == "result":
+				e4 = ev
+		if not e4.is_empty():
+			break
+	if not e4.is_empty() and e4["reason"] == "touched":
+		var p4 := GameConfig.SCORE_PATIENCE if m4.id in e4["patient"] else 0
+		_check(s4.scores[m4.id] == b4 + p4, "鬼が負けたら手下の +%d はない" % GameConfig.SCORE_MINION_ONI_WIN)
+
+
+func _test_bot_personalities() -> void:
+	var s := GameState.new()
+	s.start_match(301)
+	var kinds := {}
+	for a in s.actors:
+		if a.is_bot:
+			_check(a.personality in Personalities.ALL, "ボットには性格がある")
+			_check(Personalities.label(a.personality) in a.display_name, "名前の横に性格が出る")
+			kinds[a.personality] = true
+		else:
+			_check(a.personality == "", "人には性格はない")
+	_check(kinds.size() >= 2, "(確認用)いろいろな性格がいる")
 
 
 func _test_look_limit_and_patience() -> void:
@@ -976,6 +1128,7 @@ func _test_look_limit_and_patience() -> void:
 	# がまんした人に +1(負けた人と鬼はのぞく)
 	var s4 := GameState.new()
 	s4.start_match(107)
+	s4.minion_id = -1
 	var before: Dictionary = s4.scores.duplicate()
 	var turner := s4.get_actor(1)
 	s4.set_looking_back(turner.id, true)
@@ -1112,6 +1265,21 @@ func _run_until(s: GameState, type: String, seconds: float) -> Dictionary:
 			if e["type"] == type:
 				return e
 	return {}
+
+
+func _blocked_reason(events: Array) -> String:
+	for e in events:
+		if e["type"] == "stamp_blocked":
+			return e["reason"]
+	return ""
+
+
+## 表示中のスタンプが全部消えるまで進める(鬼が半周歩くまで)
+func _tick_until_no_stamps(s: GameState) -> void:
+	for i in int(80.0 / STEP):
+		if s.active_stamps.is_empty():
+			return
+		s.tick(STEP)
 
 
 func _has(events: Array, type: String) -> bool:

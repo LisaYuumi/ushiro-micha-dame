@@ -26,6 +26,10 @@ const KEYS := {
 	"stamp_1": [KEY_2],
 	"stamp_2": [KEY_3],
 	"stamp_3": [KEY_4],
+	"oni_stamp_0": [KEY_Z],
+	"oni_stamp_1": [KEY_X],
+	"oni_stamp_2": [KEY_C],
+	"oni_stamp_3": [KEY_V],
 	"quit": [KEY_ESCAPE],
 }
 

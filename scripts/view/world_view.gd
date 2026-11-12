@@ -22,8 +22,10 @@ var _banana_nodes: Array[MeshInstance3D] = []
 ## 鬼が自分の後ろに来たとき、自分の前の床に映る影
 var _oni_shadow: MeshInstance3D
 var _oni_shadow_mat: StandardMaterial3D
-## 頭の上のスタンプ表示(id -> Label3D)
+## 頭の上のスタンプ表示(id -> Label3D の配列。STAMP_SLOTS 個)
 var _stamp_labels := {}
+## 頭の上の「送れない」「送った」の表示(id -> Label3D)
+var _info_labels := {}
 ## スタンプを送る相手の目印
 var _target_marker: MeshInstance3D
 
@@ -58,6 +60,7 @@ func build(state: GameState) -> void:
 	_was_looking.clear()
 	_dazed.clear()
 	_stamp_labels.clear()
+	_info_labels.clear()
 	_banana_nodes.clear()
 
 	_build_environment()
@@ -329,21 +332,22 @@ func _update_bananas(state: GameState) -> void:
 			_banana_nodes[i].position = state.bananas[i]["pos"] + Vector3(0, 0.03, 0)
 
 
-## 頭の上のスタンプ表示と、送る相手の目印
+## 頭の上のスタンプ表示(送り主つき、3つまで重ねる)と、送る相手の目印
 func _build_stamp_labels(state: GameState) -> void:
 	for a in state.actors:
-		var l := Label3D.new()
-		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		l.font = HudFont.get_font()
-		# ほかの人あてのスタンプは小さめに(自分あては画面の下の吹き出しに出る)
-		l.font_size = 44
-		l.pixel_size = 0.004
-		l.outline_size = 8
-		l.no_depth_test = true
-		l.position = Vector3(0, 2.25, 0)
-		l.visible = false
-		(_actor_nodes[a.id] as Node3D).add_child(l)
-		_stamp_labels[a.id] = l
+		var node := _actor_nodes[a.id] as Node3D
+		var list: Array[Label3D] = []
+		for i in GameConfig.STAMP_SLOTS:
+			var l := _make_label3d(40)
+			l.position = Vector3(0, 2.25 + 0.24 * i, 0)
+			node.add_child(l)
+			list.append(l)
+		_stamp_labels[a.id] = list
+		# 「送れない」(8人のときの両どなり)/「送った」(このラウンドもう送った)
+		var info := _make_label3d(30)
+		info.position = Vector3(0, 2.05, 0)
+		node.add_child(info)
+		_info_labels[a.id] = info
 
 	var cone := CylinderMesh.new()
 	cone.top_radius = 0.18
@@ -354,28 +358,74 @@ func _build_stamp_labels(state: GameState) -> void:
 	add_child(_target_marker)
 
 
+func _make_label3d(size: int) -> Label3D:
+	var l := Label3D.new()
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.font = HudFont.get_font()
+	# ほかの人あてのスタンプは小さめに(自分あては画面の下の吹き出しに出る)
+	l.font_size = size
+	l.pixel_size = 0.004
+	l.outline_size = 10
+	l.no_depth_test = true
+	l.visible = false
+	return l
+
+
 func _update_stamp_labels(state: GameState) -> void:
 	for id in _stamp_labels:
-		var l: Label3D = _stamp_labels[id]
-		var s: Dictionary = state.active_stamps.get(id, {})
-		l.visible = not s.is_empty()
-		if s.is_empty():
-			continue
-		var text: String = Stamps.LABELS[s["kind"]]
-		if GameConfig.SHOW_STAMP_SENDER:
-			var sender := state.get_actor(s["sender"])
-			text += "\n(%s)" % sender.display_name
-		l.text = text
-		l.modulate = STAMP_COLORS[s["kind"]]
+		var labels: Array = _stamp_labels[id]
+		var list: Array = state.active_stamps.get(id, [])
+		for i in labels.size():
+			var l: Label3D = labels[i]
+			l.visible = i < list.size()
+			if not l.visible:
+				continue
+			var st: Dictionary = list[i]
+			var sender := state.get_actor(st["sender"])
+			# 「落ちてる!←ボット2」: 文字はスタンプの色、ふちは送った人の体の色
+			l.text = "%s ←%s" % [Stamps.LABELS[st["kind"]], _short_name(state, sender)]
+			l.modulate = STAMP_COLORS[st["kind"]]
+			l.outline_modulate = sender.color.darkened(0.3) if sender else Color.BLACK
+	# 自分がスタンプを送れない人・もう送った人の印
+	var me := state.get_local_player()
+	var stamping := me != null and (me.role == GameState.Role.SEATED or me.role == GameState.Role.ONI) \
+			and (state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED)
+	for id in _info_labels:
+		var info: Label3D = _info_labels[id]
+		var text := ""
+		if stamping and id != me.id:
+			match state.stamp_block_reason(me.id, id):
+				"neighbor":
+					text = "× 送れない"
+				"already":
+					text = "送った"
+		info.text = text
+		info.visible = text != ""
+		info.modulate = Color(0.55, 0.55, 0.55) if text == "× 送れない" else Color(0.3, 0.6, 1.0)
+		info.outline_modulate = Color.WHITE
+
+
+## 頭の上に出す短い名前(「ボット2(せっかち)」→「ボット2」、鬼は「鬼」)
+func _short_name(state: GameState, a: GameState.Actor) -> String:
+	if a == null:
+		return "?"
+	if a.id == state.oni_id:
+		return "鬼"
+	if a.id == state.local_player_id:
+		return "あなた"
+	var n := a.display_name
+	var cut := n.find("(")
+	return n.substr(0, cut) if cut > 0 else n
 
 
 ## 座っている自分から見えない席(両どなり)の後ろに落ちた物は、自分の席のカメラに映さない。
 ## (上から見る確認用カメラには映る)
 func _hide_item_if_not_visible_to_me(state: GameState) -> void:
 	var me := state.get_local_player()
+	# 手下は両どなりの後ろも見える(GameState.sees_behind)
 	var hidden := state.handkerchief_on_floor and me.role == GameState.Role.SEATED \
 			and state.drop_target_seat != me.seat_index \
-			and not state.can_see_behind(me.seat_index, state.drop_target_seat)
+			and not state.sees_behind(me.id, state.drop_target_seat)
 	var bits := 1 << (HIDDEN_LAYER - 1) if hidden else 1
 	for c in _handkerchief.get_children():
 		if c is VisualInstance3D:
@@ -455,7 +505,7 @@ func set_stamp_target(state: GameState, id: int) -> void:
 	var a := state.get_actor(id)
 	_target_marker.visible = a != null
 	if a:
-		_target_marker.position = a.position + Vector3(0, 2.25, 0)
+		_target_marker.position = a.position + Vector3(0, 3.1, 0)
 
 
 ## 画面のこの位置(タップした場所)にいる、座っている人の id(いなければ -1)

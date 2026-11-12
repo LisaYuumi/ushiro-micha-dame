@@ -222,7 +222,7 @@ func _refresh_round() -> void:
 	touch.set_oni_mode(_i_am_oni())
 	_last_sound = ""
 	_stamp_target = -1
-	hud.show_stamp("", Color.WHITE)
+	hud.show_my_stamps([])
 	hud.hide_message()
 	view.build(state)
 	_update_help()
@@ -245,17 +245,16 @@ func _physics_process(delta: float) -> void:
 			_show_event(e)
 			_update_help()
 		if mode == Mode.HOST:
-			net.broadcast_events(events)
-			_snapshot_left -= delta
-			if _snapshot_left <= 0.0:
-				_snapshot_left = SNAPSHOT_INTERVAL
-				net.broadcast_snapshot(state.snapshot())
+			_send_to_guests(events, delta)
 	if state.get_actor(_stamp_target) == null or state.get_actor(_stamp_target).role != GameState.Role.SEATED:
 		_stamp_target = -1
 	view.set_stamp_target(state, _stamp_target)
 	var me := state.get_local_player()
 	if me == null:
 		return
+	_update_my_stamps()
+	hud.set_role_badge("あなたは鬼の手下(だますと+1 / 鬼が勝つと+2)" if state.minion_id == me.id \
+			and state.phase != GameState.Phase.RESULT else "", Color(0.55, 0.2, 0.7))
 	var judged := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
 	touch.set_looks_left(me.looks_left if judged else -1)
 	touch.set_oni_mode(_i_am_oni(),
@@ -268,6 +267,34 @@ func _physics_process(delta: float) -> void:
 func _process(delta: float) -> void:
 	view.sync(state, delta)
 
+
+## ホスト: 参加者1人ずつに、その人が知ってよいお知らせと状態だけを送る
+## (手下がだれかは本人にだけ。点が入ったお知らせは送った本人にだけ)
+func _send_to_guests(events: Array, delta: float) -> void:
+	_snapshot_left -= delta
+	var send_snapshot := _snapshot_left <= 0.0
+	if send_snapshot:
+		_snapshot_left = SNAPSHOT_INTERVAL
+	for pid in _peer_actor:
+		var id: int = _peer_actor[pid]
+		var mine := events.filter(func(e: Dictionary) -> bool: return e.get("private_to", id) == id)
+		net.send_events(pid, mine)
+		if send_snapshot:
+			net.send_snapshot(pid, state.snapshot(id))
+
+
+## 自分に届いているスタンプ(3つまで)を、画面の下に送り主つきで並べる
+func _update_my_stamps() -> void:
+	var list := []
+	for st in state.active_stamps.get(state.local_player_id, []):
+		var sender := state.get_actor(st["sender"])
+		list.append({
+			"text": Stamps.LABELS[st["kind"]],
+			"color": WorldView.STAMP_COLORS[st["kind"]],
+			"sender": (("鬼 " if st["sender"] == state.oni_id else "") + sender.display_name) if sender else "?",
+			"sender_color": sender.color if sender else Color.WHITE,
+		})
+	hud.show_my_stamps(list)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("debug_top_camera"):
@@ -295,6 +322,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			if not _i_am_oni() and event.is_action_pressed("stamp_%d" % i):
 				_send_stamp(Stamps.ALL[i])
 				return
+			if _i_am_oni() and event.is_action_pressed("oni_stamp_%d" % i):
+				_send_stamp(Stamps.ALL[i])
+				return
 		# 画面に映っている人をタップ/クリックすると、スタンプを送る相手になる
 		var pos := Vector2(-1, -1)
 		if event is InputEventScreenTouch and event.pressed:
@@ -304,6 +334,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if pos.x >= 0.0:
 			var id := view.pick_actor_at(state, pos)
 			if id >= 0:
+				if state.stamp_block_reason(state.local_player_id, id) == "neighbor":
+					hud.show_message("となりの人にはスタンプを送れない\n(8人のとき)", Color(0.3, 0.3, 0.3), 1.2)
+					return
 				_stamp_target = id
 				_update_help()
 
@@ -352,17 +385,22 @@ func _send_stamp(kind: String) -> void:
 		hud.show_message("スタンプは使い切った", Color(0.3, 0.3, 0.3), 1.0)
 		return
 	cmds.send_stamp(state.local_player_id, _stamp_target, kind)
+	# 同じ相手には1ラウンド1回なので、送ったら相手えらびをやめる
+	_stamp_target = -1
+	_update_help()
 
 
 func _show_event(e: Dictionary) -> void:
 	var me := state.local_player_id
+	if e.get("private_to", me) != me:
+		return # ほかの人だけが知るお知らせ(ホストの画面でも出さない)
 	match e.get("type"):
+		"minion":
+			if e["actor"] == me:
+				hud.show_message("あなたは鬼の手下!\nだまして +1点 / 鬼が勝ったら +2点\nあなたには両どなりの後ろも見える", Color(0.55, 0.2, 0.7), 3.0)
 		"stamp":
 			if e["target"] == me:
-				var text: String = Stamps.LABELS[e["kind"]]
-				if GameConfig.SHOW_STAMP_SENDER:
-					text += " (%s)" % _name(e["sender"])
-				hud.show_stamp(text, WorldView.STAMP_COLORS[e["kind"]])
+				hud.flash_stamp(WorldView.STAMP_COLORS[e["kind"]])
 				view.play_stamp_sound(e["kind"])
 				# 対応しているスマホ(主に Android)では短く震える
 				Input.vibrate_handheld(150)
@@ -374,17 +412,14 @@ func _show_event(e: Dictionary) -> void:
 			if e["sender"] == me:
 				hud.show_message("だました! +%d点\n(%s が引っかかった)" % [e["points"], _name(e["target"])], Color(0.6, 0.3, 0.8), 1.5)
 				_update_help()
-			elif e["target"] == me:
-				hud.show_message("だまされた…", Color(0.6, 0.3, 0.8), 1.2)
-		"stamp_end":
-			if e["target"] == me:
-				hud.show_stamp("", Color.WHITE)
 		"stamp_blocked":
 			if e["sender"] == me:
-				if e.get("reason", "") == "neighbor":
-					hud.show_message("となりの人には送れない", Color(0.3, 0.3, 0.3), 1.2)
-				else:
-					hud.show_message("先に別のスタンプが届いていた", Color(0.3, 0.3, 0.3), 1.2)
+				var why := {
+					"neighbor": "となりの人には送れない",
+					"already": "この人には、このラウンドもう送った",
+					"full": "この人はスタンプがいっぱい(%d つ)\n鬼が進むと空く。また送れるよ" % GameConfig.STAMP_SLOTS,
+				}
+				hud.show_message(why.get(e.get("reason", ""), "いまは送れない"), Color(0.3, 0.3, 0.3), 1.4)
 		"dropped":
 			_last_sound = "本物"
 		"rustle":
@@ -466,6 +501,13 @@ func _show_result(r: Dictionary) -> void:
 				text = "鬼の勝ち\n(%s が気づかなかった)" % _name(r["loser"])
 	if me in r.get("patient", []):
 		text += "\nがまんした! +%d点" % GameConfig.SCORE_PATIENCE
+	# 手下の発表
+	var minion: int = r.get("minion", -1)
+	if minion >= 0:
+		if minion == me:
+			text += "\nあなたは手下だった" + (" 鬼が勝って +%d点" % GameConfig.SCORE_MINION_ONI_WIN if r.get("minion_bonus", false) else "")
+		else:
+			text += "\n手下は %s だった" % _name(minion)
 	var me_score: int = state.scores.get(me, 0)
 	var last := state.round_index + 1 >= GameConfig.ROUNDS_PER_MATCH
 	var next_text := "最終結果" if last else "次のラウンド(%s)" % Items.name_of(state.round_index + 1)
@@ -487,7 +529,10 @@ func _update_help() -> void:
 	if me == null:
 		return
 	if _i_am_oni():
-		lines.append("あなたは鬼")
+		lines.append("あなたは鬼(スタンプでだますと +%d点)" % GameConfig.SCORE_DECEIVE_ONI)
+	elif state.minion_id == me.id and state.phase != GameState.Phase.RESULT:
+		lines.append("あなたは鬼の手下: だますと +%d点 / 鬼が勝つと +%d点 / 両どなりの後ろも見える" % [
+				GameConfig.SCORE_DECEIVE_MINION, GameConfig.SCORE_MINION_ONI_WIN])
 	lines.append("振り向き: 残り %d/%d 回 (一度もしなければ +%d点) / お手つき: %d 回 (1回 %d点)" % [
 		me.looks_left, GameConfig.LOOKS_PER_ROUND, GameConfig.SCORE_PATIENCE, me.otetsuki_count, GameConfig.SCORE_OTETSUKI])
 	if _stamp_target >= 0:
@@ -519,10 +564,13 @@ func _update_help() -> void:
 		lines.append("E /「落とす」: いちばん近い席の後ろに落とす(1回だけ)")
 		lines.append("F /「落とす音」: 落とさずに、置く音だけ出す(何回でも)")
 		lines.append("1〜4 / 咳・口笛・手拍子・叫ぶ: 声を出す")
+		lines.append("人をタップ → スタンプ(Z X C V)で送れる(だますと +%d点)" % GameConfig.SCORE_DECEIVE_ONI)
 		lines.append("  声のすぐあと(0.8秒以内)に落とすと、置く音がかき消される")
 	else:
 		lines.append("スペース /「振り向く」(押している間): 振り向く")
 		lines.append("E /「拾う」: 後ろのハンカチを拾う")
-		lines.append("人をタップ → スタンプ(1〜4キー)で送る")
+		lines.append("人をタップ → スタンプ(1〜4キー)で送る(同じ人には1ラウンド1回)")
+		if state.minion_id != me.id:
+			lines.append("本当を教えると +%d点 / 嘘は点にならない(手下と鬼は嘘で点)" % GameConfig.SCORE_HELP_NORMAL)
 	lines.append("F1: 上から見る / R: 次へ・やり直し / O: 鬼で新しい試合 / T: 音テスト")
 	hud.set_help("\n".join(lines))

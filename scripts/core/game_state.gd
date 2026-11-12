@@ -49,6 +49,10 @@ class Actor:
 	var looks_used: int = 0
 	## このラウンドで、見える所にハンカチが落ちていないときに鬼が後ろを通った回数(がまんの点の条件)
 	var tense_passes: int = 0
+	## このラウンドでスタンプを届けた相手の id(同じ相手には1ラウンド1回まで)
+	var stamped_targets: Array = []
+	## ボットの性格(Personalities の名前。人は "")
+	var personality: String = ""
 
 
 ## 席の位置(床の上)
@@ -124,8 +128,15 @@ var forced_oni_id: int = -1
 var _round_start_lineup: Array = []
 var _round_start_oni: int = -1
 
-## いま表示中のスタンプ。受け取った人の id -> {"kind", "sender", "time_left", "truthful"}
+## いま表示中のスタンプ。受け取った人の id -> 届いた順の配列(STAMP_SLOTS 個まで)
+## [{"kind", "sender", "sender_role", "born_angle", "truthful", "looked", "scorable", "credited"}]
 var active_stamps: Dictionary = {}
+
+## 鬼の手下(このラウンド。いなければ -1)。本人以外には勝敗が出るまで知らせない
+## (ホストは snapshot(見る人) で、ほかの人の分からは消して送る)
+var minion_id: int = -1
+## 前のラウンドの手下(発表ずみなので、全員が知っている。ボットの信用に使う)
+var last_minion_id: int = -1
 
 ## 表示側へのお知らせ(Dictionary の配列)
 var events: Array = []
@@ -175,7 +186,9 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 		if names.has(i):
 			actor.display_name = names[i]
 		else:
-			actor.display_name = "ボット%d" % bot_no
+			# ボットには性格をつけて、名前の横に出す
+			actor.personality = Personalities.ALL[rng.randi_range(0, Personalities.ALL.size() - 1)]
+			actor.display_name = "ボット%d(%s)" % [bot_no, Personalities.label(actor.personality)]
 			bot_no += 1
 		actor.color = palette[i % palette.size()]
 		actors.append(actor)
@@ -184,6 +197,7 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 		scores[a.id] = 0
 	round_index = 0
 	match_over = false
+	last_minion_id = -1
 	var lineup := []
 	for i in seat_count + 1:
 		if i != first_oni:
@@ -300,6 +314,7 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 		a.looks_left = GameConfig.LOOKS_PER_ROUND
 		a.looks_used = 0
 		a.tense_passes = 0
+		a.stamped_targets = []
 		a.slip_left = 0.0
 	for i in seat_ids.size():
 		_sit(get_actor(seat_ids[i]), i)
@@ -341,6 +356,9 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	else:
 		_plan_drop()
 	events.append({"type": "round_start", "round": round_index, "item": item_name()})
+	# 座っている人(ボットも)から1人を手下にする。本人にだけ知らせる
+	minion_id = seat_ids[rng.randi_range(0, seat_ids.size() - 1)]
+	events.append({"type": "minion", "actor": minion_id, "private_to": minion_id})
 
 
 ## 時間を delta 秒すすめる。
@@ -403,17 +421,17 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 	# 追いかけっこ中・勝敗が出た後は、振り向いて見物してもお手つきにならない
 	if not value or not judged:
 		return
-	if active_stamps.has(actor_id):
-		# スタンプが出ている間に振り向いた(「まだ平気」のだましは失敗)
-		active_stamps[actor_id]["looked"] = true
+	var shown: Array = active_stamps.get(actor_id, [])
+	for st in shown:
+		# スタンプが出ている間に振り向いた(「まだ平気」は、教えるのもだますのも失敗)
+		st["looked"] = true
 	if has_handkerchief_behind(a):
 		events.append({"type": "found", "actor": actor_id})
 		# 本当の「落ちてる!」などで振り向けた: 教えた人に点
-		var helped: Dictionary = active_stamps.get(actor_id, {})
-		if not helped.is_empty() and helped["scorable"] and Stamps.says_look(helped["kind"]) and helped["truthful"] \
-				and not helped.get("credited", false):
-			helped["credited"] = true
-			_award_help(helped["sender"], actor_id)
+		for st in shown:
+			if st["scorable"] and Stamps.says_look(st["kind"]) and st["truthful"] and not st["credited"]:
+				st["credited"] = true
+				_award_help(st, actor_id)
 	else:
 		a.otetsuki_count += 1
 		scores[a.id] = scores.get(a.id, 0) + GameConfig.SCORE_OTETSUKI
@@ -439,9 +457,10 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 			"score_reset": reset,
 		})
 		# 嘘の「落ちてる!」などにだまされて振り向いた: 送った人に点
-		var st: Dictionary = active_stamps.get(actor_id, {})
-		if not st.is_empty() and st["scorable"] and Stamps.says_look(st["kind"]) and not st["truthful"]:
-			_award_deceive(st["sender"], actor_id, st["kind"])
+		for st in shown:
+			if st["scorable"] and Stamps.says_look(st["kind"]) and not st["truthful"] and not st["credited"]:
+				st["credited"] = true
+				_award_deceive(st, actor_id)
 
 
 ## 後ろのハンカチを拾って立ち上がる。
@@ -466,9 +485,7 @@ func pick_up(actor_id: int) -> void:
 	handkerchief_on_floor = false
 	phase = Phase.CHASE
 	# 追いかけっこが始まったらスタンプは消える
-	for id in active_stamps.keys():
-		events.append({"type": "stamp_end", "target": id})
-	active_stamps = {}
+	_clear_stamps(false)
 	# 鬼は気づいてすぐ走り出す。空いた席まで(少なくとも一度は)輪を回ってから座る
 	oni_pause_left = 0.0
 	oni_entering = false
@@ -477,38 +494,82 @@ func pick_up(actor_id: int) -> void:
 	events.append({"type": "picked_up", "actor": a.id})
 
 
-## スタンプを送る。座っている人どうしで、追いかけっこの前まで。
-## 相手に表示中のスタンプがあれば届かない(早い者勝ち)。届かなかったときは回数を使わない。
-## 戻り値: 届いたら true
-func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
+## この人にスタンプを送れるか。送れるなら ""、送れないなら理由:
+## "neighbor"(8人のときの両どなり)/"already"(このラウンドもう送った)/"full"(表示中が3つ)/
+## "phase"(追いかけっこ中など)/"invalid"(自分・座っていない人など)
+func stamp_block_reason(sender_id: int, target_id: int) -> String:
 	var sender := get_actor(sender_id)
 	var target := get_actor(target_id)
 	if sender == null or target == null or sender_id == target_id:
-		return false
-	if sender.role != Role.SEATED or target.role != Role.SEATED:
-		return false
+		return "invalid"
+	if (sender.role != Role.SEATED and sender.role != Role.ONI) or target.role != Role.SEATED:
+		return "invalid"
 	if phase != Phase.WALKING and phase != Phase.DROPPED:
+		return "phase"
+	if sender.stamps_left == 0:
+		return "invalid"
+	if sender.role == Role.SEATED and is_stamp_neighbor(sender.seat_index, target.seat_index):
+		return "neighbor"
+	if target_id in sender.stamped_targets:
+		return "already"
+	if active_stamps.get(target_id, []).size() >= GameConfig.STAMP_SLOTS:
+		return "full"
+	return ""
+
+
+## 席 a と席 b が両どなりで、スタンプを送れない組か(8人のときだけ。5人のときは送れる)
+func is_stamp_neighbor(a: int, b: int) -> bool:
+	if seat_count < GameConfig.STAMP_NEIGHBOR_BLOCK_MIN_SEATS:
 		return false
-	if sender.stamps_left == 0 or not (kind in Stamps.ALL):
+	var d := posmod(b - a, seat_count)
+	return d == 1 or d == seat_count - 1
+
+
+## スタンプを送る。座っている人と鬼から、座っている人へ。追いかけっこの前まで。
+## 1人に表示されるのは STAMP_SLOTS 個まで(早い者勝ち)。同じ相手には1ラウンド1回。
+## 届かなかったときは、その相手への1回を使わない。戻り値: 届いたら true
+func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
+	if not (kind in Stamps.ALL):
 		return false
-	if active_stamps.has(target_id):
-		events.append({"type": "stamp_blocked", "sender": sender_id, "target": target_id})
+	var reason := stamp_block_reason(sender_id, target_id)
+	if reason != "":
+		if reason != "invalid":
+			events.append({"type": "stamp_blocked", "sender": sender_id, "target": target_id,
+					"reason": reason, "private_to": sender_id})
 		return false
+	var sender := get_actor(sender_id)
+	var target := get_actor(target_id)
 	if sender.stamps_left > 0:
 		sender.stamps_left -= 1
+	sender.stamped_targets.append(target_id)
 	# 本当のことを言ったか(あとで点数に使う)。「信じて!」は「見ろ」の意味として扱う
 	var truthful := Stamps.says_look(kind) == has_handkerchief_behind(target)
-	active_stamps[target_id] = {
+	if not active_stamps.has(target_id):
+		active_stamps[target_id] = []
+	active_stamps[target_id].append({
 		"kind": kind,
 		"sender": sender_id,
-		"time_left": GameConfig.STAMP_SHOW_TIME,
+		# 点数は、送ったときの役で決まる(普通の人/手下/鬼)
+		"sender_role": stamp_role_of(sender_id),
+		# 鬼がここから半周歩いたら消える
+		"born_angle": oni_angle,
 		"truthful": truthful,
 		"looked": false,
+		"credited": false,
 		# 鬼がついさっき後ろを通った人へのスタンプだけ、点数の対象
 		"scorable": seat_pass_age[target.seat_index] <= GameConfig.STAMP_SCORE_RECENT_PASS,
-	}
+	})
 	events.append({"type": "stamp", "sender": sender_id, "target": target_id, "kind": kind})
 	return true
+
+
+## スタンプの点数を決める役: "oni"/"minion"/"normal"
+func stamp_role_of(actor_id: int) -> String:
+	if actor_id == oni_id:
+		return "oni"
+	if actor_id == minion_id:
+		return "minion"
+	return "normal"
 
 
 ## 走る向きの希望を伝える(追いかける人だけ)。dir は床の上の向き、長さ 0〜1。
@@ -674,6 +735,21 @@ func can_see_behind(from_seat: int, to_seat: int) -> bool:
 	return d >= 2 and d <= n - 2
 
 
+## この人から、席 to_seat の後ろが見えるか(役も考える)。
+## 手下は両どなりも見える。鬼は全部見える。自分の後ろはだれでも見えない
+func sees_behind(viewer_id: int, to_seat: int) -> bool:
+	var v := get_actor(viewer_id)
+	if v == null:
+		return false
+	if v.role == Role.ONI:
+		return true
+	if v.role != Role.SEATED or v.seat_index == to_seat:
+		return false
+	if viewer_id == minion_id:
+		return true
+	return can_see_behind(v.seat_index, to_seat)
+
+
 ## 席に座っている人(いなければ null)
 func get_actor_at_seat(seat: int) -> Actor:
 	for a in actors:
@@ -683,7 +759,12 @@ func get_actor_at_seat(seat: int) -> Actor:
 
 
 ## 通信や保存に使える、ただのデータ(Dictionary)に変換する。
-func snapshot() -> Dictionary:
+## viewer: この状態を受け取る人の id。手下がだれかは、手下本人と、勝敗が出たあとだけ入れる
+## (-1 = 全部入れる。ホスト自身やテスト用)
+func snapshot(viewer: int = -1) -> Dictionary:
+	var minion_shown := minion_id
+	if viewer >= 0 and viewer != minion_id and phase != Phase.RESULT:
+		minion_shown = -1
 	var list := []
 	for a in actors:
 		list.append({
@@ -700,6 +781,8 @@ func snapshot() -> Dictionary:
 			"stamps_left": a.stamps_left,
 			"looks_left": a.looks_left,
 			"bananas_left": a.bananas_left,
+			"stamped": a.stamped_targets,
+			"personality": a.personality,
 		})
 	return {
 		"actors": list,
@@ -722,6 +805,8 @@ func snapshot() -> Dictionary:
 		"drop_masked": drop_masked,
 		"round_serial": round_serial,
 		"seat_count": seat_count,
+		"minion_id": minion_shown,
+		"last_minion_id": last_minion_id,
 	}
 
 
@@ -753,6 +838,8 @@ func apply_snapshot(s: Dictionary) -> void:
 		a.stamps_left = d["stamps_left"]
 		a.looks_left = d["looks_left"]
 		a.bananas_left = d["bananas_left"]
+		a.stamped_targets = d.get("stamped", [])
+		a.personality = d.get("personality", "")
 	phase = s["phase"]
 	oni_id = s["oni_id"]
 	oni_is_player = s["oni_is_player"]
@@ -771,6 +858,8 @@ func apply_snapshot(s: Dictionary) -> void:
 	bananas = s["bananas"]
 	drop_masked = s["drop_masked"]
 	round_serial = s["round_serial"]
+	minion_id = s.get("minion_id", -1)
+	last_minion_id = s.get("last_minion_id", -1)
 
 
 # --- 内部の処理 ---
@@ -817,40 +906,71 @@ func _on_pass_behind_seat() -> void:
 			_emit_fake_drop()
 
 
-func _tick_stamps(delta: float) -> void:
+func _tick_stamps(_delta: float) -> void:
 	for id in active_stamps.keys():
-		active_stamps[id]["time_left"] -= delta
-		if active_stamps[id]["time_left"] <= 0.0:
-			var st: Dictionary = active_stamps[id]
+		var list: Array = active_stamps[id]
+		for st in list.duplicate():
+			# 鬼が半周歩いたら消える(空いた枠に次のスタンプが届く)
+			if oni_angle - st["born_angle"] >= GameConfig.STAMP_EXPIRE_LAPS * TAU:
+				list.erase(st)
+				_end_stamp(id, st, true)
+		if list.is_empty():
 			active_stamps.erase(id)
-			events.append({"type": "stamp_end", "target": id})
-			# 「まだ平気」で、出ている間に振り向かなかった:
-			#   本当は落ちていた → だました / 本当に落ちていない → 教えた(振り向かずにすんだ)
-			if st["kind"] == Stamps.SAFE and st["scorable"] and not st["looked"]:
-				if st["truthful"]:
-					_award_help(st["sender"], id)
-				else:
-					_award_deceive(st["sender"], id, st["kind"])
 
 
-func _award_help(sender_id: int, target_id: int) -> void:
-	scores[sender_id] = scores.get(sender_id, 0) + GameConfig.SCORE_HELP
+## スタンプを全部消す(追いかけっこが始まったとき・勝敗が出たとき)。
+## judge = true なら、「まだ平気」の点数を消えるときと同じく決める
+func _clear_stamps(judge: bool) -> void:
+	for id in active_stamps.keys():
+		for st in active_stamps[id]:
+			_end_stamp(id, st, judge)
+	active_stamps = {}
+
+
+func _end_stamp(target_id: int, st: Dictionary, judge: bool) -> void:
+	events.append({"type": "stamp_end", "target": target_id, "sender": st["sender"]})
+	# 「まだ平気」で、出ている間に振り向かなかった:
+	#   本当は落ちていた → だました / 本当に落ちていない → 教えた(振り向かずにすんだ)
+	if judge and st["kind"] == Stamps.SAFE and st["scorable"] and not st["looked"]:
+		if st["truthful"]:
+			_award_help(st, target_id)
+		else:
+			_award_deceive(st, target_id)
+
+
+## 教えた点。送ったときの役で点数が変わる(0点なら何もしない)
+func _award_help(st: Dictionary, target_id: int) -> void:
+	var points: int = {"normal": GameConfig.SCORE_HELP_NORMAL, "minion": GameConfig.SCORE_HELP_MINION,
+			"oni": GameConfig.SCORE_HELP_ONI}[st["sender_role"]]
+	if points == 0:
+		return
+	var sender_id: int = st["sender"]
+	scores[sender_id] = scores.get(sender_id, 0) + points
+	# 点が入ったことは送った本人にだけ知らせる(手下がばれないように)
 	events.append({
 		"type": "helped",
 		"sender": sender_id,
 		"target": target_id,
-		"points": GameConfig.SCORE_HELP,
+		"points": points,
+		"private_to": sender_id,
 	})
 
 
-func _award_deceive(sender_id: int, target_id: int, kind: String) -> void:
-	scores[sender_id] = scores.get(sender_id, 0) + GameConfig.SCORE_DECEIVE
+## だました点。送ったときの役で点数が変わる(0点なら何もしない)
+func _award_deceive(st: Dictionary, target_id: int) -> void:
+	var points: int = {"normal": GameConfig.SCORE_DECEIVE_NORMAL, "minion": GameConfig.SCORE_DECEIVE_MINION,
+			"oni": GameConfig.SCORE_DECEIVE_ONI}[st["sender_role"]]
+	if points == 0:
+		return
+	var sender_id: int = st["sender"]
+	scores[sender_id] = scores.get(sender_id, 0) + points
 	events.append({
 		"type": "deceived",
 		"sender": sender_id,
 		"target": target_id,
-		"kind": kind,
-		"points": GameConfig.SCORE_DECEIVE,
+		"kind": st["kind"],
+		"points": points,
+		"private_to": sender_id,
 	})
 
 
@@ -953,6 +1073,16 @@ func _finish(winner_id: int, loser_id: int, reason: String) -> void:
 		"touched":
 			scores[winner_id] += GameConfig.SCORE_CHASER_TOUCHED
 	scores[loser_id] += GameConfig.SCORE_LOSE
+	# 表示中のスタンプは、ここで消える(「まだ平気」の点もここで決まる)
+	_clear_stamps(true)
+	# 鬼が勝ったら、手下にも点(手下が負けた本人のときはもらえない)
+	var minion_bonus := false
+	if minion_id >= 0 and (reason == "sat" or reason == "missed") and minion_id != loser_id:
+		scores[minion_id] += GameConfig.SCORE_MINION_ONI_WIN
+		minion_bonus = true
+	result["minion"] = minion_id
+	result["minion_bonus"] = minion_bonus
+	last_minion_id = minion_id
 	# 一度も振り向かずにがまんした人に点(気づかずに負けた人と、このラウンドの鬼はのぞく)
 	var patient := []
 	for a in actors:

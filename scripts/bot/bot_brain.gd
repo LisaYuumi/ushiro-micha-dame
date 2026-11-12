@@ -62,9 +62,22 @@ func on_event(state: GameState, e: Dictionary) -> void:
 	var me := state.get_actor(e["target"])
 	if me == null or not me.is_bot or me.role != GameState.Role.SEATED:
 		return
-	if not Stamps.says_look(e["kind"]):
+	# 届いているスタンプの多数決: 「見ろ」は +1、「まだ平気」は -1。
+	# 前のラウンドで手下だった人のスタンプは、あまり信用しない
+	var vote := 0.0
+	for st in state.active_stamps.get(me.id, []):
+		var w := 1.0
+		if st["sender"] == state.last_minion_id:
+			w = GameConfig.BOT_PREV_MINION_WEIGHT
+		vote += w if Stamps.says_look(st["kind"]) else -w
+	var p := Personalities.params(me.personality)
+	var need: float = p["threshold"]
+	if me.looks_left <= 1:
+		# 最後の1回は拾うために取っておきたいので、よほどそろわないと振り向かない
+		need += 1.0
+	if vote < need - 0.001:
 		return
-	if rng.randf() < GameConfig.BOT_TRUST_CHANCE:
+	if rng.randf() < GameConfig.BOT_TRUST_CHANCE * p["trust"]:
 		# 信じて振り向く。後ろにあれば拾い、なければお手つき
 		state.pick_up(me.id)
 		_look_left[me.id] = GameConfig.BOT_LOOK_TIME
@@ -80,6 +93,8 @@ func _update_seated(state: GameState, a: GameState.Actor, delta: float) -> void:
 		if state.drop_masked:
 			# 声で置く音がかき消されていたら、気づくのが遅れる
 			k *= GameConfig.BOT_NOTICE_MASKED
+		# せっかちな性格ほど早く気づく
+		k *= Personalities.params(a.personality)["notice"]
 		_notice_left[a.id] = rng.randf_range(GameConfig.BOT_NOTICE_TIME_MIN, GameConfig.BOT_NOTICE_TIME_MAX) * k
 	_notice_left[a.id] -= delta
 	if _notice_left[a.id] <= 0.0:
@@ -96,34 +111,54 @@ func _update_look(state: GameState, a: GameState.Actor, delta: float) -> void:
 		state.set_looking_back(a.id, false)
 
 
-## ときどき、鬼がついさっき後ろを通った人にスタンプを送る。半分は本当、半分は嘘
+## ときどき、鬼がついさっき後ろを通った人にスタンプを送る。
+## 落とされた人だけでなく、鬼が通った人にまんべんなく送る(スタンプの数で答えがわからないように)。
+## 本当か嘘かは役で決まる: 普通の人はだいたい本当、手下と鬼はだいたい嘘
 func _update_stamp(state: GameState, a: GameState.Actor, delta: float) -> void:
 	if a.stamps_left == 0:
 		return
+	var is_oni := a.role == GameState.Role.ONI
 	if not _stamp_left.has(a.id):
-		_stamp_left[a.id] = rng.randf_range(GameConfig.BOT_STAMP_INTERVAL_MIN, GameConfig.BOT_STAMP_INTERVAL_MAX)
+		if is_oni:
+			_stamp_left[a.id] = rng.randf_range(GameConfig.BOT_ONI_STAMP_INTERVAL_MIN, GameConfig.BOT_ONI_STAMP_INTERVAL_MAX)
+		else:
+			_stamp_left[a.id] = rng.randf_range(GameConfig.BOT_STAMP_INTERVAL_MIN, GameConfig.BOT_STAMP_INTERVAL_MAX) \
+					* Personalities.params(a.personality)["interval"]
 	_stamp_left[a.id] -= delta
 	if _stamp_left[a.id] > 0.0:
 		return
 	_stamp_left.erase(a.id)
 
+	# 送れる相手のうち、表示中のスタンプがいちばん少ない人を選ぶ
 	var targets := []
+	var fewest := INF
 	for t in state.actors:
-		if t.id == a.id or t.role != GameState.Role.SEATED or state.active_stamps.has(t.id):
+		if t.role != GameState.Role.SEATED or state.stamp_block_reason(a.id, t.id) != "":
 			continue
-		if state.seat_pass_age[t.seat_index] <= GameConfig.BOT_STAMP_RECENT_PASS:
+		if state.seat_pass_age[t.seat_index] > GameConfig.BOT_STAMP_RECENT_PASS:
+			continue
+		var n: int = state.active_stamps.get(t.id, []).size()
+		if n < fewest:
+			fewest = n
+			targets = [t]
+		elif n == fewest:
 			targets.append(t)
 	if targets.is_empty():
 		return
 	var target: GameState.Actor = targets[rng.randi_range(0, targets.size() - 1)]
-	var honest := rng.randf() < GameConfig.BOT_STAMP_HONEST_CHANCE
 	var say_look := false
-	if state.can_see_behind(a.seat_index, target.seat_index):
+	if state.sees_behind(a.id, target.seat_index):
+		var honest_chance := GameConfig.BOT_NORMAL_HONEST_CHANCE
+		match state.stamp_role_of(a.id):
+			"minion":
+				honest_chance = GameConfig.BOT_MINION_HONEST_CHANCE
+			"oni":
+				honest_chance = GameConfig.BOT_ONI_HONEST_CHANCE
 		var behind := state.has_handkerchief_behind(target)
-		say_look = behind if honest else not behind
+		say_look = behind if rng.randf() < honest_chance else not behind
 	else:
-		# 両どなりの後ろは見えないので、当てずっぽう
-		say_look = rng.randf() < 0.5
+		# 後ろが見えない相手(5人のときの両どなり)には当てずっぽう。間違えることがある
+		say_look = rng.randf() < GameConfig.BOT_GUESS_LOOK_CHANCE
 	var kind := Stamps.SAFE
 	if say_look:
 		var r := rng.randf()
