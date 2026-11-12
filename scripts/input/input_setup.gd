@@ -30,6 +30,7 @@ const KEYS := {
 	"oni_stamp_1": [KEY_X],
 	"oni_stamp_2": [KEY_C],
 	"oni_stamp_3": [KEY_V],
+	"debug_slip": [KEY_K],
 	"quit": [KEY_ESCAPE],
 }
 

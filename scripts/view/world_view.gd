@@ -264,6 +264,13 @@ func _build_floor() -> void:
 	var half := ROOM_HALF
 	# 床(床板の継ぎ目つき)
 	_part(Vector3(half * 2.0, 0.04, half * 2.0), Vector3(0, -0.02, 0), GameConfig.COLOR_FLOOR, 0.0)
+	# 転んだ体が乗る床(物理演算用。見た目はない)
+	var floor_body := StaticBody3D.new()
+	floor_body.collision_layer = 1 << (CharacterModel.FLOOR_LAYER - 1)
+	var floor_shape := CollisionShape3D.new()
+	floor_shape.shape = WorldBoundaryShape3D.new()
+	floor_body.add_child(floor_shape)
+	add_child(floor_body)
 	var seam := GameConfig.COLOR_FLOOR.darkened(0.12)
 	for i in range(-int(half) + 1, int(half)):
 		_part(Vector3(half * 2.0, 0.004, 0.035), Vector3(0, 0.002, i), seam, 0.0)
@@ -374,23 +381,23 @@ func _build_chair(pos: Vector3, yaw: float) -> void:
 	var seat_mesh := BoxMesh.new()
 	seat_mesh.size = Vector3(0.5, 0.05, 0.5)
 	var seat := _mesh(seat_mesh, wood)
-	seat.position = Vector3(0, 0.38, 0)
+	seat.position = Vector3(0, 0.45, 0)
 	chair.add_child(seat)
 
 	# 背もたれは後ろ側(+Z)
 	var back_mesh := BoxMesh.new()
 	back_mesh.size = Vector3(0.5, 0.5, 0.05)
 	var back := _mesh(back_mesh, wood)
-	back.position = Vector3(0, 0.66, 0.28)
+	back.position = Vector3(0, 0.72, 0.28)
 	chair.add_child(back)
 
 	var metal := Color(0.4, 0.4, 0.42)
 	for x in [-0.22, 0.22]:
 		for z in [-0.22, 0.22]:
 			var leg_mesh := BoxMesh.new()
-			leg_mesh.size = Vector3(0.04, 0.38, 0.04)
+			leg_mesh.size = Vector3(0.04, 0.45, 0.04)
 			var leg := _mesh(leg_mesh, metal)
-			leg.position = Vector3(x, 0.19, z)
+			leg.position = Vector3(x, 0.225, z)
 			chair.add_child(leg)
 	add_child(chair)
 
@@ -473,13 +480,13 @@ func _build_stamp_labels(state: GameState) -> void:
 		var list: Array[Label3D] = []
 		for i in GameConfig.STAMP_SLOTS:
 			var l := _make_label3d(40)
-			l.position = Vector3(0, 2.25 + 0.24 * i, 0)
+			l.position = Vector3(0, 2.55 + 0.24 * i, 0)
 			node.add_child(l)
 			list.append(l)
 		_stamp_labels[a.id] = list
 		# 「送れない」(8人のときの両どなり)/「送った」(このラウンドもう送った)
 		var info := _make_label3d(30)
-		info.position = Vector3(0, 2.05, 0)
+		info.position = Vector3(0, 2.32, 0)
 		node.add_child(info)
 		_info_labels[a.id] = info
 
@@ -635,6 +642,14 @@ func play_stamp_sound(kind: String) -> void:
 
 
 ## スタンプを送る相手の目印を出す(-1 で消す)
+## 確認用: 全員を転ばせる(K キー)
+func debug_slip_all() -> void:
+	for id in _actor_nodes:
+		var m := _actor_nodes[id] as CharacterModel
+		if m:
+			m.slip()
+
+
 func set_stamp_target(state: GameState, id: int) -> void:
 	var a := state.get_actor(id)
 	_target_marker.visible = a != null

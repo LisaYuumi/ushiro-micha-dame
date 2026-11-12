@@ -29,6 +29,8 @@ var _peer_profile := {}
 var _snapshot_left := 0.0
 ## 参加者: 最後に見た目を作ったラウンド
 var _built_serial := -1
+## ラウンドが始まったときの点数(結果カードで「このラウンドで何点ふえたか」を出す)
+var _round_start_scores := {}
 
 const SNAPSHOT_INTERVAL := 0.05
 
@@ -230,6 +232,7 @@ func _start_round() -> void:
 ## ラウンドが変わったときに、画面とボットを作り直す
 func _refresh_round() -> void:
 	bots.reset()
+	_round_start_scores = state.scores.duplicate()
 	touch.set_oni_mode(_i_am_oni())
 	_last_sound = ""
 	_stamp_target = -1
@@ -266,7 +269,6 @@ func _physics_process(delta: float) -> void:
 	_update_my_stamps()
 	hud.set_role_badge("あなたは鬼の手下" if state.minion_id == me.id \
 			and state.phase != GameState.Phase.RESULT else "", Color(0.55, 0.2, 0.7))
-	_update_scores()
 	var judged := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
 	touch.set_looks_left(me.looks_left if judged else -1)
 	touch.set_oni_mode(_i_am_oni(),
@@ -327,6 +329,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_player_is_oni = not _player_is_oni
 		_start_round()
 		hud.show_message("あなたが鬼で新しい試合" if _player_is_oni else "座る側で新しい試合", Color(0.3, 0.3, 0.3), 1.2)
+	elif event.is_action_pressed("debug_slip"):
+		view.debug_slip_all()
 	elif event.is_action_pressed("sound_test"):
 		view.play_test_beep()
 	elif event.is_action_pressed("quit"):
@@ -375,20 +379,44 @@ func _on_restart_pressed() -> void:
 		_refresh_round()
 
 
+## 試合が終わった: 順位のカード(1位に★)
 func _show_match_result() -> void:
 	var ids := state.scores.keys()
 	ids.sort_custom(func(a, b): return state.scores[a] > state.scores[b])
-	var lines := PackedStringArray(["試合終了!"])
+	var rows := []
 	var rank := 0
 	var prev := INF
+	var top_name := ""
 	for i in ids.size():
 		var sc: int = state.scores[ids[i]]
 		if sc != prev:
 			rank = i + 1
 			prev = sc
-		lines.append("%d位 %s  %d点" % [rank, _name(ids[i]), sc])
-	lines.append("「次へ」(R)で新しい試合")
-	hud.show_message("\n".join(lines), Color(0.9, 0.6, 0.1), 0.0)
+		if rank == 1 and top_name == "":
+			top_name = _name(ids[i])
+		var row := _score_row_for(ids[i], state.scores, false)
+		row["mark"] = "★" if rank == 1 else "%d位" % rank
+		rows.append(row)
+	var me_first: bool = state.scores.get(state.local_player_id, 0) == state.scores[ids[0]]
+	var title := "ゆうしょう!" if me_first else "試合おわり!"
+	var sub := "あなたがいちばん!" if me_first else "いちばんは %s!" % top_name
+	var footer := "「次へ」で新しい試合" if mode != Mode.GUEST else "ホストが「次へ」を押すと新しい試合"
+	hud.hide_message()
+	hud.show_result_card(title, sub, [], GameConfig.COLOR_ACCENT, rows, footer)
+
+
+## 結果カードの1行。delta: このラウンドで増えた分も出すか
+func _score_row_for(id: int, scores: Dictionary, delta: bool) -> Dictionary:
+	var a := state.get_actor(id)
+	var n: String = "あなた" if id == state.local_player_id else (a.display_name.get_slice("(", 0) if a else "?")
+	var sc: int = scores.get(id, 0)
+	return {
+		"name": n,
+		"color": a.color if a else Color.WHITE,
+		"score": sc,
+		"delta": sc - int(_round_start_scores.get(id, sc)) if delta else 0,
+		"me": id == state.local_player_id,
+	}
 
 
 func _send_stamp(kind: String) -> void:
@@ -481,52 +509,74 @@ func _show_event(e: Dictionary) -> void:
 			_show_match_result()
 
 
+## ラウンドが終わった: 可愛い結果カード(見出し・一言・がまんや手下の発表・全員の点数)
 func _show_result(r: Dictionary) -> void:
 	var me := state.local_player_id
-	var text := ""
-	var color := Color(0.3, 0.3, 0.3)
+	var win := Color("FFB020")
+	var lose := Color("6C8CFF")
+	var plain := GameConfig.COLOR_ACCENT
+	var title := ""
+	var sub := ""
+	var color := plain
+	var winner := _name(r["winner"])
+	var loser := _name(r["loser"])
 	match r["reason"]:
 		"touched":
 			if r["winner"] == me:
-				text = "勝ち!\n鬼をタッチした"
-				color = Color(0.9, 0.6, 0.1)
+				title = "タッチ成功!"
+				sub = "鬼をつかまえた! やったね"
+				color = win
 			elif r["loser"] == me:
-				text = "負け…\n%s にタッチされた" % _name(r["winner"])
-				color = Color(0.2, 0.3, 0.8)
+				title = "つかまっちゃった…"
+				sub = "%s にタッチされた" % winner
+				color = lose
 			else:
-				text = "%s の勝ち\n(鬼をタッチ)" % _name(r["winner"])
+				title = "タッチ!"
+				sub = "%s が鬼をつかまえた!" % winner
 		"sat":
-			if r["loser"] == me:
-				text = "負け…\n鬼に座られた"
-				color = Color(0.2, 0.3, 0.8)
-			elif r["winner"] == me:
-				text = "勝ち!\n空いた席に座れた"
-				color = Color(0.9, 0.6, 0.1)
+			if r["winner"] == me:
+				title = "セーフ!"
+				sub = "空いた席にすわれた〜!"
+				color = win
+			elif r["loser"] == me:
+				title = "すわられちゃった…"
+				sub = "あとちょっとだったのに!"
+				color = lose
 			else:
-				text = "鬼の勝ち\n(%s の席に座った)" % _name(r["loser"])
+				title = "鬼のかち!"
+				sub = "%s の席にすわった!" % loser
 		"missed":
 			if r["loser"] == me:
-				text = "負け…\n一周しても気づかなかった"
-				color = Color(0.2, 0.3, 0.8)
+				title = "気づかなかった〜!"
+				sub = "うしろに落ちてたよ…"
+				color = lose
 			elif r["winner"] == me:
-				text = "勝ち!\n%s は気づかなかった" % _name(r["loser"])
-				color = Color(0.9, 0.6, 0.1)
+				title = "気づかれなかった!"
+				sub = "%s はぜんぜん気づかなかった" % loser
+				color = win
 			else:
-				text = "鬼の勝ち\n(%s が気づかなかった)" % _name(r["loser"])
+				title = "鬼のかち!"
+				sub = "%s が気づかなかった!" % loser
+	var notes := []
 	if me in r.get("patient", []):
-		text += "\nがまんした! +%d点" % GameConfig.SCORE_PATIENCE
-	# 手下の発表
+		notes.append("がまんできた! +%d" % GameConfig.SCORE_PATIENCE)
 	var minion: int = r.get("minion", -1)
-	if minion >= 0:
-		if minion == me:
-			text += "\nあなたは手下だった" + (" 鬼が勝って +%d点" % GameConfig.SCORE_MINION_ONI_WIN if r.get("minion_bonus", false) else "")
-		else:
-			text += "\n手下は %s だった" % _name(minion)
-	var me_score: int = state.scores.get(me, 0)
+	if minion == me:
+		notes.append("あなたは手下だったよ" + (" 鬼がかって +%d" % GameConfig.SCORE_MINION_ONI_WIN if r.get("minion_bonus", false) else ""))
+	elif minion >= 0:
+		notes.append("手下は %s だったよ!" % _name(minion))
+	# 全員の点数(この試合の合計。点の多い順、このラウンドで増えた分つき)
+	var scores: Dictionary = r.get("scores", state.scores)
+	var ids := scores.keys()
+	ids.sort_custom(func(a, b): return scores[a] > scores[b])
+	var rows := []
+	for id in ids:
+		rows.append(_score_row_for(id, scores, true))
 	var last := state.round_index + 1 >= GameConfig.ROUNDS_PER_MATCH
-	var next_text := "最終結果" if last else "次のラウンド(%s)" % Items.name_of(state.round_index + 1)
-	var how := "「次へ」(R)で" if mode != Mode.GUEST else "ホストが「次へ」を押すと"
-	hud.show_message("%s\nあなた: %d点\n%s%s" % [text, me_score, how, next_text], color, 0.0)
+	var next_text := "さいごの結果へ" if last else "次のラウンド(%s)へ" % Items.name_of(state.round_index + 1)
+	var footer := "「次へ」で" + next_text if mode != Mode.GUEST else "ホストが「次へ」を押すと" + next_text
+	hud.hide_message()
+	hud.show_result_card(title, sub, notes, color, rows, footer)
 
 
 ## 札に出す短い名前(「ボット2(せっかち)」→「ボット2」、鬼は「鬼」)
@@ -563,20 +613,5 @@ func _update_help() -> void:
 		extra = "スタンプを送る相手: %s" % _short_name(_stamp_target)
 	hud.set_round_info("ラウンド %d/%d" % [state.round_index + 1, GameConfig.ROUNDS_PER_MATCH],
 			"いまの落とし物:%s" % state.item_name(), extra)
-	_update_scores()
 
 
-## 全員の点数(この試合の合計)
-func _update_scores() -> void:
-	var rows := []
-	for a in state.actors:
-		var n: String = "あなた" if a.id == state.local_player_id else a.display_name.get_slice("(", 0)
-		if a.id == state.oni_id:
-			n += "(鬼)"
-		rows.append({
-			"name": n,
-			"color": a.color,
-			"score": state.scores.get(a.id, 0),
-			"me": a.id == state.local_player_id,
-		})
-	hud.show_scores(rows)

@@ -27,10 +27,8 @@ var _badge: PanelContainer
 var _round_pill: PanelContainer
 var _item_pill: PanelContainer
 var _extra_pill: PanelContainer
-## 右上: 全員の点数
-var _score_box: VBoxContainer
-var _score_rows: Array = []
-var _score_key := ""
+## ラウンドが終わったときの結果カード(全員の点数もここに出す。手下がばれないように、ふだんは出さない)
+var _result_card: PanelContainer
 
 
 func _ready() -> void:
@@ -39,7 +37,6 @@ func _ready() -> void:
 	_help.visible = false
 	add_child(_help)
 	_build_info_pills()
-	_build_scoreboard()
 
 	# 画面中央の大きな文字(「お手つき!」など)
 	_message = _make_label(72, Color.WHITE)
@@ -73,26 +70,99 @@ func set_round_info(round_text: String, item_text: String, extra_text: String) -
 	_extra_pill.visible = extra_text != ""
 
 
-## 右上の点数の表。rows: [{"name", "color", "score", "me"}](点数の多い順に並べて出す)
-func show_scores(rows: Array) -> void:
-	var sorted := rows.duplicate()
-	sorted.sort_custom(func(a, b): return a["score"] > b["score"])
-	var key := str(sorted)
-	if key == _score_key:
-		return
-	_score_key = key
-	for i in _score_rows.size():
-		var row: Dictionary = _score_rows[i]
-		var panel: PanelContainer = row["panel"]
-		panel.visible = i < sorted.size()
-		if not panel.visible:
-			continue
-		var r: Dictionary = sorted[i]
-		(row["dot"].get_theme_stylebox("panel") as StyleBoxFlat).bg_color = r["color"]
-		row["name"].text = r["name"]
-		row["score"].text = "%d点" % r["score"]
-		# 自分の行はオレンジのふち
-		(panel.get_theme_stylebox("panel") as StyleBoxFlat).border_color = GameConfig.COLOR_ACCENT if r["me"] else GameConfig.COLOR_INK
+## 結果カードを出す。
+## title: 大きい見出し / sub: その下の一言 / notes: 小さい札(がまん・手下の発表など)/ color: 見出しの色 /
+## rows: [{"name", "color", "score", "delta", "me", "mark"}](この順に並べる)/ footer: いちばん下の案内
+func show_result_card(title: String, sub: String, notes: Array, color: Color, rows: Array, footer: String) -> void:
+	hide_result_card()
+	_result_card = PanelContainer.new()
+	_result_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 28, 5)
+	st.shadow_offset = Vector2(6, 8)
+	st.set_content_margin_all(22)
+	_result_card.add_theme_stylebox_override("panel", st)
+	add_child(_result_card)
+	_result_card.set_anchors_preset(Control.PRESET_CENTER)
+	_result_card.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_result_card.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_result_card.custom_minimum_size = Vector2(560, 0)
+
+	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_theme_constant_override("separation", 8)
+	_result_card.add_child(col)
+	var t := UiStyle.label(title, 54, color)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_color_override("font_outline_color", GameConfig.COLOR_INK)
+	t.add_theme_constant_override("outline_size", 10)
+	col.add_child(t)
+	if sub != "":
+		var sl := UiStyle.label(sub, 26, GameConfig.COLOR_INK)
+		sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(sl)
+	if not notes.is_empty():
+		var nrow := HFlowContainer.new()
+		nrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		nrow.alignment = FlowContainer.ALIGNMENT_CENTER
+		nrow.add_theme_constant_override("h_separation", 8)
+		nrow.add_theme_constant_override("v_separation", 8)
+		col.add_child(nrow)
+		for n in notes:
+			nrow.add_child(UiStyle.pill(str(n), 20))
+	# 全員の点数(2列)
+	var grid := GridContainer.new()
+	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 6)
+	col.add_child(grid)
+	for r in rows:
+		grid.add_child(_score_row(r))
+	if footer != "":
+		var f := UiStyle.label(footer, 20, GameConfig.COLOR_INK.lightened(0.35))
+		f.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(f)
+	# ポンと出る
+	_result_card.pivot_offset = _result_card.size / 2.0
+	_result_card.scale = Vector2(0.6, 0.6)
+	var tw := create_tween()
+	tw.tween_property(_result_card, "scale", Vector2(1.06, 1.06), 0.14)
+	tw.tween_property(_result_card, "scale", Vector2.ONE, 0.1)
+
+
+func hide_result_card() -> void:
+	if _result_card:
+		_result_card.queue_free()
+		_result_card = null
+
+
+func _score_row(r: Dictionary) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var st := UiStyle.box(Color("FFF6D8") if r["me"] else GameConfig.COLOR_PAPER, false, 12, 3)
+	st.border_color = GameConfig.COLOR_ACCENT if r["me"] else GameConfig.COLOR_INK
+	st.content_margin_top = 1
+	st.content_margin_bottom = 2
+	panel.add_theme_stylebox_override("panel", st)
+	panel.custom_minimum_size = Vector2(260, 0)
+	var h := HBoxContainer.new()
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_theme_constant_override("separation", 6)
+	panel.add_child(h)
+	var mark: String = r.get("mark", "")
+	if mark != "":
+		h.add_child(UiStyle.label(mark, 18, GameConfig.COLOR_ACCENT.darkened(0.2)))
+	h.add_child(UiStyle.dot(r["color"], 20))
+	var n := UiStyle.label(r["name"], 18, GameConfig.COLOR_INK)
+	n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	n.clip_text = true
+	h.add_child(n)
+	var d: int = r.get("delta", 0)
+	if d != 0:
+		var dl := UiStyle.label("%+d" % d, 16, Color("2E9E5B") if d > 0 else Color("D9483B"))
+		h.add_child(dl)
+	h.add_child(UiStyle.label("%d点" % r["score"], 18, GameConfig.COLOR_INK))
+	return panel
 
 
 func _pill_text(p: PanelContainer, text: String) -> void:
@@ -113,42 +183,6 @@ func _build_info_pills() -> void:
 	row.add_child(_extra_pill)
 
 
-func _build_scoreboard() -> void:
-	_score_box = VBoxContainer.new()
-	_score_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_score_box.add_theme_constant_override("separation", 6)
-	add_child(_score_box)
-	_score_box.anchor_left = 1.0
-	_score_box.anchor_right = 1.0
-	_score_box.offset_left = -236
-	_score_box.offset_right = -16
-	_score_box.offset_top = 84
-	for i in GameConfig.SEAT_COUNT + 1:
-		var panel := PanelContainer.new()
-		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 12, 3)
-		st.content_margin_top = 1
-		st.content_margin_bottom = 2
-		st.content_margin_left = 8
-		st.content_margin_right = 10
-		panel.add_theme_stylebox_override("panel", st)
-		panel.visible = false
-		_score_box.add_child(panel)
-		var h := HBoxContainer.new()
-		h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		h.add_theme_constant_override("separation", 6)
-		panel.add_child(h)
-		var d := UiStyle.dot(Color.WHITE, 20)
-		h.add_child(d)
-		var n := UiStyle.label("", 18, GameConfig.COLOR_INK)
-		n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		n.clip_text = true
-		h.add_child(n)
-		var sc := UiStyle.label("", 18, GameConfig.COLOR_INK)
-		h.add_child(sc)
-		_score_rows.append({"panel": panel, "dot": d, "name": n, "score": sc})
-
-
 ## 画面中央に大きく表示する。seconds 秒で消える(0 なら消さない)。
 func show_message(text: String, outline: Color, seconds: float) -> void:
 	_message.text = text
@@ -160,6 +194,7 @@ func show_message(text: String, outline: Color, seconds: float) -> void:
 func hide_message() -> void:
 	_message.visible = false
 	_message_left = 0.0
+	hide_result_card()
 
 
 ## 自分に届いているスタンプを並べる。list: [{"text", "color", "sender", "sender_color"}](届いた順)

@@ -24,10 +24,61 @@ const FACE_Z := -0.222
 
 ## 骨組みと動きの素材
 const RIG_SCENE := preload("res://assets/characters/ual/AnimationLibrary_Godot_Standard.gltf")
-## 素材の人形(身長 約1.75m)を縮める倍率
-const BODY_SCALE := 0.9
+## 素材の人形(身長 約1.75m)の大きさの倍率(転ぶときの物理演算のため 1.0 のまま)
+const BODY_SCALE := 1.0
 ## 座っているとき、腰が椅子の上に来るように体全体を前へずらす量(メートル。体の向きで前)
-const SEAT_SHIFT := 0.3
+const SEAT_SHIFT := 0.33
+## 転ぶ: 物理演算でぐにゃっと倒れる時間と、起き上がる(動きに戻る)時間(秒)。合わせて GameConfig.SLIP_TIME くらい
+const RAGDOLL_FALL_TIME := 0.55
+const RAGDOLL_RISE_TIME := 0.4
+## 物理演算で動かす骨 [骨, 次の関節(長さを測る), 太さ]。次の関節が "" なら球
+const RAGDOLL_BONES := [
+	["DEF-hips", "DEF-spine.001", 0.17],
+	["DEF-spine.001", "DEF-neck", 0.18],
+	["DEF-head", "", 0.21],
+	["DEF-upper_arm.L", "DEF-forearm.L", 0.065],
+	["DEF-forearm.L", "DEF-hand.L", 0.06],
+	["DEF-upper_arm.R", "DEF-forearm.R", 0.065],
+	["DEF-forearm.R", "DEF-hand.R", 0.06],
+	["DEF-thigh.L", "DEF-shin.L", 0.085],
+	["DEF-shin.L", "DEF-foot.L", 0.075],
+	["DEF-thigh.R", "DEF-shin.R", 0.085],
+	["DEF-shin.R", "DEF-foot.R", 0.075],
+]
+## 転ぶ体がぶつかる層(床)と、体の層(体どうしはぶつからない)
+const FLOOR_LAYER := 1
+const RAGDOLL_LAYER := 2
+
+## 名札(白地・黒枠の丸い札)の絵: カメラのほうを向く四角に、角の丸い札を描く
+const _TAG_SHADER := """
+shader_type spatial;
+render_mode unshaded, cull_disabled, shadows_disabled, depth_draw_never;
+
+uniform vec2 size = vec2(0.6, 0.2);
+uniform vec4 paper : source_color = vec4(1.0);
+uniform vec4 ink : source_color = vec4(0.118, 0.106, 0.094, 1.0);
+uniform float border = 0.022;
+
+void vertex() {
+	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);
+}
+
+float round_box(vec2 p, vec2 b, float r) {
+	vec2 q = abs(p) - b + r;
+	return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+}
+
+void fragment() {
+	vec2 p = (UV - 0.5) * size;
+	float d = round_box(p, size * 0.5, size.y * 0.5);
+	if (d > 0.0) {
+		discard;
+	}
+	ALBEDO = d > -border ? ink.rgb : paper.rgb;
+	ALPHA = 1.0;
+}
+"""
+static var _tag_shader: Shader
 ## 頭の球の大きさと、首の骨からの高さ(素材の大きさで。BODY_SCALE がかかる)
 const HEAD_RADIUS := 0.22
 const HEAD_LIFT := 0.16
@@ -47,6 +98,10 @@ const ANIM_IDLE := "Idle_Loop"
 var _pivot: Node3D
 var _rig: Node3D
 var _skel: Skeleton3D
+## 転ぶときの物理演算
+var _sim: PhysicalBoneSimulator3D
+var _pbones: Array[PhysicalBone3D] = []
+var _ragdoll_t := -1.0
 var _anim: AnimationPlayer
 var _face: Node3D
 var _pose := ""
@@ -58,8 +113,9 @@ var _look_body := 0.0
 var _twist_bones := {}
 ## 動きの名前(小文字、「_loop」なしも)-> 読みこんだあとの本当の名前
 var _anim_names := {}
-## 頭の上の名前
+## 頭の上の名札(札と文字)
 var _name_label: Label3D
+var _name_tag: Node3D
 ## 目・口・眉の色(体の色が暗いときは白)
 var _face_color: Color = GameConfig.COLOR_INK
 var _eyes: Array[MeshInstance3D] = []
@@ -146,22 +202,92 @@ func build(color: Color, display_name: String, font: Font) -> void:
 		_face.add_child(xe)
 		_x_eyes.append(xe)
 
-	var label := Label3D.new()
-	_name_label = label
-	label.text = display_name
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.font_size = 48
-	label.pixel_size = 0.004
-	label.outline_size = 8
-	label.font = font
-	# 名札は頭の上(頭といっしょに動く)
-	var tag := _head_transform()
-	tag.origin += Vector3(0, HEAD_RADIUS + 0.28, 0)
-	tag.basis = Basis.IDENTITY
-	_attach("DEF-head", label, tag)
+	_build_name_tag(display_name, font)
+	_build_ragdoll()
 
 	set_expression(NORMAL)
 	set_pose("sit")
+
+
+## 頭の上の名札: 白地・黒枠の丸い札に、黒い文字。頭といっしょに動き、いつもカメラのほうを向く
+func _build_name_tag(display_name: String, font: Font) -> void:
+	var font_size := 40
+	var px := 0.0042
+	var text_w := font.get_string_size(display_name, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x * px
+	var size := Vector2(text_w + 0.18, font_size * px * 1.45)
+	var tag := Node3D.new()
+	var at := _head_transform()
+	at.origin += Vector3(0, HEAD_RADIUS + 0.26, 0)
+	at.basis = Basis.IDENTITY
+	_attach("DEF-head", tag, at)
+	if _tag_shader == null:
+		_tag_shader = Shader.new()
+		_tag_shader.code = _TAG_SHADER
+	var mat := ShaderMaterial.new()
+	mat.shader = _tag_shader
+	mat.set_shader_parameter("size", size)
+	mat.set_shader_parameter("paper", GameConfig.COLOR_PAPER)
+	mat.set_shader_parameter("ink", GameConfig.COLOR_INK)
+	var quad := QuadMesh.new()
+	quad.size = size
+	var plate := MeshInstance3D.new()
+	plate.mesh = quad
+	plate.material_override = mat
+	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	tag.add_child(plate)
+	var label := Label3D.new()
+	_name_label = label
+	label.text = display_name
+	label.font = font
+	label.font_size = font_size
+	label.pixel_size = px
+	label.outline_size = 0
+	label.modulate = GameConfig.COLOR_INK
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	# 札の上に文字を描く(札は奥行きを書かないので、文字が隠れない)
+	label.render_priority = 1
+	tag.add_child(label)
+	_name_tag = tag
+
+
+## 転ぶときの物理演算の体: 骨ごとにカプセルの当たりをつけ、関節は自由に曲がる(ぐにゃっと倒れる)
+func _build_ragdoll() -> void:
+	_sim = PhysicalBoneSimulator3D.new()
+	_skel.add_child(_sim)
+	for def in RAGDOLL_BONES:
+		var bone: String = def[0]
+		var child: String = def[1]
+		var radius: float = def[2]
+		var i := _skel.find_bone(bone)
+		if i < 0:
+			continue
+		var length := 0.0 if child == "" else _rest_pos(bone).distance_to(_rest_pos(child))
+		var pb := PhysicalBone3D.new()
+		pb.name = "PB_" + bone
+		pb.bone_name = bone
+		pb.joint_type = PhysicalBone3D.JOINT_TYPE_PIN
+		# 体の中心は骨の中ほど、関節は骨の根もと
+		pb.body_offset = Transform3D(Basis.IDENTITY, Vector3(0, length / 2.0 if child != "" else HEAD_LIFT, 0))
+		pb.joint_offset = Transform3D(Basis.IDENTITY, Vector3(0, -length / 2.0 if child != "" else -HEAD_LIFT, 0))
+		pb.mass = 3.0 if bone == "DEF-hips" or bone == "DEF-spine.001" else 1.0
+		pb.linear_damp = 0.3
+		pb.angular_damp = 1.5
+		pb.friction = 0.9
+		pb.collision_layer = 1 << (RAGDOLL_LAYER - 1)
+		pb.collision_mask = 1 << (FLOOR_LAYER - 1)
+		var cs := CollisionShape3D.new()
+		if child == "":
+			var sph := SphereShape3D.new()
+			sph.radius = radius
+			cs.shape = sph
+		else:
+			var cap := CapsuleShape3D.new()
+			cap.radius = radius
+			cap.height = maxf(length + radius * 2.0, radius * 2.0 + 0.01)
+			cs.shape = cap
+		pb.add_child(cs)
+		_sim.add_child(pb)
+		_pbones.append(pb)
 
 
 ## 骨組みと動きを読みこむ。付属の人形(皮膚のメッシュ)は使わないので消す
@@ -310,8 +436,8 @@ func set_look(back: bool) -> void:
 
 ## 頭の上の名前を出す/消す(自分の名前は自分の画面には出さない)
 func set_name_visible(v: bool) -> void:
-	if _name_label:
-		_name_label.visible = v
+	if _name_tag:
+		_name_tag.visible = v
 
 
 ## 自分のカメラから隠すときなどに、すべての見た目のレイヤーをまとめて変える
@@ -391,15 +517,44 @@ func hop() -> void:
 	_hop = 1.0
 
 
-## バナナの皮で、つるっと転ぶ
+## バナナの皮で、つるっと転ぶ: 物理演算でぐにゃっと倒れて、少しして起き上がる
 func slip() -> void:
 	_slip = 1.0
+	if _sim == null or not is_inside_tree() or _pbones.is_empty():
+		return
+	_sim.influence = 1.0
+	_sim.physical_bones_start_simulation()
+	_ragdoll_t = 0.0
+	# 走っていた向きへ、上半身を前に投げ出し、足をすくう
+	var fwd := -global_transform.basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized()
+	for pb in _pbones:
+		var b := String(pb.bone_name)
+		if b.begins_with("DEF-thigh") or b.begins_with("DEF-shin"):
+			pb.apply_central_impulse((-fwd * 1.2 + Vector3.UP * 0.6) * pb.mass)
+		else:
+			pb.apply_central_impulse((fwd * 2.6 + Vector3.UP * 0.4) * pb.mass)
+
+
+## 転んでいる間の物理演算を進める: 倒れきったら、だんだん元の動きに戻す(起き上がる)
+func _update_ragdoll(delta: float) -> void:
+	if _ragdoll_t < 0.0:
+		return
+	_ragdoll_t += delta
+	if _ragdoll_t > RAGDOLL_FALL_TIME:
+		_sim.influence = clampf(1.0 - (_ragdoll_t - RAGDOLL_FALL_TIME) / RAGDOLL_RISE_TIME, 0.0, 1.0)
+	if _ragdoll_t >= RAGDOLL_FALL_TIME + RAGDOLL_RISE_TIME:
+		_sim.physical_bones_stop_simulation()
+		_sim.influence = 1.0
+		_ragdoll_t = -1.0
 
 
 ## 毎フレームの動き。running: 走っている(大げさに揺れる)
 func animate(delta: float, running: bool) -> void:
 	_time += delta
 	_update_rig(delta)
+	_update_ragdoll(delta)
 	_hop = maxf(_hop - delta * 4.0, 0.0)
 	_lean = move_toward(_lean, 1.0 if running else 0.0, delta * 5.0)
 	_slump = move_toward(_slump, 1.0 if _expression == LOSE else 0.0, delta * 3.0)
@@ -408,8 +563,10 @@ func animate(delta: float, running: bool) -> void:
 	var bob := sin(_time * 18.0) * 0.04 * _lean
 	_pivot.position = Vector3(0, hop_y + bob, 0)
 	_slip = maxf(_slip - delta / GameConfig.SLIP_TIME, 0.0)
-	# 転ぶ: 横にばったり倒れて、だんだん起き上がる
-	_pivot.rotation.z = sin(minf(_slip * 3.0, 1.0) * PI / 2.0) * 1.3 * minf(_slip * 1.5, 1.0)
+	# 転ぶ: 物理演算が使えないとき(画面に出ていないときなど)だけ、横にばったり倒れる動きで代わりにする
+	_pivot.rotation.z = 0.0
+	if _ragdoll_t < 0.0:
+		_pivot.rotation.z = sin(minf(_slip * 3.0, 1.0) * PI / 2.0) * 1.3 * minf(_slip * 1.5, 1.0)
 	# お手つきが重なるほど落ち着きがなくなる: 2回でふるえ、放心でふらふら
 	if _fluster == 2:
 		_pivot.position.x = sin(_time * 45.0) * 0.012
