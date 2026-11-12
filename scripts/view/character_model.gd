@@ -525,6 +525,7 @@ func slip() -> void:
 	_sim.influence = 1.0
 	_sim.physical_bones_start_simulation()
 	_ragdoll_t = 0.0
+	print("DBG slip pbones=", _pbones.size(), " active=", _sim.active, " sim_bones=", _sim.is_simulating_physics() if _sim.has_method("is_simulating_physics") else "?")
 	# 走っていた向きへ、上半身を前に投げ出し、足をすくう
 	var fwd := -global_transform.basis.z
 	fwd.y = 0.0
@@ -542,6 +543,8 @@ func _update_ragdoll(delta: float) -> void:
 	if _ragdoll_t < 0.0:
 		return
 	_ragdoll_t += delta
+	if int(_ragdoll_t * 10.0) != int((_ragdoll_t - delta) * 10.0) and _pbones.size() > 0:
+		print("DBG t=%.2f pb0=%s simulating=%s head=%s" % [_ragdoll_t, _pbones[0].global_position, _pbones[0].is_simulating_physics(), _skel.get_bone_global_pose(_skel.find_bone("DEF-head")).origin])
 	if _ragdoll_t > RAGDOLL_FALL_TIME:
 		_sim.influence = clampf(1.0 - (_ragdoll_t - RAGDOLL_FALL_TIME) / RAGDOLL_RISE_TIME, 0.0, 1.0)
 	if _ragdoll_t >= RAGDOLL_FALL_TIME + RAGDOLL_RISE_TIME:
