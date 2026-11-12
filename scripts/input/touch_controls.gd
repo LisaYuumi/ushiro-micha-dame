@@ -44,17 +44,9 @@ func _ready() -> void:
 	for i in Voices.ALL.size():
 		var v: String = Voices.ALL[i]
 		_oni_buttons.append(_add_button(Voices.LABELS[v], "voice_%d" % i, Vector2(0.5, 1), Rect2(-385 + i * 150, -100, 140, 80), 26))
-	# 鬼のスタンプ(声の上の列。先に相手をタップして選ぶ)
-	for i in Stamps.ALL.size():
-		var kind: String = Stamps.ALL[i]
-		_oni_buttons.append(_add_button(Stamps.LABELS[kind], "oni_stamp_%d" % i, Vector2(0.5, 1), Rect2(-370 + i * 140, -190, 130, 80), 22))
 	# 追いかけっこ中のバナナの皮(下のまん中)
 	_chase_buttons.append(_add_button("鬼にバナナ", "banana_oni", Vector2(0.5, 1), Rect2(-300, -110, 280, 90), 28))
 	_chase_buttons.append(_add_button("追う人にバナナ", "banana_chaser", Vector2(0.5, 1), Rect2(20, -110, 280, 90), 28))
-	# 下のまん中: スタンプ(先に相手をタップして選ぶ)
-	for i in Stamps.ALL.size():
-		var kind: String = Stamps.ALL[i]
-		_seated_buttons.append(_add_button(Stamps.LABELS[kind], "stamp_%d" % i, Vector2(0.5, 1), Rect2(-385 + i * 150, -100, 140, 80), 24))
 	# 左下: 走るためのスティック
 	var stick := VirtualStick.new()
 	add_child(stick)
@@ -303,9 +295,6 @@ func _add_button(text: String, action: String, anchor: Vector2, rect: Rect2, fon
 	b.text = text
 	# A案: 白地かオレンジ地、黒い太い枠、右下の影。スタンプはスタンプの色の文字
 	var text_color := Color(0, 0, 0, 0)
-	if action.begins_with("stamp_") or action.begins_with("oni_stamp_"):
-		var kind: String = Stamps.ALL[int(action.get_slice("_", action.get_slice_count("_") - 1))]
-		text_color = WorldView.STAMP_COLORS[kind].darkened(0.25)
 	# キーボードのスペースでボタンが反応しないように、フォーカスを受けない(UiStyle.button の中で)
 	UiStyle.button(b, action in ACCENT_ACTIONS, font_size, text_color)
 	add_child(b)

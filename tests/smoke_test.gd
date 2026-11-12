@@ -390,7 +390,7 @@ func _test_stamp_rules() -> void:
 	_check(_blocked_reason(s.take_events()) == "neighbor", "となりには送れないお知らせが出る")
 	_check(not s.send_stamp(1, 0, Stamps.SAFE), "8人のとき、左どなりには送れない")
 	s.take_events()
-	_check(s.send_stamp(0, 3, Stamps.DROPPED) and s.send_stamp(5, 3, Stamps.NOW), "1人に何人もスタンプを送れる")
+	_check(s.send_stamp(0, 3, Stamps.DROPPED) and s.send_stamp(5, 3, Stamps.FAKE), "1人に何人もスタンプを送れる")
 	_check(s.active_stamps[3].size() == 3, "3つ同時に表示される")
 	_check(s.active_stamps[3][0]["sender"] == 1 and s.active_stamps[3][2]["sender"] == 5, "届いた順に並ぶ")
 	s.take_events()
@@ -932,7 +932,7 @@ func _test_deceiving_scores() -> void:
 	var before_n: int = s.scores[normal_liar.id]
 	var before_oni: int = s.scores[s.oni_id]
 	s.send_stamp(liar.id, victim.id, Stamps.DROPPED)
-	s.send_stamp(normal_liar.id, victim.id, Stamps.NOW)
+	s.send_stamp(normal_liar.id, victim.id, Stamps.TRUST)
 	s.send_stamp(s.oni_id, victim.id, Stamps.TRUST)
 	s.set_looking_back(victim.id, true)
 	_check(s.scores[liar.id] == before + GameConfig.SCORE_DECEIVE_MINION, "手下が嘘の『落ちてる!』で振り向かせたら +%d" % GameConfig.SCORE_DECEIVE_MINION)

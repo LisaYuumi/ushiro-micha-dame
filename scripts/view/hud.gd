@@ -15,7 +15,7 @@ var _slot_styles: Array[StyleBoxFlat] = []
 ## 送った人の色の丸
 var _slot_dots: Array[StyleBoxFlat] = []
 var _slot_senders: Array[Label] = []
-var _slot_texts: Array[Label] = []
+var _slot_icons: Array[StampIcon] = []
 ## 前のフレームに出ていたスタンプ(新しく届いたものだけポンと飛び出させる)
 var _shown_keys: Array = []
 ## 自分に届いたスタンプの間、画面のふちを光らせる枠
@@ -225,7 +225,7 @@ func hide_message() -> void:
 	hide_result_card()
 
 
-## 自分に届いているスタンプを並べる。list: [{"text", "color", "sender", "sender_color"}](届いた順)
+## 自分に届いているスタンプを並べる。list: [{"kind", "item", "sender", "sender_color"}](届いた順)
 func show_my_stamps(list: Array) -> void:
 	var keys := []
 	for i in _slots.size():
@@ -234,12 +234,11 @@ func show_my_stamps(list: Array) -> void:
 			box.visible = false
 			continue
 		var st: Dictionary = list[i]
-		var key := "%s|%s" % [st["sender"], st["text"]]
+		var key := "%s|%s" % [st["sender"], st["kind"]]
 		keys.append(key)
-		# 白い札に「●送った人  !落ちてる」。丸は送った人の体の色、文字はスタンプの色
-		var stamp_color: Color = st["color"]
-		_slot_texts[i].text = "%s %s" % [st.get("mark", ""), st["text"]]
-		_slot_texts[i].add_theme_color_override("font_color", stamp_color.darkened(0.2))
+		# 白い札に「●送った人  [スタンプの絵]」。丸は送った人の体の色
+		_slot_icons[i].kind = st["kind"]
+		_slot_icons[i].item = st["item"]
 		_slot_senders[i].text = st["sender"]
 		_slot_dots[i].bg_color = st["sender_color"]
 		box.visible = true
@@ -376,16 +375,14 @@ func _build_stamp_display() -> void:
 		sender.custom_minimum_size = Vector2(96, 0)
 		sender.clip_text = true
 		row.add_child(sender)
-		# スタンプ(「!落ちてる」「○まだ平気」)
-		var text := _make_label(32, ink)
-		text.add_theme_constant_override("outline_size", 0)
-		text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		row.add_child(text)
+		# スタンプの絵(落とし物アイコン+記号)
+		var icon := StampIcon.make(Stamps.DROPPED, 0, 52.0)
+		row.add_child(icon)
 		_slots.append(slot)
 		_slot_styles.append(style)
 		_slot_dots.append(dot_style)
 		_slot_senders.append(sender)
-		_slot_texts.append(text)
+		_slot_icons.append(icon)
 
 	_badge = UiStyle.pill("", 24, true)
 	(_badge.get_child(0) as Label).add_theme_color_override("font_color", GameConfig.COLOR_PAPER)

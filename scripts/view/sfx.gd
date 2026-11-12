@@ -28,17 +28,32 @@ static func drop() -> AudioStreamWAV:
 
 ## スタンプが届いた音(種類ごとに少しちがう、仮の音)
 static func stamp(kind: String) -> AudioStreamWAV:
+	# 言葉ではない声(仮の音)
 	if not _stamp.has(kind):
 		match kind:
-			Stamps.NOW:
-				# 手拍子っぽい「パン」
-				_stamp[kind] = _make(0.08, 0.9, 50.0, 0.0, 0.0, 1.0)
-			Stamps.TRUST:
-				_stamp[kind] = _make(0.3, 0.0, 6.0, 520.0, 1.0, 0.7)
+			Stamps.DROPPED:
+				# 「ハッ!」: 息まじりの短い声が、上がって止まる
+				_stamp[kind] = _make_fn(0.2, func(t: float, n: float) -> float:
+					var f := 330.0 + 260.0 * t / 0.2
+					var v := sin(TAU * f * t) + 0.4 * sin(TAU * 2.0 * f * t)
+					return (v * 0.45 + n * 0.25) * minf(t * 40.0, 1.0) * maxf(1.0 - t / 0.2, 0.0))
 			Stamps.SAFE:
-				_stamp[kind] = _make(0.2, 0.0, 10.0, 660.0, 1.0, 0.6)
+				# 「シーッ」: 高い息の音
+				_stamp[kind] = _make_fn(0.5, func(t: float, n: float) -> float:
+					var hiss := n - 0.6 * sin(TAU * 40.0 * t) * n
+					return hiss * 0.5 * minf(t * 15.0, 1.0) * maxf(1.0 - t / 0.5, 0.0))
+			Stamps.FAKE:
+				# 「ん?」: 口を閉じた声が、くいっと上がる
+				_stamp[kind] = _make_fn(0.35, func(t: float, _n: float) -> float:
+					var f := 200.0 + (160.0 * pow(t / 0.35, 2.0))
+					var v := sin(TAU * f * t) + 0.25 * sin(TAU * 3.0 * f * t)
+					return v * 0.5 * minf(t * 20.0, 1.0) * maxf(1.0 - t / 0.35, 0.0))
 			_:
-				_stamp[kind] = _make(0.2, 0.0, 10.0, 990.0, 1.0, 0.6)
+				# 「うるっ」: 高めの声がふるえる
+				_stamp[kind] = _make_fn(0.45, func(t: float, _n: float) -> float:
+					var f := 420.0 + 35.0 * sin(TAU * 11.0 * t)
+					var v := sin(TAU * f * t) + 0.3 * sin(TAU * 2.0 * f * t)
+					return v * 0.42 * minf(t * 18.0, 1.0) * maxf(1.0 - t / 0.45, 0.0))
 	return _stamp[kind]
 
 

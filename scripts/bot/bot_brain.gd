@@ -162,10 +162,9 @@ func _update_stamp(state: GameState, a: GameState.Actor, delta: float) -> void:
 	else:
 		# 後ろが見えない相手(5人のときの両どなり)には当てずっぽう。間違えることがある
 		say_look = rng.randf() < GameConfig.BOT_GUESS_LOOK_CHANCE
-	var kind := Stamps.SAFE
+	var kind := Stamps.SAFE if rng.randf() < 0.7 else Stamps.FAKE
 	if say_look:
-		var r := rng.randf()
-		kind = Stamps.DROPPED if r < 0.5 else (Stamps.NOW if r < 0.8 else Stamps.TRUST)
+		kind = Stamps.DROPPED if rng.randf() < 0.65 else Stamps.TRUST
 	state.send_stamp(a.id, target.id, kind)
 
 

@@ -22,12 +22,8 @@ var _banana_nodes: Array[MeshInstance3D] = []
 ## 鬼が自分の後ろに来たとき、自分の前の床に映る影
 var _oni_shadow: MeshInstance3D
 var _oni_shadow_mat: StandardMaterial3D
-## 頭の上のスタンプ表示(id -> Label3D の配列。STAMP_SLOTS 個)
-var _stamp_labels := {}
 ## 頭の上の名札(2D で重ねる)
 var _overlay: HeadOverlay
-## スタンプを送る相手の目印
-var _target_marker: MeshInstance3D
 
 ## 教室の大きさと色
 const ROOM_HALF := 8.0
@@ -43,7 +39,7 @@ const COLOR_CORK := Color("D4A06A")
 const STAMP_COLORS := {
 	Stamps.DROPPED: Color(0.95, 0.35, 0.2),
 	Stamps.SAFE: Color(0.2, 0.7, 0.35),
-	Stamps.NOW: Color(0.95, 0.7, 0.1),
+	Stamps.FAKE: Color(0.95, 0.62, 0.1),
 	Stamps.TRUST: Color(0.6, 0.4, 0.9),
 }
 ## 足音用: 鬼の前回の位置と、前の足音から歩いた距離
@@ -74,7 +70,6 @@ func build(state: GameState) -> void:
 	_dazed.clear()
 	_last_pos.clear()
 	_still_time.clear()
-	_stamp_labels.clear()
 	_banana_nodes.clear()
 
 	_build_environment()
@@ -86,7 +81,6 @@ func build(state: GameState) -> void:
 		add_child(node)
 		_actor_nodes[a.id] = node
 	_build_handkerchief(state)
-	_build_stamp_labels(state)
 	_build_oni_shadow()
 	_build_sounds(state)
 	_build_cameras(state)
@@ -114,7 +108,6 @@ func sync(state: GameState, delta: float) -> void:
 				model.set_pose(_pose_of(state, a))
 			_update_expression(state, a, model, delta)
 	_update_seat_camera(state, delta)
-	_update_stamp_labels(state)
 	if _overlay:
 		_overlay.update(state, get_viewport().get_camera_3d())
 	_update_bananas(state)
@@ -479,70 +472,6 @@ func _update_bananas(state: GameState) -> void:
 			_banana_nodes[i].position = state.bananas[i]["pos"] + Vector3(0, 0.03, 0)
 
 
-## 頭の上のスタンプ表示(送り主つき、3つまで重ねる)と、送る相手の目印
-func _build_stamp_labels(state: GameState) -> void:
-	for a in state.actors:
-		var node := _actor_nodes[a.id] as Node3D
-		var list: Array[Label3D] = []
-		for i in GameConfig.STAMP_SLOTS:
-			var l := _make_label3d(40)
-			l.position = Vector3(0, 2.55 + 0.24 * i, 0)
-			node.add_child(l)
-			list.append(l)
-		_stamp_labels[a.id] = list
-
-	var cone := CylinderMesh.new()
-	cone.top_radius = 0.18
-	cone.bottom_radius = 0.0
-	cone.height = 0.3
-	_target_marker = _mesh(cone, Color(1.0, 0.85, 0.1))
-	_target_marker.visible = false
-	add_child(_target_marker)
-
-
-func _make_label3d(size: int) -> Label3D:
-	var l := Label3D.new()
-	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	l.font = HudFont.get_font()
-	# ほかの人あてのスタンプは小さめに(自分あては画面の下の吹き出しに出る)
-	l.font_size = size
-	l.pixel_size = 0.004
-	l.outline_size = 10
-	l.no_depth_test = true
-	l.visible = false
-	return l
-
-
-func _update_stamp_labels(state: GameState) -> void:
-	for id in _stamp_labels:
-		var labels: Array = _stamp_labels[id]
-		var list: Array = state.active_stamps.get(id, [])
-		for i in labels.size():
-			var l: Label3D = labels[i]
-			l.visible = i < list.size()
-			if not l.visible:
-				continue
-			var st: Dictionary = list[i]
-			var sender := state.get_actor(st["sender"])
-			# 「落ちてる!←ボット2」: 文字はスタンプの色、ふちは送った人の体の色
-			l.text = "%s ←%s" % [Stamps.LABELS[st["kind"]], _short_name(state, sender)]
-			l.modulate = STAMP_COLORS[st["kind"]]
-			l.outline_modulate = sender.color.darkened(0.3) if sender else Color.BLACK
-
-
-## 頭の上に出す短い名前(「ボット2(せっかち)」→「ボット2」、鬼は「鬼」)
-func _short_name(state: GameState, a: GameState.Actor) -> String:
-	if a == null:
-		return "?"
-	if a.id == state.oni_id:
-		return "鬼"
-	if a.id == state.local_player_id:
-		return "あなた"
-	var n := a.display_name
-	var cut := n.find("(")
-	return n.substr(0, cut) if cut > 0 else n
-
-
 ## 座っている自分から見えない席(両どなり)の後ろに落ちた物は、自分の席のカメラに映さない。
 ## (上から見る確認用カメラには映る)
 func _hide_item_if_not_visible_to_me(state: GameState) -> void:
@@ -634,11 +563,14 @@ func debug_slip_all() -> void:
 			m.slip()
 
 
-func set_stamp_target(state: GameState, id: int) -> void:
-	var a := state.get_actor(id)
-	_target_marker.visible = a != null
-	if a:
-		_target_marker.position = a.position + Vector3(0, 3.1, 0)
+## スタンプを送る相手(いまは頭の上の選択肢で示すので、3D の目印は出さない)
+func set_stamp_target(_state: GameState, _id: int) -> void:
+	pass
+
+
+## 頭の上の名札とスタンプ(2D)
+func get_overlay() -> HeadOverlay:
+	return _overlay
 
 
 ## 画面のこの位置(タップした場所)にいる、座っている人の id(いなければ -1)

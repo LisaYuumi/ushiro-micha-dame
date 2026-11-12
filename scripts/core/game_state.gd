@@ -905,9 +905,9 @@ func _clear_stamps(judge: bool) -> void:
 
 func _end_stamp(target_id: int, st: Dictionary, judge: bool) -> void:
 	events.append({"type": "stamp_end", "target": target_id, "sender": st["sender"]})
-	# 「まだ平気」で、出ている間に振り向かなかった:
+	# 「まだ平気」「ニセかも」(見るな)で、出ている間に振り向かなかった:
 	#   本当は落ちていた → だました / 本当に落ちていない → 教えた(振り向かずにすんだ)
-	if judge and st["kind"] == Stamps.SAFE and st["scorable"] and not st["looked"]:
+	if judge and not Stamps.says_look(st["kind"]) and st["scorable"] and not st["looked"]:
 		if st["truthful"]:
 			_award_help(st, target_id)
 		else:

@@ -260,8 +260,9 @@ func _physics_process(delta: float) -> void:
 			_update_help()
 		if mode == Mode.HOST:
 			_send_to_guests(events, delta)
-	if state.get_actor(_stamp_target) == null or state.get_actor(_stamp_target).role != GameState.Role.SEATED:
-		_stamp_target = -1
+	if _stamp_target >= 0 and (state.get_actor(_stamp_target) == null or state.get_actor(_stamp_target).role != GameState.Role.SEATED
+			or (state.phase != GameState.Phase.WALKING and state.phase != GameState.Phase.DROPPED)):
+		_close_picker()
 	view.set_stamp_target(state, _stamp_target)
 	var me := state.get_local_player()
 	if me == null:
@@ -304,10 +305,8 @@ func _update_my_stamps() -> void:
 	for st in state.active_stamps.get(state.local_player_id, []):
 		var sender := state.get_actor(st["sender"])
 		list.append({
-			"text": Stamps.LABELS[st["kind"]].trim_suffix("!"),
-			# 「見ろ」は「!」、「まだ平気」は「○」
-			"mark": "!" if Stamps.says_look(st["kind"]) else "○",
-			"color": WorldView.STAMP_COLORS[st["kind"]],
+			"kind": st["kind"],
+			"item": state.round_index,
 			"sender": _short_name(st["sender"]),
 			"sender_color": sender.color if sender else Color.WHITE,
 		})
@@ -356,13 +355,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 			pos = event.position
 		if pos.x >= 0.0:
-			var id := view.pick_actor_at(state, pos)
-			if id >= 0:
-				if state.stamp_block_reason(state.local_player_id, id) == "neighbor":
-					hud.show_message("となりの人にはスタンプを送れない\n(8人のとき)", Color(0.3, 0.3, 0.3), 1.2)
-					return
-				_stamp_target = id
-				_update_help()
+			_on_tap(pos)
 
 
 ## 「次へ・やり直し」: 勝敗が出ていれば次のラウンドへ、試合が終わっていれば新しい試合、
@@ -424,17 +417,49 @@ func _score_row_for(id: int, scores: Dictionary, delta: bool) -> Dictionary:
 	}
 
 
+## 画面をタップした: スタンプの選択肢を押した/人(か名札)をタップした/外をタップした
+func _on_tap(pos: Vector2) -> void:
+	var ov := view.get_overlay()
+	if ov == null:
+		return
+	var kind := ov.picker_hit(pos)
+	if kind != "":
+		_send_stamp(kind)
+		return
+	var id := ov.tag_hit(pos)
+	if id < 0:
+		id = view.pick_actor_at(state, pos)
+	if ov.picker_target() >= 0:
+		# 開いているときは、同じ人か外をタップしたら閉じる。ほかの人なら、その人の選択肢を開く
+		var was := ov.picker_target()
+		_close_picker()
+		if id == was or id < 0:
+			return
+	if id < 0:
+		return
+	# 送れない相手(8人のときの両どなり・このラウンド送った人)は、タップしても何もしない(名札が薄い)
+	var why := state.stamp_block_reason(state.local_player_id, id)
+	if why != "" and why != "full":
+		return
+	_stamp_target = id
+	ov.open_picker(id)
+
+
+func _close_picker() -> void:
+	_stamp_target = -1
+	var ov := view.get_overlay()
+	if ov:
+		ov.close_picker()
+
+
 func _send_stamp(kind: String) -> void:
 	if _stamp_target < 0:
-		hud.show_message("先に相手をタップ", Color(0.3, 0.3, 0.3), 1.0)
-		return
-	if state.get_local_player().stamps_left == 0:
-		hud.show_message("スタンプは使い切った", Color(0.3, 0.3, 0.3), 1.0)
 		return
 	cmds.send_stamp(state.local_player_id, _stamp_target, kind)
-	# 同じ相手には1ラウンド1回なので、送ったら相手えらびをやめる
-	_stamp_target = -1
-	_update_help()
+	# 押したときの短い声(言葉ではない声)
+	view.play_stamp_sound(kind)
+	# 同じ相手には1ラウンド1回なので、送ったら閉じる
+	_close_picker()
 
 
 func _show_event(e: Dictionary) -> void:
@@ -608,8 +633,6 @@ func _update_help() -> void:
 		extra = "鬼 %d周目(%d周で自動で落とす)" % [laps, GameConfig.ONI_MAX_LAPS_BEFORE_DROP]
 	elif _i_am_oni():
 		extra = "あなたは鬼"
-	elif _stamp_target >= 0:
-		extra = "スタンプを送る相手: %s" % _short_name(_stamp_target)
 	hud.set_round_info("ラウンド %d/%d" % [state.round_index + 1, GameConfig.ROUNDS_PER_MATCH],
 			"いまの落とし物:%s" % state.item_name(), extra)
 
