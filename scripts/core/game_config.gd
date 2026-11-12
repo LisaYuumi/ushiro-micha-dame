@@ -215,6 +215,10 @@ const BOT_BANANA_CHANCE := 0.35
 const BOT_BANANA_DELAY_MIN := 0.5
 const BOT_BANANA_DELAY_MAX := 3.0
 
+# --- 開発用 ---
+## ⚙メニューに「撮影モード」(SNS 画像や宣伝素材の見本を撮る画面)を出すか。本番では false にして隠す
+const SHOW_PHOTO_MODE := true
+
 # --- 見た目(A案「放課後ポップ」) ---
 ## 空・壁の上のほうの色
 const COLOR_SKY := Color("8FD3E8")

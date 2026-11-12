@@ -31,6 +31,9 @@ var _snapshot_left := 0.0
 var _built_serial := -1
 ## ラウンドが始まったときの点数(結果カードで「このラウンドで何点ふえたか」を出す)
 var _round_start_scores := {}
+## 撮影モード(開いている間はゲームを止める)
+var _studio: PhotoStudio
+var _lobby_was_visible := false
 
 const SNAPSHOT_INTERVAL := 0.05
 
@@ -243,7 +246,7 @@ func _refresh_round() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if mode == Mode.LOBBY:
+	if mode == Mode.LOBBY or _studio:
 		return
 	if mode == Mode.GUEST and _built_serial < 0:
 		return # まだ最初の状態が届いていない
@@ -280,6 +283,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	if _studio:
+		return
 	view.sync(state, delta)
 
 
@@ -312,7 +317,11 @@ func _update_my_stamps() -> void:
 	hud.show_my_stamps(list)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("debug_top_camera"):
+	if _studio:
+		return
+	if event.is_action_pressed("photo_mode"):
+		_open_studio()
+	elif event.is_action_pressed("debug_top_camera"):
 		view.toggle_top_camera()
 		_update_help()
 	elif event.is_action_pressed("restart"):
@@ -414,6 +423,35 @@ func _score_row_for(id: int, scores: Dictionary, delta: bool) -> Dictionary:
 		"delta": sc - int(_round_start_scores.get(id, sc)) if delta else 0,
 		"me": id == state.local_player_id,
 	}
+
+
+## 撮影モードを開く(ゲームは止まる)。オンライン対戦中は、ほかの人のゲームも止まってしまうので開かない
+func _open_studio() -> void:
+	if _studio or not GameConfig.SHOW_PHOTO_MODE:
+		return
+	if mode == Mode.HOST or mode == Mode.GUEST:
+		hud.show_message("撮影モードは、ひとりで遊ぶときだけ", Color(0.3, 0.3, 0.3), 1.5)
+		return
+	_close_picker()
+	_studio = PhotoStudio.new()
+	add_child(_studio)
+	_studio.closed.connect(_close_studio)
+	view.set_shown(false)
+	hud.visible = false
+	touch.visible = false
+	_lobby_was_visible = lobby.visible
+	lobby.visible = false
+
+
+func _close_studio() -> void:
+	if _studio == null:
+		return
+	_studio.queue_free()
+	_studio = null
+	view.set_shown(true)
+	hud.visible = true
+	touch.visible = true
+	lobby.visible = _lobby_was_visible
 
 
 ## 画面をタップした: スタンプの選択肢を押した/人(か名札)をタップした/外をタップした

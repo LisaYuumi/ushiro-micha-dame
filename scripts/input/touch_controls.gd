@@ -191,6 +191,8 @@ func _build_menu() -> void:
 	_menu_button(col, "上から見る(確認用)", _menu_action.bind("debug_top_camera"))
 	_personality_button = _menu_button(col, "", _toggle_personality)
 	_menu_button(col, "あそびかた", _show_help)
+	if GameConfig.SHOW_PHOTO_MODE:
+		_menu_button(col, "撮影モード(開発用)", _menu_action.bind("photo_mode"))
 	_menu_button(col, "とじる", close_menu, true)
 	_update_menu_texts()
 

@@ -573,6 +573,15 @@ func get_overlay() -> HeadOverlay:
 	return _overlay
 
 
+## 撮影モードから戻ったとき: 席のカメラに戻し、名札をまた出す
+func set_shown(v: bool) -> void:
+	visible = v
+	if _overlay:
+		_overlay.visible = v
+	if v and _seat_cam:
+		_seat_cam.make_current()
+
+
 ## 画面のこの位置(タップした場所)にいる、座っている人の id(いなければ -1)
 func pick_actor_at(state: GameState, screen_pos: Vector2) -> int:
 	var cam := get_viewport().get_camera_3d()

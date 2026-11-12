@@ -75,6 +75,8 @@ var _pbones: Array[PhysicalBone3D] = []
 ## 骨の番号 -> その骨の物理演算の体
 var _pb_by_bone := {}
 var _ragdoll_t := -1.0
+## 倒れたまま起き上がらない(撮影モード用)
+var _ragdoll_hold := false
 ## 物理演算の形をどれだけ見た目に使うか(1 = 倒れている、0 = ふつうの動き)
 var _ragdoll_w := 0.0
 ## 体の部品をくっつけた骨 [{"node": 骨についていく Node3D, "bone": 骨の番号}]
@@ -505,9 +507,11 @@ func hop() -> void:
 	_hop = 1.0
 
 
-## バナナの皮で、つるっと転ぶ: 物理演算でぐにゃっと倒れて、少しして起き上がる
-func slip() -> void:
+## バナナの皮で、つるっと転ぶ: 物理演算でぐにゃっと倒れて、少しして起き上がる。
+## hold = true なら倒れたまま(撮影モード用。stop_ragdoll で元に戻す)
+func slip(hold: bool = false) -> void:
 	_slip = 1.0
+	_ragdoll_hold = hold
 	if _sim == null or not is_inside_tree() or _pbones.is_empty():
 		return
 	_sim.influence = 1.0
@@ -528,11 +532,24 @@ func slip() -> void:
 			pb.apply_central_impulse((fwd * 3.0 + Vector3.DOWN * 1.0) * pb.mass)
 
 
+## 倒れているのをやめて、ふつうの動きに戻す
+func stop_ragdoll() -> void:
+	if _ragdoll_t < 0.0:
+		return
+	_sim.physical_bones_stop_simulation()
+	_ragdoll_t = -1.0
+	_ragdoll_w = 0.0
+	_ragdoll_hold = false
+	_slip = 0.0
+
+
 ## 転んでいる間の物理演算を進める: 倒れきったら、だんだん元の動きに戻す(起き上がる)
 func _update_ragdoll(delta: float) -> void:
 	if _ragdoll_t < 0.0:
 		return
 	_ragdoll_t += delta
+	if _ragdoll_hold:
+		return
 	if _ragdoll_t > RAGDOLL_FALL_TIME:
 		_ragdoll_w = clampf(1.0 - (_ragdoll_t - RAGDOLL_FALL_TIME) / RAGDOLL_RISE_TIME, 0.0, 1.0)
 	if _ragdoll_t >= RAGDOLL_FALL_TIME + RAGDOLL_RISE_TIME:

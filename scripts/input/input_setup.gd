@@ -32,6 +32,7 @@ const KEYS := {
 	"oni_stamp_3": [KEY_V],
 	"debug_slip": [KEY_K],
 	"menu": [KEY_TAB],
+	"photo_mode": [KEY_P],
 	"toggle_personality": [],
 	"quit": [KEY_ESCAPE],
 }

@@ -98,6 +98,7 @@ func _process(delta: float) -> bool:
 		_press("stamp_1", false)
 		_press("restart", true)
 		_press("restart", false)
+	_check_photo_mode()
 	if (_frames < MAIN_SCENE_FRAMES or not _fall_done) and _frames < 5000:
 		return false
 	if _failures == 0:
@@ -106,6 +107,30 @@ func _process(delta: float) -> bool:
 		printerr("TESTS FAILED: %d" % _failures)
 	quit(1 if _failures > 0 else 0)
 	return true
+
+
+## 撮影モード: 開いて、向き・表情・ポーズ・色・輪の場面を切りかえ、もどれる
+func _check_photo_mode() -> void:
+	match _frames:
+		140:
+			_main._open_studio()
+			_check(_main._studio != null and not _main.view.visible, "撮影モードが開き、ゲームの画面が隠れる")
+		145:
+			var st: PhotoStudio = _main._studio
+			for pose in PhotoStudio.POSES:
+				st._pick(func(v: String) -> void: st._pose = v, pose)
+			st._pick(func(v: String) -> void: st._direction = v, "後ろ")
+			st._pick(func(v: String) -> void: st._expression = PhotoStudio.EXPRESSIONS.find(v), "放心")
+			st._pick_color(Profile.COLORS[9])
+			st._next_background()
+			_check(st._models.size() == 1, "撮影モード: キャラが1体")
+		150:
+			_main._studio._toggle_ring()
+			_check(_main._studio._models.size() == PhotoStudio.RING_PEOPLE, "撮影モード: 輪の場面は %d 人" % PhotoStudio.RING_PEOPLE)
+			_main._studio._set_ui_hidden(true)
+		160:
+			_main._studio._close()
+			_check(_main._studio == null and _main.view.visible, "撮影モードからもどれる")
 
 
 ## 転ぶ: 床の上でキャラを転ばせると、頭がぐっと下がり、少しして元の高さに戻る
