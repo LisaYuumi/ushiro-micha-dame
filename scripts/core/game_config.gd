@@ -85,6 +85,9 @@ const BOT_NOTICE_TIME_MAX := 55.0
 ## 自分が追いかけるとき、カメラを輪の外側のどれだけ後ろ・上に置くか(メートル)
 const CHASE_CAM_DISTANCE := 3.0
 const CHASE_CAM_HEIGHT := 3.2
+## 自分が鬼のときのカメラ(追いかける人より近く。鬼の背中ごしに輪が見えるくらい)
+const ONI_CAM_DISTANCE := 1.7
+const ONI_CAM_HEIGHT := 2.1
 
 # --- スタンプ ---
 ## 1人に同時に表示されるスタンプの数(早い者勝ち。空きができたら次が届く)

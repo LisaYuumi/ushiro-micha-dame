@@ -467,7 +467,7 @@ func _show_event(e: Dictionary) -> void:
 				_update_help()
 		"found":
 			if e["actor"] == me:
-				hud.show_message("ハンカチがある!\n「拾う」(E)", Color(0.1, 0.5, 0.9), GameConfig.MESSAGE_TIME)
+				hud.show_message("あった!", Color(0.1, 0.5, 0.9), GameConfig.MESSAGE_TIME)
 		"picked_up":
 			if e["actor"] == me:
 				hud.show_message("追いかけろ!", Color(0.1, 0.5, 0.9), GameConfig.MESSAGE_TIME)

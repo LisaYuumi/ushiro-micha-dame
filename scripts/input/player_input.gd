@@ -21,9 +21,15 @@ static func apply(state: GameState, cmds: Object, cam_basis: Basis) -> void:
 		if Input.is_action_just_pressed("oni_feint"):
 			cmds.oni_feint(id)
 	else:
-		cmds.set_looking_back(id, Input.is_action_pressed("look_back"))
-		if Input.is_action_just_pressed("pick_up"):
+		# 振り向く = 後ろに落ちていたら、そのまま拾って立ち上がる(「拾う」ボタンはない)
+		var me := state.get_actor(id)
+		var holding := Input.is_action_pressed("look_back")
+		if Input.is_action_just_pressed("look_back") or Input.is_action_just_pressed("pick_up"):
 			cmds.pick_up(id)
+		elif holding and me.looking_back and state.phase == GameState.Phase.DROPPED and state.has_handkerchief_behind(me):
+			# 振り向いたまま待っていたら、後ろに落とされた: そのまま拾う
+			cmds.pick_up(id)
+		cmds.set_looking_back(id, holding)
 		# 追いかけっこ中: 鬼か追いかける人にバナナの皮
 		if Input.is_action_just_pressed("banana_oni"):
 			cmds.throw_banana(id, state.oni_id)

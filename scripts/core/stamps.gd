@@ -4,7 +4,7 @@ extends RefCounted
 
 const DROPPED := "dropped" # 落ちてる!
 const SAFE := "safe"       # まだ平気
-const NOW := "now"         # いま!
+const NOW := "now"         # あっ…!
 const TRUST := "trust"     # 信じて!
 
 ## ボタンに並べる順番
@@ -14,7 +14,7 @@ const ALL := [DROPPED, SAFE, NOW, TRUST]
 const LABELS := {
 	DROPPED: "落ちてる!",
 	SAFE: "まだ平気",
-	NOW: "いま!",
+	NOW: "あっ…!",
 	TRUST: "信じて!",
 }
 

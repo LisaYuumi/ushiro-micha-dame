@@ -708,7 +708,10 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 		_seat_cam.cull_mask = 0xFFFFF & ~self_bit & ~(1 << (HIDDEN_LAYER - 1))
 	if me.role != GameState.Role.SEATED:
 		var out := Vector3(me.position.x, 0.0, me.position.z).normalized()
-		var want := me.position + out * GameConfig.CHASE_CAM_DISTANCE + Vector3(0, GameConfig.CHASE_CAM_HEIGHT, 0)
+		var is_oni := me.role == GameState.Role.ONI
+		var dist := GameConfig.ONI_CAM_DISTANCE if is_oni else GameConfig.CHASE_CAM_DISTANCE
+		var height := GameConfig.ONI_CAM_HEIGHT if is_oni else GameConfig.CHASE_CAM_HEIGHT
+		var want := me.position + out * dist + Vector3(0, height, 0)
 		# 立ち上がった直後は一気に、そのあとはなめらかに追う
 		var w := 1.0 if delta == 0.0 else clampf(delta * 8.0, 0.0, 1.0)
 		var from := _seat_cam.position

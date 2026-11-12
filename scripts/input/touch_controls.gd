@@ -22,7 +22,6 @@ func _ready() -> void:
 	# 右下: 振り向く(押している間)
 	_look_button = _add_button("振り向く", "look_back", Vector2(1, 1), Rect2(-250, -250, 220, 220), 36)
 	_seated_buttons.append(_look_button)
-	_seated_buttons.append(_add_button("拾う", "pick_up", Vector2(1, 1), Rect2(-430, -170, 160, 140), 36))
 	# 鬼のとき: 同じ場所に「止まる」(押している間)「落とす」、その左に「ふり」
 	_oni_buttons.append(_add_button("止まる", "oni_stop", Vector2(1, 1), Rect2(-250, -250, 220, 220), 40))
 	_oni_buttons.append(_add_button("落とす", "oni_drop", Vector2(1, 1), Rect2(-430, -170, 160, 140), 36))
@@ -56,9 +55,7 @@ func _ready() -> void:
 	# 右上: 確認用の操作
 	# (左上のラウンド・落とし物の札と重ならないように、小さめ)
 	_add_button("次へ・やり直し", "restart", Vector2(1, 0), Rect2(-196, 14, 180, 54), 20)
-	_add_button("上から見る", "debug_top_camera", Vector2(1, 0), Rect2(-346, 14, 140, 54), 20)
-	_add_button("音テスト", "sound_test", Vector2(1, 0), Rect2(-476, 14, 120, 54), 20)
-	_role_button = _add_button("役を変える", "toggle_role", Vector2(1, 0), Rect2(-656, 14, 170, 54), 18)
+	_role_button = _add_button("役を変える", "toggle_role", Vector2(1, 0), Rect2(-376, 14, 170, 54), 18)
 	set_oni_mode(false)
 
 
@@ -88,7 +85,7 @@ func set_oni_mode(is_oni: bool, seated_in_chase: bool = false) -> void:
 
 
 ## A案の見た目でオレンジ地にするボタン(いちばん大事な操作)
-const ACCENT_ACTIONS := ["look_back", "pick_up", "oni_stop", "oni_drop"]
+const ACCENT_ACTIONS := ["look_back", "oni_stop", "oni_drop"]
 
 
 func _add_button(text: String, action: String, anchor: Vector2, rect: Rect2, font_size: int) -> Button:
