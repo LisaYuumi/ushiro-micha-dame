@@ -570,7 +570,7 @@ func _update_help() -> void:
 func _update_scores() -> void:
 	var rows := []
 	for a in state.actors:
-		var n := "あなた" if a.id == state.local_player_id else a.display_name.get_slice("(", 0)
+		var n: String = "あなた" if a.id == state.local_player_id else a.display_name.get_slice("(", 0)
 		if a.id == state.oni_id:
 			n += "(鬼)"
 		rows.append({
