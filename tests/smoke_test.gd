@@ -52,6 +52,7 @@ func _initialize() -> void:
 	_test_online_match_setup()
 	_test_humans_only_oni()
 	_test_snapshot_round_trip()
+	_test_character_model()
 
 	_main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(_main)
@@ -1232,6 +1233,30 @@ func _test_snapshot_round_trip() -> void:
 	var bytes := var_to_bytes(host.snapshot())
 	var back = bytes_to_var(bytes)
 	_check(typeof(back) == TYPE_DICTIONARY and back["round_serial"] == host.round_serial, "状態は通信で送れる形")
+
+
+func _test_character_model() -> void:
+	# 人型キャラ: 骨組みと動きの素材が読めて、使う動きと骨がそろっているか
+	var m := CharacterModel.new()
+	m.build(Color(0.3, 0.5, 0.9), "テスト", HudFont.get_font())
+	_check(m._skel != null and m._anim != null, "キャラの骨組みと動きが読める")
+	if m._anim == null:
+		m.free()
+		return
+	for anim_name in [CharacterModel.ANIM_SIT, CharacterModel.ANIM_SIT_DOWN, CharacterModel.ANIM_STAND_UP,
+			CharacterModel.ANIM_RUN, CharacterModel.ANIM_WALK, CharacterModel.ANIM_IDLE]:
+		_check(m._anim.has_animation(anim_name), "動き %s がある" % anim_name)
+	for bone in CharacterModel.LOOK_TWIST:
+		_check(m._skel.find_bone(bone) >= 0, "骨 %s がある" % bone)
+	_check(m._twist_bones.size() == CharacterModel.LOOK_TWIST.size(), "振り向きでひねる骨がそろう")
+	# 姿勢を切りかえて動かしても、エラーにならない
+	for pose in ["sit", "run", "walk", "idle", "sit"]:
+		m.set_pose(pose)
+		m.set_look(pose == "sit")
+		for i in 30:
+			m.animate(STEP, pose == "run")
+	_check(m._pose == "sit", "姿勢が切りかわる")
+	m.free()
 
 
 # --- 道具 ---

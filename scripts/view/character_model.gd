@@ -1,8 +1,11 @@
 class_name CharacterModel
 extends Node3D
-## 仮のキャラクター: カプセルの体+球の頭+点の目と線の口。正面は -Z。
-## 表情(set_expression)と、大げさな動き(跳ねる・前のめり・しょんぼり)を見た目だけで出す。
-## 状態(GameState)は持たない。WorldView が毎フレーム表情を決めて渡す。
+## 人型のキャラクター(A案「放課後ポップ」)。正面は -Z。
+## - 骨組みと動き: Quaternius「Universal Animation Library」(CC0。docs/CREDITS.md)
+##   付属の人形は使わず、骨に「丸い頭・カプセルの胴・短い手足(指なし)」をくっつけて見せる
+## - 顔: 点の目と線の口。表情(set_expression)とお手つきの崩れ(set_fluster)
+## - 動き: 座る/歩く/走る/立っている(set_pose)。振り向きは頭→上半身の順に少し遅れて回る(set_look)
+## 状態(GameState)は持たない。WorldView が毎フレーム表情と姿勢を決めて渡す。
 
 const NORMAL := "normal"       # ふだん: 点の目・まっすぐな口
 const SURPRISED := "surprised" # 振り向いた/スタンプが届いた: 丸い大きな目・「o」の口
@@ -15,10 +18,44 @@ const LOSE := "lose"           # 負け: しょんぼり(下がった目・へ�
 ## 0: ふだん / 1: 困り眉・汗 / 2: 汗2つ・目がちぐはぐ・への字口・ふるえる / 3: 放心(×の目・ぽかん口・ふらふら)
 const FLUSTER_MAX := 3
 
-const HEAD_Y := 1.42
-const FACE_Z := -0.205
+## 顔の部品は、頭の球の中心を原点にした「顔」ノードの上に置く
+const HEAD_Y := 0.0
+const FACE_Z := -0.222
+
+## 骨組みと動きの素材
+const RIG_SCENE := preload("res://assets/characters/ual/AnimationLibrary_Godot_Standard.gltf")
+## 素材の人形(身長 約1.75m)を縮める倍率
+const BODY_SCALE := 0.9
+## 座っているとき、腰が椅子の上に来るように体全体を前へずらす量(メートル。体の向きで前)
+const SEAT_SHIFT := 0.3
+## 頭の球の大きさと、首の骨からの高さ(素材の大きさで。BODY_SCALE がかかる)
+const HEAD_RADIUS := 0.22
+const HEAD_LIFT := 0.16
+## 振り向くとき、骨ごとにひねる角度(度)。合わせて約180度。頭が先、上半身があと
+const LOOK_TWIST := {"DEF-spine.002": 30.0, "DEF-spine.003": 35.0, "DEF-neck": 50.0, "DEF-head": 65.0}
+const LOOK_HEAD_TIME := 0.12
+const LOOK_BODY_TIME := 0.32
+
+## 姿勢ごとの動き(素材の動きの名前)
+const ANIM_SIT := "Sitting_Idle_Loop"
+const ANIM_SIT_DOWN := "Sitting_Enter"
+const ANIM_STAND_UP := "Sitting_Exit"
+const ANIM_RUN := "Sprint_Loop"
+const ANIM_WALK := "Walk_Loop"
+const ANIM_IDLE := "Idle_Loop"
 
 var _pivot: Node3D
+var _rig: Node3D
+var _skel: Skeleton3D
+var _anim: AnimationPlayer
+var _face: Node3D
+var _pose := ""
+var _seat_shift := 0.0
+var _look_target := 0.0
+var _look_head := 0.0
+var _look_body := 0.0
+## ひねる骨の番号 -> 角度(ラジアン)
+var _twist_bones := {}
 var _eyes: Array[MeshInstance3D] = []
 var _happy_eyes: Array[Node3D] = []
 var _mouth_flat: MeshInstance3D
@@ -41,20 +78,11 @@ var _slip := 0.0
 func build(color: Color, display_name: String, font: Font) -> void:
 	_pivot = Node3D.new()
 	add_child(_pivot)
+	_build_rig()
+	_build_body(color)
 
-	var body_mesh := CapsuleMesh.new()
-	body_mesh.radius = 0.25
-	body_mesh.height = 1.15
-	var body := _mesh(body_mesh, color, GameConfig.OUTLINE_WIDTH)
-	body.position = Vector3(0, 0.6, 0)
-	_pivot.add_child(body)
-
-	var head_mesh := SphereMesh.new()
-	head_mesh.radius = 0.22
-	head_mesh.height = 0.44
-	var head := _mesh(head_mesh, color.lightened(0.25), GameConfig.OUTLINE_WIDTH)
-	head.position = Vector3(0, HEAD_Y, 0)
-	_pivot.add_child(head)
+	_face = Node3D.new()
+	_attach("DEF-head", _face, _head_transform())
 
 	# 点の目
 	for x in [-0.08, 0.08]:
@@ -63,26 +91,26 @@ func build(color: Color, display_name: String, font: Font) -> void:
 		eye_mesh.height = 0.06
 		var eye := _mesh(eye_mesh, GameConfig.COLOR_INK)
 		eye.position = Vector3(x, HEAD_Y + 0.04, FACE_Z + 0.005)
-		_pivot.add_child(eye)
+		_face.add_child(eye)
 		_eyes.append(eye)
 		# にっこりの「^」の目
 		var happy := _bent_line(Vector3(x, HEAD_Y + 0.045, FACE_Z), 0.05, 0.4)
-		_pivot.add_child(happy)
+		_face.add_child(happy)
 		_happy_eyes.append(happy)
 
 	# 口のいろいろ
 	_mouth_flat = _box(Vector3(0.1, 0.016, 0.01), Vector3(0, HEAD_Y - 0.08, FACE_Z))
-	_pivot.add_child(_mouth_flat)
+	_face.add_child(_mouth_flat)
 	var o_mesh := SphereMesh.new()
 	o_mesh.radius = 0.035
 	o_mesh.height = 0.07
 	_mouth_o = _mesh(o_mesh, Color(0.25, 0.05, 0.05))
 	_mouth_o.position = Vector3(0, HEAD_Y - 0.09, FACE_Z + 0.01)
-	_pivot.add_child(_mouth_o)
+	_face.add_child(_mouth_o)
 	_mouth_smile = _bent_line(Vector3(0, HEAD_Y - 0.09, FACE_Z), 0.06, -0.5)
-	_pivot.add_child(_mouth_smile)
+	_face.add_child(_mouth_smile)
 	_mouth_frown = _bent_line(Vector3(0, HEAD_Y - 0.1, FACE_Z), 0.06, 0.5)
-	_pivot.add_child(_mouth_frown)
+	_face.add_child(_mouth_frown)
 
 	# 汗(水色のしずく)
 	var sweat_mesh := SphereMesh.new()
@@ -90,16 +118,16 @@ func build(color: Color, display_name: String, font: Font) -> void:
 	sweat_mesh.height = 0.11
 	_sweat = _mesh(sweat_mesh, Color(0.45, 0.75, 1.0))
 	_sweat.position = Vector3(0.2, HEAD_Y + 0.1, -0.08)
-	_pivot.add_child(_sweat)
+	_face.add_child(_sweat)
 	_sweat2 = _mesh(sweat_mesh, Color(0.45, 0.75, 1.0))
-	_sweat2.position = Vector3(-0.19, HEAD_Y + 0.02, -0.1)
-	_pivot.add_child(_sweat2)
+	_sweat2.position = Vector3(-0.21, HEAD_Y + 0.02, -0.1)
+	_face.add_child(_sweat2)
 
 	# 困り眉(ハの字)と、放心の「×」の目
 	for x in [-0.08, 0.08]:
 		var brow := _box(Vector3(0.075, 0.015, 0.01), Vector3(x, HEAD_Y + 0.115, FACE_Z + 0.01))
 		brow.rotation.z = 0.4 if x < 0.0 else -0.4
-		_pivot.add_child(brow)
+		_face.add_child(brow)
 		_brows.append(brow)
 		var xe := Node3D.new()
 		xe.position = Vector3(x, HEAD_Y + 0.04, FACE_Z)
@@ -107,7 +135,7 @@ func build(color: Color, display_name: String, font: Font) -> void:
 			var bar := _box(Vector3(0.07, 0.014, 0.01), Vector3.ZERO)
 			bar.rotation.z = r
 			xe.add_child(bar)
-		_pivot.add_child(xe)
+		_face.add_child(xe)
 		_x_eyes.append(xe)
 
 	var label := Label3D.new()
@@ -116,11 +144,136 @@ func build(color: Color, display_name: String, font: Font) -> void:
 	label.font_size = 48
 	label.pixel_size = 0.004
 	label.outline_size = 8
-	label.position = Vector3(0, 1.85, 0)
 	label.font = font
-	add_child(label)
+	# 名札は頭の上(頭といっしょに動く)
+	var tag := _head_transform()
+	tag.origin += Vector3(0, HEAD_RADIUS + 0.28, 0)
+	tag.basis = Basis.IDENTITY
+	_attach("DEF-head", label, tag)
 
 	set_expression(NORMAL)
+	set_pose("sit")
+
+
+## 骨組みと動きを読みこむ。付属の人形(皮膚のメッシュ)は使わないので消す
+func _build_rig() -> void:
+	_rig = RIG_SCENE.instantiate()
+	# 素材は +Z が正面。このキャラは -Z が正面なので半回転
+	_rig.rotation.y = PI
+	_rig.scale = Vector3.ONE * BODY_SCALE
+	_pivot.add_child(_rig)
+	_skel = _rig.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
+	for mi in _rig.find_children("*", "MeshInstance3D", true, false):
+		mi.queue_free()
+	_anim = _rig.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
+	# 動きはこちらで進める(振り向きのひねりを、動きのあとに足すため)
+	_anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+	for anim_name in _anim.get_animation_list():
+		if anim_name.ends_with("_Loop"):
+			_anim.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
+	for bone_name in LOOK_TWIST:
+		var i := _skel.find_bone(bone_name)
+		if i >= 0:
+			_twist_bones[i] = deg_to_rad(LOOK_TWIST[bone_name])
+
+
+## 骨にくっつける体の部品: 丸い頭、カプセルの胴、短い手足(指なし)。全部同じ体の色
+func _build_body(color: Color) -> void:
+	var line := GameConfig.OUTLINE_WIDTH / BODY_SCALE
+	var head_mesh := SphereMesh.new()
+	head_mesh.radius = HEAD_RADIUS
+	head_mesh.height = HEAD_RADIUS * 2.0
+	_attach("DEF-head", _mesh(head_mesh, color, line), _head_transform())
+	# 胴: 腰から首まで。お腹は丸く
+	_limb("DEF-spine.001", "DEF-hips", "DEF-neck", 0.19, color, line)
+	# 腕・脚(関節から次の関節まで)
+	for side in ["L", "R"]:
+		_limb("DEF-upper_arm." + side, "DEF-upper_arm." + side, "DEF-forearm." + side, 0.065, color, line)
+		_limb("DEF-forearm." + side, "DEF-forearm." + side, "DEF-hand." + side, 0.06, color, line)
+		_limb("DEF-thigh." + side, "DEF-thigh." + side, "DEF-shin." + side, 0.085, color, line)
+		_limb("DEF-shin." + side, "DEF-shin." + side, "DEF-foot." + side, 0.075, color, line)
+		_limb("DEF-foot." + side, "DEF-foot." + side, "DEF-toe." + side, 0.07, color, line)
+		# 手は指のない丸
+		var hand := SphereMesh.new()
+		hand.radius = 0.075
+		hand.height = 0.15
+		var at := Transform3D(Basis.IDENTITY, _rest_pos("DEF-hand." + side) + _bone_dir("DEF-hand." + side) * 0.05)
+		_attach("DEF-hand." + side, _mesh(hand, color, line), at)
+
+
+## 頭の球の位置と向き(骨組みの座標で)。顔の -Z が体の正面(素材の +Z)を向く
+func _head_transform() -> Transform3D:
+	return Transform3D(Basis(Vector3.UP, PI), _rest_pos("DEF-head") + Vector3(0, HEAD_LIFT, 0))
+
+
+## 関節 from から関節 to まで、太さ radius のカプセルを bone にくっつける
+func _limb(bone: String, from: String, to: String, radius: float, color: Color, line: float) -> void:
+	var a := _rest_pos(from)
+	var b := _rest_pos(to)
+	var length := a.distance_to(b)
+	var cap := CapsuleMesh.new()
+	cap.radius = radius
+	cap.height = length + radius * 2.0
+	var y := (b - a).normalized()
+	var x := y.cross(Vector3.FORWARD)
+	if x.length() < 0.01:
+		x = y.cross(Vector3.RIGHT)
+	x = x.normalized()
+	var b3 := Basis(x, y, x.cross(y).normalized())
+	_attach(bone, _mesh(cap, color, line), Transform3D(b3, (a + b) / 2.0))
+
+
+## 骨組みの座標で決めた位置(立った形のとき)に node を置き、骨 bone といっしょに動くようにする
+func _attach(bone: String, node: Node3D, rest_transform: Transform3D) -> void:
+	var i := _skel.find_bone(bone)
+	var ba := BoneAttachment3D.new()
+	ba.bone_name = bone
+	_skel.add_child(ba)
+	ba.add_child(node)
+	node.transform = _skel.get_bone_global_rest(i).affine_inverse() * rest_transform
+
+
+func _rest_pos(bone: String) -> Vector3:
+	return _skel.get_bone_global_rest(_skel.find_bone(bone)).origin
+
+
+## 骨の向き(骨組みの座標で。骨は +Y の向きにのびている)
+func _bone_dir(bone: String) -> Vector3:
+	return _skel.get_bone_global_rest(_skel.find_bone(bone)).basis.y.normalized()
+
+
+## 姿勢: "sit"(座る)/"walk"(歩く)/"run"(走る)/"idle"(立っている)
+## 座っている→走るときは立ち上がってから、立っている→座るときは座ってから続ける
+func set_pose(pose: String) -> void:
+	if pose == _pose or _anim == null:
+		return
+	var prev := _pose
+	_pose = pose
+	_anim.clear_queue()
+	match pose:
+		"sit":
+			if prev == "":
+				_anim.play(ANIM_SIT)
+			else:
+				_anim.play(ANIM_SIT_DOWN, 0.15, 2.0)
+				_anim.queue(ANIM_SIT)
+		"run":
+			if prev == "sit":
+				_anim.play(ANIM_STAND_UP, 0.1, 3.0)
+				_anim.queue(ANIM_RUN)
+			else:
+				_anim.play(ANIM_RUN, 0.2)
+		"walk":
+			_anim.play(ANIM_WALK, 0.25)
+		_:
+			_anim.play(ANIM_IDLE, 0.25)
+	if prev == "":
+		_anim.advance(0.0)
+
+
+## 振り向く(true)/前を向く(false)。頭が先に回り、上半身が少し遅れてついてくる
+func set_look(back: bool) -> void:
+	_look_target = 1.0 if back else 0.0
 
 
 ## 自分のカメラから隠すときなどに、すべての見た目のレイヤーをまとめて変える
@@ -205,9 +358,10 @@ func slip() -> void:
 	_slip = 1.0
 
 
-## 毎フレームの動き。running: 走っている(前のめり)
+## 毎フレームの動き。running: 走っている(大げさに揺れる)
 func animate(delta: float, running: bool) -> void:
 	_time += delta
+	_update_rig(delta)
 	_hop = maxf(_hop - delta * 4.0, 0.0)
 	_lean = move_toward(_lean, 1.0 if running else 0.0, delta * 5.0)
 	_slump = move_toward(_slump, 1.0 if _expression == LOSE else 0.0, delta * 3.0)
@@ -226,13 +380,44 @@ func animate(delta: float, running: bool) -> void:
 		_pivot.position.x = 0.0
 	else:
 		_pivot.position.x = 0.0
-	_pivot.rotation.x = -0.35 * _lean * (1.0 - _slip) - 0.25 * _slump
+	# 座っているときは、ゆっくり少し揺れる
+	if _pose == "sit":
+		_pivot.rotation.z += sin(_time * 1.6 + float(get_instance_id() % 7)) * 0.025
+	# 走る動きは素材が前のめりなので、ここでは少しだけ足す
+	_pivot.rotation.x = -0.1 * _lean * (1.0 - _slip) - 0.25 * _slump
 	_pivot.scale = Vector3(1.0, 1.0 - 0.08 * _slump, 1.0)
 	# 汗はぷるぷる揺れる
 	if _sweat.visible:
 		_sweat.position.y = HEAD_Y + 0.1 + sin(_time * 10.0) * 0.015
 	if _sweat2.visible:
 		_sweat2.position.y = HEAD_Y + 0.02 + sin(_time * 12.0 + 1.0) * 0.015
+
+
+## 骨の動きを進め、座っているときの位置と、振り向きのひねりを足す
+func _update_rig(delta: float) -> void:
+	if _anim == null:
+		return
+	# ひねる骨は、いったん元に戻してから動きを当てる(ひねりが積み重ならないように)
+	for i in _twist_bones:
+		_skel.set_bone_pose_rotation(i, _skel.get_bone_rest(i).basis.get_rotation_quaternion())
+	_anim.advance(delta)
+	# 座る動きは腰が後ろに下がるので、体全体を前へずらして椅子の上に乗せる
+	_seat_shift = move_toward(_seat_shift, SEAT_SHIFT if _pose == "sit" else 0.0, delta / 0.5 * SEAT_SHIFT)
+	_rig.position = Vector3(0, 0, -_seat_shift)
+	# 振り向き: 頭は速く、上半身はゆっくり
+	_look_head = move_toward(_look_head, _look_target, delta / LOOK_HEAD_TIME)
+	_look_body = move_toward(_look_body, _look_target, delta / LOOK_BODY_TIME)
+	for i in _twist_bones:
+		var bone_name := _skel.get_bone_name(i)
+		var t := _look_head if bone_name == "DEF-neck" or bone_name == "DEF-head" else _look_body
+		if t <= 0.0:
+			continue
+		var angle: float = _twist_bones[i] * _ease(t)
+		_skel.set_bone_pose_rotation(i, _skel.get_bone_pose_rotation(i) * Quaternion(Vector3.UP, angle))
+
+
+func _ease(t: float) -> float:
+	return t * t * (3.0 - 2.0 * t)
 
 
 # --- 部品づくり ---

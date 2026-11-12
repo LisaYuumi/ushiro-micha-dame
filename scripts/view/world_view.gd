@@ -48,6 +48,9 @@ var _surprise_until := {}
 var _was_looking := {}
 ## お手つき3回で放心している人(そのラウンドの間)
 var _dazed := {}
+## 鬼が歩いているか立ち止まっているかを見分けるため(id -> 前の位置/止まっている時間)
+var _last_pos := {}
+var _still_time := {}
 
 
 func build(state: GameState) -> void:
@@ -59,6 +62,8 @@ func build(state: GameState) -> void:
 	_surprise_until.clear()
 	_was_looking.clear()
 	_dazed.clear()
+	_last_pos.clear()
+	_still_time.clear()
 	_stamp_labels.clear()
 	_info_labels.clear()
 	_banana_nodes.clear()
@@ -88,9 +93,13 @@ func sync(state: GameState, delta: float) -> void:
 		var node: Node3D = _actor_nodes.get(a.id)
 		if node:
 			node.position = a.position
-			# 振り向いた姿は全員に見える(体ごと大げさに後ろを向く)
-			node.rotation.y = a.yaw + PI * t
-			_update_expression(state, a, node as CharacterModel, delta)
+			node.rotation.y = a.yaw
+			var model := node as CharacterModel
+			if model:
+				# 振り向いた姿は全員に見える(頭→上半身の順に後ろを向く)
+				model.set_look(a.looking_back)
+				model.set_pose(_pose_of(state, a))
+			_update_expression(state, a, model, delta)
 	_update_seat_camera(state, delta)
 	_update_stamp_labels(state)
 	_update_bananas(state)
@@ -107,6 +116,25 @@ func sync(state: GameState, delta: float) -> void:
 		_handkerchief.position = state.handkerchief_position
 	_hide_item_if_not_visible_to_me(state)
 	_update_footsteps(state)
+
+
+## 姿勢: 座っている人は座る、追いかけっこ中は走る、鬼は歩く(止まっていれば立つ)
+func _pose_of(state: GameState, a: GameState.Actor) -> String:
+	if a.role == GameState.Role.SEATED:
+		return "sit"
+	if state.phase == GameState.Phase.RESULT:
+		return "idle"
+	if state.phase == GameState.Phase.CHASE:
+		return "run"
+	# 鬼が歩いている: 前のフレームから動いていなければ、立ち止まっている
+	var last: Vector3 = _last_pos.get(a.id, a.position)
+	_last_pos[a.id] = a.position
+	var moving := last.distance_to(a.position) > 0.0005
+	if moving:
+		_still_time[a.id] = 0.0
+	else:
+		_still_time[a.id] = _still_time.get(a.id, 0.0) + get_process_delta_time()
+	return "walk" if _still_time[a.id] < 0.15 else "idle"
 
 
 ## 表情と動きを、状態から決める(見た目だけ。状態は変えない)
@@ -241,23 +269,23 @@ func _build_chair(pos: Vector3, yaw: float) -> void:
 	var seat_mesh := BoxMesh.new()
 	seat_mesh.size = Vector3(0.5, 0.05, 0.5)
 	var seat := _mesh(seat_mesh, wood)
-	seat.position = Vector3(0, 0.45, 0)
+	seat.position = Vector3(0, 0.38, 0)
 	chair.add_child(seat)
 
 	# 背もたれは後ろ側(+Z)
 	var back_mesh := BoxMesh.new()
 	back_mesh.size = Vector3(0.5, 0.5, 0.05)
 	var back := _mesh(back_mesh, wood)
-	back.position = Vector3(0, 0.72, 0.28)
+	back.position = Vector3(0, 0.66, 0.28)
 	chair.add_child(back)
 
 	var metal := Color(0.4, 0.4, 0.42)
 	for x in [-0.22, 0.22]:
 		for z in [-0.22, 0.22]:
 			var leg_mesh := BoxMesh.new()
-			leg_mesh.size = Vector3(0.04, 0.45, 0.04)
+			leg_mesh.size = Vector3(0.04, 0.38, 0.04)
 			var leg := _mesh(leg_mesh, metal)
-			leg.position = Vector3(x, 0.225, z)
+			leg.position = Vector3(x, 0.19, z)
 			chair.add_child(leg)
 	add_child(chair)
 
