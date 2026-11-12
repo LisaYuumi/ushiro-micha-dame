@@ -10,7 +10,7 @@ signal closed
 
 ## ほかの 3D(ゲームの教室・物理の床)と重ならないように、離れた場所に作る
 const ORIGIN := Vector3(200, 0, 0)
-const DIRECTIONS := {"正面": PI, "横": PI / 2.0, "後ろ": 0.0, "斜め前": PI * 0.78}
+const DIRECTIONS := {"正面": PI, "横": PI / 2.0, "後ろ": 0.0, "斜め前": PI * 0.83}
 const EXPRESSIONS := ["ふつう", "困り眉", "汗だく", "放心"]
 const POSES := ["座る", "立つ", "走る", "転ぶ"]
 const BACKGROUNDS := [Color("8FD3E8"), Color("FFF4DC"), Color("FFFFFF"), Color("F7C4CF"), Color("F6C945"), Color("00B140")]
@@ -172,7 +172,7 @@ func _chair() -> Node3D:
 func _update_camera() -> void:
 	if _ring:
 		_cam.fov = 45
-		_cam.h_offset = 0.0 if _ui_hidden else 1.6
+		_cam.h_offset = 0.0 if _ui_hidden else 2.6
 		_cam.look_at_from_position(ORIGIN + Vector3(0, 6.2, 7.2), ORIGIN + Vector3(0, 0.5, 0))
 		return
 	_cam.fov = 40
