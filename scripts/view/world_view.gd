@@ -401,8 +401,9 @@ func _build_character(a: GameState.Actor, is_self: bool) -> Node3D:
 	model.name = "Actor%d" % a.id
 	model.build(a.color, a.display_name, HudFont.get_font())
 	if is_self:
-		# 自分の体は、座っているときの自分のカメラには映さない
+		# 自分の体は、座っているときの自分のカメラには映さない。自分の名前は出さない
 		model.set_layers(1 << (SELF_LAYER - 1))
+		model.set_name_visible(false)
 	return model
 
 

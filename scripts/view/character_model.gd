@@ -58,6 +58,8 @@ var _look_body := 0.0
 var _twist_bones := {}
 ## 動きの名前(小文字、「_loop」なしも)-> 読みこんだあとの本当の名前
 var _anim_names := {}
+## 頭の上の名前
+var _name_label: Label3D
 ## 目・口・眉の色(体の色が暗いときは白)
 var _face_color: Color = GameConfig.COLOR_INK
 var _eyes: Array[MeshInstance3D] = []
@@ -145,6 +147,7 @@ func build(color: Color, display_name: String, font: Font) -> void:
 		_x_eyes.append(xe)
 
 	var label := Label3D.new()
+	_name_label = label
 	label.text = display_name
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.font_size = 48
@@ -303,6 +306,12 @@ func set_pose(pose: String) -> void:
 ## 振り向く(true)/前を向く(false)。頭が先に回り、上半身が少し遅れてついてくる
 func set_look(back: bool) -> void:
 	_look_target = 1.0 if back else 0.0
+
+
+## 頭の上の名前を出す/消す(自分の名前は自分の画面には出さない)
+func set_name_visible(v: bool) -> void:
+	if _name_label:
+		_name_label.visible = v
 
 
 ## 自分のカメラから隠すときなどに、すべての見た目のレイヤーをまとめて変える
