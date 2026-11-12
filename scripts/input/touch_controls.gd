@@ -54,10 +54,11 @@ func _ready() -> void:
 	stick.offset_right = 250
 	stick.offset_bottom = -30
 	# 右上: 確認用の操作
-	_add_button("上から見る", "debug_top_camera", Vector2(1, 0), Rect2(-410, 16, 190, 64), 24)
-	_add_button("次へ・やり直し", "restart", Vector2(1, 0), Rect2(-206, 16, 190, 64), 24)
-	_add_button("音テスト", "sound_test", Vector2(1, 0), Rect2(-614, 16, 190, 64), 24)
-	_role_button = _add_button("役を変える", "toggle_role", Vector2(1, 0), Rect2(-858, 16, 230, 64), 22)
+	# (左上のラウンド・落とし物の札と重ならないように、小さめ)
+	_add_button("次へ・やり直し", "restart", Vector2(1, 0), Rect2(-196, 14, 180, 54), 20)
+	_add_button("上から見る", "debug_top_camera", Vector2(1, 0), Rect2(-346, 14, 140, 54), 20)
+	_add_button("音テスト", "sound_test", Vector2(1, 0), Rect2(-476, 14, 120, 54), 20)
+	_role_button = _add_button("役を変える", "toggle_role", Vector2(1, 0), Rect2(-656, 14, 170, 54), 18)
 	set_oni_mode(false)
 
 
@@ -77,7 +78,7 @@ func set_oni_mode(is_oni: bool, seated_in_chase: bool = false) -> void:
 		b.visible = is_oni
 	for b in _chase_buttons:
 		b.visible = seated_in_chase
-	_role_button.text = "役を変えて新しい試合"
+	_role_button.text = "役を変えて新試合"
 	# 切りかえで押しっぱなしになった指を離しておく
 	for index in _touch_action.keys():
 		var entry: Dictionary = _touch_action[index]

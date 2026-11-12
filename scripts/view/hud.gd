@@ -122,7 +122,7 @@ func _build_scoreboard() -> void:
 	_score_box.anchor_right = 1.0
 	_score_box.offset_left = -236
 	_score_box.offset_right = -16
-	_score_box.offset_top = 96
+	_score_box.offset_top = 84
 	for i in GameConfig.SEAT_COUNT + 1:
 		var panel := PanelContainer.new()
 		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
