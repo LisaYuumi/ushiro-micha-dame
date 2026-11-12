@@ -289,9 +289,11 @@ func _update_my_stamps() -> void:
 	for st in state.active_stamps.get(state.local_player_id, []):
 		var sender := state.get_actor(st["sender"])
 		list.append({
-			"text": Stamps.LABELS[st["kind"]],
+			"text": Stamps.LABELS[st["kind"]].trim_suffix("!"),
+			# 「見ろ」は「!」、「まだ平気」は「○」
+			"mark": "!" if Stamps.says_look(st["kind"]) else "○",
 			"color": WorldView.STAMP_COLORS[st["kind"]],
-			"sender": (("鬼 " if st["sender"] == state.oni_id else "") + sender.display_name) if sender else "?",
+			"sender": _short_name(st["sender"]),
 			"sender_color": sender.color if sender else Color.WHITE,
 		})
 	hud.show_my_stamps(list)
@@ -513,6 +515,18 @@ func _show_result(r: Dictionary) -> void:
 	var next_text := "最終結果" if last else "次のラウンド(%s)" % Items.name_of(state.round_index + 1)
 	var how := "「次へ」(R)で" if mode != Mode.GUEST else "ホストが「次へ」を押すと"
 	hud.show_message("%s\nあなた: %d点\n%s%s" % [text, me_score, how, next_text], color, 0.0)
+
+
+## 札に出す短い名前(「ボット2(せっかち)」→「ボット2」、鬼は「鬼」)
+func _short_name(id: int) -> String:
+	if id == state.oni_id:
+		return "鬼"
+	var a := state.get_actor(id)
+	if a == null:
+		return "?"
+	var n := a.display_name
+	var cut := n.find("(")
+	return n.substr(0, cut) if cut > 0 else n
 
 
 func _name(id: int) -> String:
