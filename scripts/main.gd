@@ -23,6 +23,8 @@ var _player_is_oni := false
 var _seats: int = GameConfig.SEAT_COUNT
 ## ホスト: 参加者の peer id -> 登場人物の id
 var _peer_actor := {}
+## ホスト: 参加者の peer id -> {"name", "color"}(ロビーで決めた名前と色)
+var _peer_profile := {}
 ## ホスト: 状態を配るまでの時間
 var _snapshot_left := 0.0
 ## 参加者: 最後に見た目を作ったラウンド
@@ -50,7 +52,10 @@ func _ready() -> void:
 	lobby.start_pressed.connect(_on_host_start)
 	net.status_changed.connect(lobby.set_status)
 	net.peers_changed.connect(_on_peers_changed)
-	net.connected_to_host.connect(func() -> void: lobby.show_waiting("つながりました! ホストがスタートするのを待っています"))
+	net.connected_to_host.connect(func() -> void:
+		net.send_profile(Profile.to_dict())
+		lobby.show_waiting("つながりました! ホストがスタートするのを待っています"))
+	net.profile_received.connect(func(pid: int, p: Dictionary) -> void: _peer_profile[pid] = p)
 	net.lobby_received.connect(_on_lobby_info)
 	net.snapshot_received.connect(_on_snapshot)
 	net.events_received.connect(_on_net_events)
@@ -114,17 +119,23 @@ func _on_host_start() -> void:
 	var max_humans := _seats + 1
 	_peer_actor.clear()
 	var humans := [0]
-	var names := {0: "プレイヤー1(ホスト)"}
+	var names := {0: Profile.player_name}
+	var colors := {0: Profile.color}
 	var next_id := 1
 	for pid in peers:
 		if next_id >= max_humans:
 			break
 		_peer_actor[pid] = next_id
 		humans.append(next_id)
-		names[next_id] = "プレイヤー%d" % (next_id + 1)
+		# ロビーで決めた名前と色(届いていなければ「プレイヤーN」と決まった色)
+		var prof: Dictionary = _peer_profile.get(pid, {})
+		names[next_id] = Profile.clean_name(str(prof.get("name", "プレイヤー%d" % (next_id + 1))))
+		var c := Profile.parse_color(str(prof.get("color", "")), Color(0, 0, 0, 0))
+		if c.a > 0.0:
+			colors[next_id] = c
 		next_id += 1
 	var first_oni: int = humans[randi_range(0, humans.size() - 1)]
-	state.start_match_custom(-1, humans, first_oni, names, true, _seats)
+	state.start_match_custom(-1, humans, first_oni, names, true, _seats, colors)
 	state.local_player_id = 0
 	mode = Mode.HOST
 	cmds = state
@@ -212,7 +223,7 @@ func _start_round() -> void:
 	if mode == Mode.HOST:
 		_on_host_start()
 		return
-	state.start_match(-1, _player_is_oni, _seats)
+	state.start_match(-1, _player_is_oni, _seats, Profile.player_name, Profile.color)
 	_refresh_round()
 
 
@@ -253,8 +264,9 @@ func _physics_process(delta: float) -> void:
 	if me == null:
 		return
 	_update_my_stamps()
-	hud.set_role_badge("あなたは鬼の手下(だますと+1 / 鬼が勝つと+2)" if state.minion_id == me.id \
+	hud.set_role_badge("あなたは鬼の手下" if state.minion_id == me.id \
 			and state.phase != GameState.Phase.RESULT else "", Color(0.55, 0.2, 0.7))
+	_update_scores()
 	var judged := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
 	touch.set_looks_left(me.looks_left if judged else -1)
 	touch.set_oni_mode(_i_am_oni(),
@@ -536,55 +548,35 @@ func _name(id: int) -> String:
 	return a.display_name if a else "?"
 
 
+## 画面の札(左上: ラウンド・落とし物・鬼の周回、右上: 全員の点数)を更新する。説明文は出さない
 func _update_help() -> void:
-	var lines := PackedStringArray(["ラウンド %d/%d: %s / あなた %d点" % [
-		state.round_index + 1, GameConfig.ROUNDS_PER_MATCH, state.item_name(), state.scores.get(state.local_player_id, 0)]])
 	var me := state.get_local_player()
 	if me == null:
 		return
-	if _i_am_oni():
-		lines.append("あなたは鬼(スタンプでだますと +%d点)" % GameConfig.SCORE_DECEIVE_ONI)
-	elif state.minion_id == me.id and state.phase != GameState.Phase.RESULT:
-		lines.append("あなたは鬼の手下: だますと +%d点 / 鬼が勝つと +%d点 / 両どなりの後ろも見える" % [
-				GameConfig.SCORE_DECEIVE_MINION, GameConfig.SCORE_MINION_ONI_WIN])
-	lines.append("振り向き: 残り %d/%d 回 (一度もしなければ +%d点) / お手つき: %d 回 (1回 %d点)" % [
-		me.looks_left, GameConfig.LOOKS_PER_ROUND, GameConfig.SCORE_PATIENCE, me.otetsuki_count, GameConfig.SCORE_OTETSUKI])
-	if _stamp_target >= 0:
-		lines.append("スタンプを送る相手: %s" % _name(_stamp_target))
-	if view.is_top_camera():
-		lines.append("今のカメラ: 上から見る(確認用)")
-		# 確認用カメラのときだけ答えを出す
-		var who := "?"
-		if state.vacant_seat >= 0:
-			who = _name(state.chaser_id)
-		elif state.drop_target_seat >= 0:
-			who = _name(state.get_actor_at_seat(state.drop_target_seat).id)
-		if state.handkerchief_on_floor or state.chaser_id >= 0:
-			lines.append("【確認用】%s の後ろに落とした" % who)
-		elif not state.oni_is_player:
-			lines.append("【確認用】%s の後ろに落とす予定" % who)
-		if _last_sound != "":
-			lines.append("【確認用】さっきの物音: %s" % _last_sound)
-	if me.role == GameState.Role.CHASER or (me.role == GameState.Role.ONI and state.phase == GameState.Phase.CHASE):
-		lines.append("自動で走る! ↑(W)/スティック上: 内側へ(近道)  ↓(S): 外側へ")
-		lines.append("前に落ちたバナナの皮は、曲がってよけよう")
-	elif state.phase == GameState.Phase.CHASE:
-		lines.append("B: 鬼にバナナ / N: 追う人にバナナ(1ラウンド %d 個)" % GameConfig.BANANAS_PER_ROUND)
-	elif me.role == GameState.Role.ONI:
+	var extra := ""
+	if _i_am_oni() and state.phase == GameState.Phase.WALKING:
 		var laps := int((state.oni_angle - state.oni_start_angle) / TAU) + 1
-		lines.append("%d 周目 (%d 周しても落とさないと自動で落とす)" % [laps, GameConfig.ONI_MAX_LAPS_BEFORE_DROP])
-		lines.append("→(D)/スティック右: 速く  ←(A): ゆっくり")
-		lines.append("スペース /「止まる」(押している間): 止まる")
-		lines.append("E /「落とす」: いちばん近い席の後ろに落とす(1回だけ)")
-		lines.append("F /「落とす音」: 落とさずに、置く音だけ出す(何回でも)")
-		lines.append("1〜4 / 咳・口笛・手拍子・叫ぶ: 声を出す")
-		lines.append("人をタップ → スタンプ(Z X C V)で送れる(だますと +%d点)" % GameConfig.SCORE_DECEIVE_ONI)
-		lines.append("  声のすぐあと(0.8秒以内)に落とすと、置く音がかき消される")
-	else:
-		lines.append("スペース /「振り向く」(押している間): 振り向く")
-		lines.append("E /「拾う」: 後ろのハンカチを拾う")
-		lines.append("人をタップ → スタンプ(1〜4キー)で送る(同じ人には1ラウンド1回)")
-		if state.minion_id != me.id:
-			lines.append("本当を教えると +%d点 / 嘘は点にならない(手下と鬼は嘘で点)" % GameConfig.SCORE_HELP_NORMAL)
-	lines.append("F1: 上から見る / R: 次へ・やり直し / O: 鬼で新しい試合 / T: 音テスト")
-	hud.set_help("\n".join(lines))
+		extra = "鬼 %d周目(%d周で自動で落とす)" % [laps, GameConfig.ONI_MAX_LAPS_BEFORE_DROP]
+	elif _i_am_oni():
+		extra = "あなたは鬼"
+	elif _stamp_target >= 0:
+		extra = "スタンプを送る相手: %s" % _short_name(_stamp_target)
+	hud.set_round_info("ラウンド %d/%d" % [state.round_index + 1, GameConfig.ROUNDS_PER_MATCH],
+			"いまの落とし物:%s" % state.item_name(), extra)
+	_update_scores()
+
+
+## 全員の点数(この試合の合計)
+func _update_scores() -> void:
+	var rows := []
+	for a in state.actors:
+		var n := "あなた" if a.id == state.local_player_id else a.display_name.get_slice("(", 0)
+		if a.id == state.oni_id:
+			n += "(鬼)"
+		rows.append({
+			"name": n,
+			"color": a.color,
+			"score": state.scores.get(a.id, 0),
+			"me": a.id == state.local_player_id,
+		})
+	hud.show_scores(rows)

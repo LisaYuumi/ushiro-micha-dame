@@ -58,6 +58,8 @@ var _look_body := 0.0
 var _twist_bones := {}
 ## 動きの名前(小文字、「_loop」なしも)-> 読みこんだあとの本当の名前
 var _anim_names := {}
+## 目・口・眉の色(体の色が暗いときは白)
+var _face_color: Color = GameConfig.COLOR_INK
 var _eyes: Array[MeshInstance3D] = []
 var _happy_eyes: Array[Node3D] = []
 var _mouth_flat: MeshInstance3D
@@ -78,6 +80,8 @@ var _slip := 0.0
 
 
 func build(color: Color, display_name: String, font: Font) -> void:
+	# 黒っぽい体では、目と口を白にする(黒い顔の部品が見えなくなるので)
+	_face_color = GameConfig.COLOR_PAPER if color.get_luminance() < 0.25 else GameConfig.COLOR_INK
 	_pivot = Node3D.new()
 	add_child(_pivot)
 	_build_rig()
@@ -91,7 +95,7 @@ func build(color: Color, display_name: String, font: Font) -> void:
 		var eye_mesh := SphereMesh.new()
 		eye_mesh.radius = 0.03
 		eye_mesh.height = 0.06
-		var eye := _mesh(eye_mesh, GameConfig.COLOR_INK)
+		var eye := _mesh(eye_mesh, _face_color)
 		eye.position = Vector3(x, HEAD_Y + 0.04, FACE_Z + 0.005)
 		_face.add_child(eye)
 		_eyes.append(eye)
@@ -461,7 +465,7 @@ func _bent_line(center: Vector3, width: float, bend: float) -> Node3D:
 func _box(size: Vector3, pos: Vector3) -> MeshInstance3D:
 	var m := BoxMesh.new()
 	m.size = size
-	var mi := _mesh(m, GameConfig.COLOR_INK)
+	var mi := _mesh(m, _face_color)
 	mi.position = pos
 	return mi
 

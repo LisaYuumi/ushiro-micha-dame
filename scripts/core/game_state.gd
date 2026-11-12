@@ -147,17 +147,23 @@ var rng := RandomNumberGenerator.new()
 ## 新しい試合を始める(ラウンド1から)。seed を指定すると毎回同じ展開になる(テスト用)。
 ## player_is_oni = true なら、この画面のプレイヤーが最初の鬼になる。
 ## seats: 席の数(鬼は別に1人。8人で遊ぶなら7、5人なら4)
-func start_match(seed_value: int = -1, player_is_oni: bool = false, seats: int = GameConfig.SEAT_COUNT) -> void:
+## me_name / me_color: この画面のプレイヤーの名前と体の色(色の a が 0 なら決まった色)
+func start_match(seed_value: int = -1, player_is_oni: bool = false, seats: int = GameConfig.SEAT_COUNT,
+		me_name: String = "あなた", me_color: Color = Color(0, 0, 0, 0)) -> void:
 	var me := seats if player_is_oni else 0
-	start_match_custom(seed_value, [me], me if player_is_oni else seats, {me: "あなた"}, false, seats)
+	var colors := {}
+	if me_color.a > 0.0:
+		colors[me] = me_color
+	start_match_custom(seed_value, [me], me if player_is_oni else seats, {me: me_name}, false, seats, colors)
 	local_player_id = me
 
 
 ## 人とボットの組み合わせを決めて、新しい試合を始める(オンライン対戦のホストが使う)。
 ## human_ids: 人が操作する登場人物の id(0〜SEAT_COUNT)/first_oni: 最初の鬼の id/
-## names: id -> 表示名(書かれていない人はボット名)/humans_only_oni: 鬼は人だけにする
+## names: id -> 表示名(書かれていない人はボット名)/humans_only_oni: 鬼は人だけにする/
+## colors: id -> 体の色(人が選んだ色。書かれていない人は決まった色から、人の色と重ならないように)
 func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names: Dictionary, humans_only: bool,
-		seats: int = GameConfig.SEAT_COUNT) -> void:
+		seats: int = GameConfig.SEAT_COUNT, colors: Dictionary = {}) -> void:
 	seat_count = seats
 	if seed_value >= 0:
 		rng.seed = seed_value
@@ -179,6 +185,19 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 	# 登場人物は試合のあいだ同じ。席に SEAT_COUNT 人、鬼が1人(id は 0〜SEAT_COUNT)
 	actors.clear()
 	var bot_no := 1
+	# 人が選んだ色に近い色は、ほかの人には使わない
+	var free_colors := []
+	for c in palette:
+		var taken := false
+		for k in colors:
+			var mine: Color = colors[k]
+			if Vector3(c.r - mine.r, c.g - mine.g, c.b - mine.b).length() < 0.25:
+				taken = true
+		if not taken:
+			free_colors.append(c)
+	if free_colors.is_empty():
+		free_colors = palette.duplicate()
+	var next_color := 0
 	for i in seat_count + 1:
 		var actor := Actor.new()
 		actor.id = i
@@ -190,7 +209,11 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 			actor.personality = Personalities.ALL[rng.randi_range(0, Personalities.ALL.size() - 1)]
 			actor.display_name = "ボット%d(%s)" % [bot_no, Personalities.label(actor.personality)]
 			bot_no += 1
-		actor.color = palette[i % palette.size()]
+		if colors.has(i):
+			actor.color = colors[i]
+		else:
+			actor.color = free_colors[next_color % free_colors.size()]
+			next_color += 1
 		actors.append(actor)
 	scores = {}
 	for a in actors:

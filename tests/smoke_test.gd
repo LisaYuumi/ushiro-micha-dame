@@ -53,6 +53,7 @@ func _initialize() -> void:
 	_test_humans_only_oni()
 	_test_snapshot_round_trip()
 	_test_character_model()
+	_test_profile_names_and_colors()
 
 	_main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(_main)
@@ -1259,6 +1260,28 @@ func _test_character_model() -> void:
 			m.animate(STEP, pose == "run")
 	_check(m._pose == "sit", "姿勢が切りかわる")
 	m.free()
+
+
+func _test_profile_names_and_colors() -> void:
+	_check(Profile.clean_name("  とても長いなまえですよ  ") == "とても長いなまえ", "名前は %d 文字まで" % Profile.NAME_MAX)
+	_check(Profile.clean_name("   ") == Profile.DEFAULT_NAME, "空の名前は「プレイヤー」")
+	_check(Profile.parse_color("4d96ff", Color.RED).is_equal_approx(Color("4D96FF")), "# なしのカラーコードも読める")
+	_check(Profile.parse_color("ぴんく", Color.RED) == Color.RED, "読めないカラーコードは元のまま")
+	# 選んだ名前と色で試合が始まり、ほかの人には近い色を使わない
+	var mine := Color("EE6A4D")
+	var s := GameState.new()
+	s.start_match(401, false, GameConfig.SEAT_COUNT, "りさ", mine)
+	var me := s.get_local_player()
+	_check(me.display_name == "りさ" and me.color.is_equal_approx(mine), "自分の名前と色で始まる")
+	for a in s.actors:
+		if a.id != me.id:
+			_check(Vector3(a.color.r - mine.r, a.color.g - mine.g, a.color.b - mine.b).length() >= 0.25, "ほかの人は自分の色と重ならない")
+	var o := GameState.new()
+	o.start_match_custom(402, [0, 1], 0, {0: "ホスト", 1: "ゆうみ"}, true, GameConfig.SEAT_COUNT, {1: Color("B07CF0")})
+	_check(o.get_actor(1).display_name == "ゆうみ" and o.get_actor(1).color.is_equal_approx(Color("B07CF0")), "参加者の名前と色が入る")
+	var g := GameState.new()
+	g.apply_snapshot(o.snapshot(1))
+	_check(g.get_actor(1).color.is_equal_approx(Color("B07CF0")) and g.get_actor(1).display_name == "ゆうみ", "名前と色は通信で届く")
 
 
 # --- 道具 ---

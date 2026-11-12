@@ -22,6 +22,8 @@ signal events_received(events: Array)
 signal command_received(peer_id: int, cmd: String, args: Array)
 ## 参加者: ホストとの通信が切れた
 signal host_lost
+## ホスト: 参加者の名前と色が届いた
+signal profile_received(peer_id: int, profile: Dictionary)
 
 ## 仲介に使う無料サービス ntfy.sh(アカウント不要)。合言葉ごとの「話題」でメッセージを受け渡す
 const NTFY_WS := "wss://ntfy.sh/%s/ws"
@@ -107,6 +109,18 @@ func broadcast_snapshot(snap: Dictionary) -> void:
 func broadcast_events(events: Array) -> void:
 	if is_host and not events.is_empty() and not multiplayer.get_peers().is_empty():
 		_rpc_events.rpc(events)
+
+
+## 参加者 → ホスト: 自分の名前と色
+func send_profile(profile: Dictionary) -> void:
+	if is_online and not is_host:
+		_rpc_profile.rpc_id(1, profile)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_profile(profile: Dictionary) -> void:
+	if is_host:
+		profile_received.emit(multiplayer.get_remote_sender_id(), profile)
 
 
 ## ホスト → 1人: 状態(その人に見せてよい分だけ)

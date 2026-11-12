@@ -227,5 +227,3 @@ const COLOR_INK := Color("1E1B18")
 const COLOR_PAPER := Color("FFFFFF")
 ## キャラ・小物・家具の輪郭線の太さ(メートル)
 const OUTLINE_WIDTH := 0.025
-## 床の円の半径(メートル)
-const FLOOR_RADIUS := 7.5

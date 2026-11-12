@@ -82,18 +82,24 @@ func set_oni_mode(is_oni: bool, seated_in_chase: bool = false) -> void:
 	for index in _touch_action.keys():
 		var entry: Dictionary = _touch_action[index]
 		_send(entry["action"], false)
-		(entry["button"] as Button).modulate = Color(1, 1, 1, 0.85)
+		UiStyle.show_pressed(entry["button"], false)
 	_touch_action.clear()
+
+
+## A案の見た目でオレンジ地にするボタン(いちばん大事な操作)
+const ACCENT_ACTIONS := ["look_back", "pick_up", "oni_stop", "oni_drop"]
 
 
 func _add_button(text: String, action: String, anchor: Vector2, rect: Rect2, font_size: int) -> Button:
 	var b := Button.new()
 	b.text = text
-	# キーボードのスペースでボタンが反応しないように、フォーカスを受けない
-	b.focus_mode = Control.FOCUS_NONE
-	b.modulate = Color(1, 1, 1, 0.85)
-	b.add_theme_font_override("font", HudFont.get_font())
-	b.add_theme_font_size_override("font_size", font_size)
+	# A案: 白地かオレンジ地、黒い太い枠、右下の影。スタンプはスタンプの色の文字
+	var text_color := Color(0, 0, 0, 0)
+	if action.begins_with("stamp_") or action.begins_with("oni_stamp_"):
+		var kind: String = Stamps.ALL[int(action.get_slice("_", action.get_slice_count("_") - 1))]
+		text_color = WorldView.STAMP_COLORS[kind].darkened(0.25)
+	# キーボードのスペースでボタンが反応しないように、フォーカスを受けない(UiStyle.button の中で)
+	UiStyle.button(b, action in ACCENT_ACTIONS, font_size, text_color)
 	add_child(b)
 	b.anchor_left = anchor.x
 	b.anchor_right = anchor.x
@@ -120,14 +126,14 @@ func _input(event: InputEvent) -> void:
 			var b: Button = entry["button"]
 			if b.visible and b.get_global_rect().has_point(t.position):
 				_touch_action[t.index] = entry
-				b.modulate = Color(0.7, 0.85, 1.0, 1.0)
+				UiStyle.show_pressed(b, true)
 				_send(entry["action"], true)
 				get_viewport().set_input_as_handled()
 				return
 	elif _touch_action.has(t.index):
 		var entry: Dictionary = _touch_action[t.index]
 		_touch_action.erase(t.index)
-		(entry["button"] as Button).modulate = Color(1, 1, 1, 0.85)
+		UiStyle.show_pressed(entry["button"], false)
 		_send(entry["action"], false)
 
 

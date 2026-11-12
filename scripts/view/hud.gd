@@ -22,13 +22,24 @@ var _shown_keys: Array = []
 var _frame: Array[ColorRect] = []
 var _frame_tween: Tween
 ## 役の表示(手下のとき)
-var _badge: Label
+var _badge: PanelContainer
+## 左上の札: ラウンド(黒地)・いまの落とし物・鬼の周回など
+var _round_pill: PanelContainer
+var _item_pill: PanelContainer
+var _extra_pill: PanelContainer
+## 右上: 全員の点数
+var _score_box: VBoxContainer
+var _score_rows: Array = []
+var _score_key := ""
 
 
 func _ready() -> void:
-	_help = _make_label(22, Color.BLACK)
-	_help.position = Vector2(16, 12)
+	# 説明文は出さない(A案: 文字は札とボタンだけ)。古い呼び出しのために部品だけ残す
+	_help = _make_label(22, GameConfig.COLOR_INK)
+	_help.visible = false
 	add_child(_help)
+	_build_info_pills()
+	_build_scoreboard()
 
 	# 画面中央の大きな文字(「お手つき!」など)
 	_message = _make_label(72, Color.WHITE)
@@ -49,8 +60,93 @@ func _process(delta: float) -> void:
 			_message.visible = false
 
 
+## 説明文(いまは出さない)
 func set_help(text: String) -> void:
 	_help.text = text
+
+
+## 左上の札。extra が "" なら3つ目は出さない
+func set_round_info(round_text: String, item_text: String, extra_text: String) -> void:
+	_pill_text(_round_pill, round_text)
+	_pill_text(_item_pill, item_text)
+	_pill_text(_extra_pill, extra_text)
+	_extra_pill.visible = extra_text != ""
+
+
+## 右上の点数の表。rows: [{"name", "color", "score", "me"}](点数の多い順に並べて出す)
+func show_scores(rows: Array) -> void:
+	var sorted := rows.duplicate()
+	sorted.sort_custom(func(a, b): return a["score"] > b["score"])
+	var key := str(sorted)
+	if key == _score_key:
+		return
+	_score_key = key
+	for i in _score_rows.size():
+		var row: Dictionary = _score_rows[i]
+		var panel: PanelContainer = row["panel"]
+		panel.visible = i < sorted.size()
+		if not panel.visible:
+			continue
+		var r: Dictionary = sorted[i]
+		(row["dot"].get_theme_stylebox("panel") as StyleBoxFlat).bg_color = r["color"]
+		row["name"].text = r["name"]
+		row["score"].text = "%d点" % r["score"]
+		# 自分の行はオレンジのふち
+		(panel.get_theme_stylebox("panel") as StyleBoxFlat).border_color = GameConfig.COLOR_ACCENT if r["me"] else GameConfig.COLOR_INK
+
+
+func _pill_text(p: PanelContainer, text: String) -> void:
+	(p.get_child(0) as Label).text = text
+
+
+func _build_info_pills() -> void:
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 12)
+	row.position = Vector2(16, 14)
+	add_child(row)
+	_round_pill = UiStyle.pill("ラウンド 1/5", 24, true)
+	_item_pill = UiStyle.pill("いまの落とし物:ハンカチ", 24)
+	_extra_pill = UiStyle.pill("", 24)
+	row.add_child(_round_pill)
+	row.add_child(_item_pill)
+	row.add_child(_extra_pill)
+
+
+func _build_scoreboard() -> void:
+	_score_box = VBoxContainer.new()
+	_score_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_score_box.add_theme_constant_override("separation", 6)
+	add_child(_score_box)
+	_score_box.anchor_left = 1.0
+	_score_box.anchor_right = 1.0
+	_score_box.offset_left = -236
+	_score_box.offset_right = -16
+	_score_box.offset_top = 96
+	for i in GameConfig.SEAT_COUNT + 1:
+		var panel := PanelContainer.new()
+		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 12, 3)
+		st.content_margin_top = 1
+		st.content_margin_bottom = 2
+		st.content_margin_left = 8
+		st.content_margin_right = 10
+		panel.add_theme_stylebox_override("panel", st)
+		panel.visible = false
+		_score_box.add_child(panel)
+		var h := HBoxContainer.new()
+		h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		h.add_theme_constant_override("separation", 6)
+		panel.add_child(h)
+		var d := UiStyle.dot(Color.WHITE, 20)
+		h.add_child(d)
+		var n := UiStyle.label("", 18, GameConfig.COLOR_INK)
+		n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		n.clip_text = true
+		h.add_child(n)
+		var sc := UiStyle.label("", 18, GameConfig.COLOR_INK)
+		h.add_child(sc)
+		_score_rows.append({"panel": panel, "dot": d, "name": n, "score": sc})
 
 
 ## 画面中央に大きく表示する。seconds 秒で消える(0 なら消さない)。
@@ -117,11 +213,11 @@ func flash_stamp(color: Color) -> void:
 	_frame_tween.tween_callback(_set_frame_alpha.bind(0.5))
 
 
-## 画面の上のまん中に、役を出す(空文字で消す)
+## 画面の上のまん中に、役を出す(空文字で消す)。color の地に白い文字
 func set_role_badge(text: String, color: Color) -> void:
-	_badge.text = text
+	_pill_text(_badge, text)
 	_badge.visible = text != ""
-	_badge.add_theme_color_override("font_outline_color", color)
+	(_badge.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = color
 
 
 func _set_frame_alpha(a: float) -> void:
@@ -228,15 +324,10 @@ func _build_stamp_display() -> void:
 		_slot_senders.append(sender)
 		_slot_texts.append(text)
 
-	_badge = _make_label(30, Color.WHITE)
-	_badge.add_theme_constant_override("outline_size", 12)
+	_badge = UiStyle.pill("", 24, true)
+	(_badge.get_child(0) as Label).add_theme_color_override("font_color", GameConfig.COLOR_PAPER)
 	add_child(_badge)
-	_badge.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_badge.offset_left = -400
-	_badge.offset_right = 400
-	_badge.offset_top = 96
-	_badge.offset_bottom = 140
+	_badge.position = Vector2(16, 72)
 	_badge.visible = false
 
 

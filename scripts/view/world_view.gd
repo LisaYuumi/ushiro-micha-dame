@@ -29,6 +29,16 @@ var _info_labels := {}
 ## スタンプを送る相手の目印
 var _target_marker: MeshInstance3D
 
+## 教室の大きさと色
+const ROOM_HALF := 8.0
+const ROOM_HEIGHT := 4.4
+const COLOR_WAINSCOT := Color("FFF4DC")
+const COLOR_WOOD := Color("B67A45")
+const COLOR_BOARD := Color("2F6B55")
+const COLOR_GLASS := Color("CFF0FA")
+const COLOR_CURTAIN := Color("F7A8B8")
+const COLOR_CORK := Color("D4A06A")
+
 ## スタンプの色(仮)
 const STAMP_COLORS := {
 	Stamps.DROPPED: Color(0.95, 0.35, 0.2),
@@ -248,16 +258,111 @@ func _build_environment() -> void:
 	add_child(sun)
 
 
+## 教室: 黄色い床板、下が白っぽく上が水色の壁。黒板・時計・窓・ドア・掲示板・ロッカー。
+## 全部アニメ塗り+黒い輪郭線(A案)
 func _build_floor() -> void:
-	# 黄色い丸い床。ふちに黒い線(A案の絵のように、空の青との境目がはっきりする)
-	var disc := CylinderMesh.new()
-	disc.top_radius = GameConfig.FLOOR_RADIUS
-	disc.bottom_radius = GameConfig.FLOOR_RADIUS
-	disc.height = 0.04
-	disc.radial_segments = 64
-	var floor_mi := Toon.mesh(disc, GameConfig.COLOR_FLOOR, 0.06)
-	floor_mi.position = Vector3(0, -0.02, 0)
-	add_child(floor_mi)
+	var half := ROOM_HALF
+	# 床(床板の継ぎ目つき)
+	_part(Vector3(half * 2.0, 0.04, half * 2.0), Vector3(0, -0.02, 0), GameConfig.COLOR_FLOOR, 0.0)
+	var seam := GameConfig.COLOR_FLOOR.darkened(0.12)
+	for i in range(-int(half) + 1, int(half)):
+		_part(Vector3(half * 2.0, 0.004, 0.035), Vector3(0, 0.002, i), seam, 0.0)
+	# 4つの壁: 下は腰板(白っぽい)、上は水色。境目は黒い線
+	for side in 4:
+		var wall := Node3D.new()
+		wall.rotation.y = side * PI / 2.0
+		add_child(wall)
+		_part(Vector3(half * 2.0, 1.1, 0.2), Vector3(0, 0.55, -half), COLOR_WAINSCOT, 0.03, wall)
+		_part(Vector3(half * 2.0, ROOM_HEIGHT - 1.1, 0.2), Vector3(0, 1.1 + (ROOM_HEIGHT - 1.1) / 2.0, -half),
+				GameConfig.COLOR_SKY, 0.03, wall)
+		match side:
+			0:
+				_build_front_wall(wall, half)
+			1:
+				_build_window_wall(wall, half)
+			2:
+				_build_back_wall(wall, half)
+			3:
+				_build_door_wall(wall, half)
+
+
+## 前: 黒板(チョークの文字つき)と時計
+func _build_front_wall(wall: Node3D, half: float) -> void:
+	var z := -half + 0.12
+	_part(Vector3(5.6, 2.0, 0.1), Vector3(0, 2.0, z), COLOR_WOOD, 0.03, wall)
+	_part(Vector3(5.2, 1.6, 0.1), Vector3(0, 2.0, z + 0.04), COLOR_BOARD, 0.02, wall)
+	_part(Vector3(5.2, 0.06, 0.18), Vector3(0, 1.17, z + 0.1), COLOR_WOOD, 0.02, wall)
+	var chalk := Label3D.new()
+	chalk.text = "うしろ見ちゃダメ!"
+	chalk.font = HudFont.get_font()
+	chalk.font_size = 120
+	chalk.pixel_size = 0.006
+	chalk.outline_size = 0
+	chalk.modulate = Color(0.97, 0.97, 0.92)
+	chalk.position = Vector3(0, 2.15, z + 0.1)
+	wall.add_child(chalk)
+	# 時計
+	var face := CylinderMesh.new()
+	face.top_radius = 0.38
+	face.bottom_radius = 0.38
+	face.height = 0.06
+	var clock := Toon.mesh(face, GameConfig.COLOR_PAPER)
+	clock.rotation.x = PI / 2.0
+	clock.position = Vector3(0, 3.55, z + 0.02)
+	wall.add_child(clock)
+	_part(Vector3(0.04, 0.26, 0.02), Vector3(0, 3.65, z + 0.07), GameConfig.COLOR_INK, 0.0, wall)
+	var minute := _part(Vector3(0.03, 0.32, 0.02), Vector3(0.1, 3.6, z + 0.08), GameConfig.COLOR_INK, 0.0, wall)
+	minute.rotation.z = -1.0
+
+
+## 横: 窓が3つ(水色のガラス、白い枠、ピンクのカーテン)
+func _build_window_wall(wall: Node3D, half: float) -> void:
+	var z := -half + 0.12
+	for x in [-4.5, 0.0, 4.5]:
+		_part(Vector3(2.2, 1.9, 0.08), Vector3(x, 2.3, z), GameConfig.COLOR_PAPER, 0.03, wall)
+		_part(Vector3(1.9, 1.6, 0.06), Vector3(x, 2.3, z + 0.03), COLOR_GLASS, 0.0, wall)
+		_part(Vector3(0.06, 1.6, 0.08), Vector3(x, 2.3, z + 0.05), GameConfig.COLOR_PAPER, 0.015, wall)
+		_part(Vector3(1.9, 0.06, 0.08), Vector3(x, 2.3, z + 0.05), GameConfig.COLOR_PAPER, 0.015, wall)
+		for sx in [-1.25, 1.25]:
+			_part(Vector3(0.35, 2.1, 0.08), Vector3(x + sx, 2.25, z + 0.08), COLOR_CURTAIN, 0.025, wall)
+
+
+## 後ろ: ロッカー(ランドセルが入っている)
+func _build_back_wall(wall: Node3D, half: float) -> void:
+	var z := -half + 0.35
+	_part(Vector3(7.2, 1.3, 0.5), Vector3(0, 0.65, z), COLOR_WOOD, 0.03, wall)
+	var bags := [Color("D9483B"), Color("2E2B28"), Color("EF8FB0"), Color("4D96FF"), Color("7CC576")]
+	for row in 2:
+		for col in 8:
+			var x := -3.15 + col * 0.9
+			var y := 0.38 + row * 0.6
+			_part(Vector3(0.78, 0.48, 0.05), Vector3(x, y, z + 0.26), COLOR_WOOD.darkened(0.35), 0.0, wall)
+			if (row * 8 + col) % 3 != 1:
+				_part(Vector3(0.4, 0.34, 0.2), Vector3(x, y - 0.02, z + 0.22),
+						bags[(row * 3 + col) % bags.size()], 0.02, wall)
+
+
+## もう1つの横: ドアと掲示板(貼り紙つき)
+func _build_door_wall(wall: Node3D, half: float) -> void:
+	var z := -half + 0.12
+	_part(Vector3(1.3, 2.3, 0.08), Vector3(-4.5, 1.15, z), COLOR_WOOD, 0.03, wall)
+	_part(Vector3(0.5, 0.6, 0.06), Vector3(-4.5, 1.65, z + 0.04), COLOR_GLASS, 0.015, wall)
+	_part(Vector3(3.2, 1.3, 0.08), Vector3(1.5, 2.0, z), COLOR_CORK, 0.03, wall)
+	var papers := [GameConfig.COLOR_PAPER, Color("FCE7A5"), Color("F7C4CF"), Color("CDEBFF")]
+	for i in 5:
+		var p := _part(Vector3(0.5, 0.65, 0.03), Vector3(0.3 + i * 0.6, 2.0 + (0.12 if i % 2 == 0 else -0.1), z + 0.06),
+				papers[i % papers.size()], 0.012, wall)
+		p.rotation.z = 0.06 if i % 2 == 0 else -0.05
+
+
+## 箱の部品を1つ置く(outline: 輪郭線の太さ。0 なら線なし)
+func _part(size: Vector3, pos: Vector3, color: Color, outline: float = GameConfig.OUTLINE_WIDTH, parent: Node3D = null) -> MeshInstance3D:
+	var box := BoxMesh.new()
+	box.size = size
+	var mi := Toon.mesh(box, color, outline)
+	mi.position = pos
+	(parent if parent else self).add_child(mi)
+	return mi
 
 
 func _build_chair(pos: Vector3, yaw: float) -> void:
