@@ -10,6 +10,10 @@ const MAIN_SCENE_FRAMES := 180
 var _failures := 0
 var _frames := 0
 var _main: Node
+## 転ぶ(物理演算)の確認用のキャラ
+var _faller: CharacterModel
+var _faller_head_y := 0.0
+var _faller_min_head_y := INF
 
 
 func _initialize() -> void:
@@ -59,8 +63,9 @@ func _initialize() -> void:
 	root.add_child(_main)
 
 
-func _process(_delta: float) -> bool:
+func _process(delta: float) -> bool:
 	_frames += 1
+	_check_fall(delta)
 	if _frames == 60:
 		# ボタン操作と同じ命令を送ってみる
 		_press("look_back", true)
@@ -98,6 +103,39 @@ func _process(_delta: float) -> bool:
 		printerr("TESTS FAILED: %d" % _failures)
 	quit(1 if _failures > 0 else 0)
 	return true
+
+
+## 転ぶ: 床の上でキャラを転ばせると、頭がぐっと下がり、少しして元の高さに戻る
+func _check_fall(delta: float) -> void:
+	if _frames == 5:
+		var floor_body := StaticBody3D.new()
+		floor_body.collision_layer = 1 << (CharacterModel.FLOOR_LAYER - 1)
+		var cs := CollisionShape3D.new()
+		cs.shape = WorldBoundaryShape3D.new()
+		floor_body.add_child(cs)
+		floor_body.position = Vector3(50, 0, 50)
+		root.add_child(floor_body)
+		_faller = CharacterModel.new()
+		root.add_child(_faller)
+		_faller.position = Vector3(50, 0, 50)
+		_faller.build(Color(0.9, 0.4, 0.3), "テスト", HudFont.get_font())
+		_faller.set_pose("run")
+	if _faller == null:
+		return
+	_faller.animate(delta, true)
+	var head := _faller._attachments.filter(func(a): return _faller._skel.get_bone_name(a["bone"]) == "DEF-head")
+	var y: float = (head[0]["node"] as Node3D).global_position.y if not head.is_empty() else 0.0
+	if _frames == 30:
+		_faller_head_y = y
+		_faller.slip()
+	elif _frames > 30 and _frames < 30 + int(CharacterModel.RAGDOLL_FALL_TIME * 60.0):
+		_faller_min_head_y = minf(_faller_min_head_y, y)
+	if _frames % 6 == 0 and _frames > 24 and _frames < 110:
+		var pb_y := _faller._pbones[0].global_position.y if not _faller._pbones.is_empty() else -1.0
+		print("fall frame %d: head y %.2f / hips body y %.2f / w %.2f" % [_frames, y, pb_y, _faller._ragdoll_w])
+	if _frames == 130:
+		_check(_faller_min_head_y < _faller_head_y - 0.5, "転ぶと頭が下がる(%.2f → %.2f)" % [_faller_head_y, _faller_min_head_y])
+		_check(absf(y - _faller_head_y) < 0.25 and _faller._ragdoll_w == 0.0, "少しすると起き上がる(頭 %.2f)" % y)
 
 
 # --- テスト ---
