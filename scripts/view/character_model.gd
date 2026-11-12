@@ -45,14 +45,14 @@ func build(color: Color, display_name: String, font: Font) -> void:
 	var body_mesh := CapsuleMesh.new()
 	body_mesh.radius = 0.25
 	body_mesh.height = 1.15
-	var body := _mesh(body_mesh, color)
+	var body := _mesh(body_mesh, color, GameConfig.OUTLINE_WIDTH)
 	body.position = Vector3(0, 0.6, 0)
 	_pivot.add_child(body)
 
 	var head_mesh := SphereMesh.new()
 	head_mesh.radius = 0.22
 	head_mesh.height = 0.44
-	var head := _mesh(head_mesh, color.lightened(0.25))
+	var head := _mesh(head_mesh, color.lightened(0.25), GameConfig.OUTLINE_WIDTH)
 	head.position = Vector3(0, HEAD_Y, 0)
 	_pivot.add_child(head)
 
@@ -61,7 +61,7 @@ func build(color: Color, display_name: String, font: Font) -> void:
 		var eye_mesh := SphereMesh.new()
 		eye_mesh.radius = 0.03
 		eye_mesh.height = 0.06
-		var eye := _mesh(eye_mesh, Color.BLACK)
+		var eye := _mesh(eye_mesh, GameConfig.COLOR_INK)
 		eye.position = Vector3(x, HEAD_Y + 0.04, FACE_Z + 0.005)
 		_pivot.add_child(eye)
 		_eyes.append(eye)
@@ -251,18 +251,14 @@ func _bent_line(center: Vector3, width: float, bend: float) -> Node3D:
 func _box(size: Vector3, pos: Vector3) -> MeshInstance3D:
 	var m := BoxMesh.new()
 	m.size = size
-	var mi := _mesh(m, Color.BLACK)
+	var mi := _mesh(m, GameConfig.COLOR_INK)
 	mi.position = pos
 	return mi
 
 
-func _mesh(mesh: Mesh, color: Color) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mi.material_override = mat
-	return mi
+## アニメ塗りの見た目。outline > 0 なら黒い輪郭線もつける(顔の点や線にはつけない)
+func _mesh(mesh: Mesh, color: Color, outline: float = 0.0) -> MeshInstance3D:
+	return Toon.mesh(mesh, color, outline)
 
 
 func _set_layers_rec(node: Node, bits: int) -> void:

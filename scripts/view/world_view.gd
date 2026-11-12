@@ -205,7 +205,7 @@ func is_top_camera() -> bool:
 func _build_environment() -> void:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.93, 0.9, 0.82) # 教室の壁っぽいクリーム色
+	env.background_color = GameConfig.COLOR_SKY
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(1, 1, 1)
 	env.ambient_light_energy = 0.5
@@ -213,23 +213,23 @@ func _build_environment() -> void:
 	we.environment = env
 	add_child(we)
 
+	# アニメ塗りの陰の向きを決める光。リアルな影は落とさない(見た目のためと、スマホで軽くするため)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55, 30, 0)
-	sun.shadow_enabled = true
+	sun.shadow_enabled = false
 	add_child(sun)
 
 
 func _build_floor() -> void:
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(16, 16)
-	add_child(_mesh(plane, Color(0.72, 0.55, 0.38))) # 木の床
-	# 床板の継ぎ目っぽい線
-	for i in range(-7, 8):
-		var line := BoxMesh.new()
-		line.size = Vector3(16, 0.002, 0.03)
-		var mi := _mesh(line, Color(0.6, 0.44, 0.3))
-		mi.position = Vector3(0, 0.001, i)
-		add_child(mi)
+	# 黄色い丸い床。ふちに黒い線(A案の絵のように、空の青との境目がはっきりする)
+	var disc := CylinderMesh.new()
+	disc.top_radius = GameConfig.FLOOR_RADIUS
+	disc.bottom_radius = GameConfig.FLOOR_RADIUS
+	disc.height = 0.04
+	disc.radial_segments = 64
+	var floor_mi := Toon.mesh(disc, GameConfig.COLOR_FLOOR, 0.06)
+	floor_mi.position = Vector3(0, -0.02, 0)
+	add_child(floor_mi)
 
 
 func _build_chair(pos: Vector3, yaw: float) -> void:
@@ -590,10 +590,6 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 	_seat_cam.rotation = Vector3(deg_to_rad(pitch), me.yaw + PI * t, 0.0)
 
 
+## アニメ塗り+黒い輪郭線(Toon)の見た目
 func _mesh(mesh: Mesh, color: Color) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mi.material_override = mat
-	return mi
+	return Toon.mesh(mesh, color)

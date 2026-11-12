@@ -17,7 +17,6 @@ concurrency:
 
 env:
   GODOT_VERSION: 4.5.1
-  FONT_URL: https://github.com/google/fonts/raw/main/ofl/mplusrounded1c/MPLUSRounded1c-Bold.ttf
 
 defaults:
   run:
@@ -52,11 +51,6 @@ jobs:
           mv templates/version.txt templates/web_* "$dest/"
           rm -rf templates tpl.tpz
           ls "$dest"
-
-      - name: Download Japanese font
-        run: |
-          mkdir -p assets/fonts
-          curl -sSfL -o assets/fonts/MPLUSRounded1c-Bold.ttf "$FONT_URL"
 
       - name: Import project
         run: |

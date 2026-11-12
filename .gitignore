@@ -5,5 +5,3 @@
 
 # Web版の書き出し先
 /build/
-# フォントは自動変換のときに取ってくる(scripts/view/hud_font.gd を参照)
-/assets/fonts/*.ttf

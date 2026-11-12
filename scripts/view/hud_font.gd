@@ -1,8 +1,8 @@
 class_name HudFont
 extends RefCounted
 ## 日本語が表示できるフォントを返す。
-## - assets/fonts/ にフォントがあればそれを使う(Web版はこちら。自動変換のときに入る)
-## - なければ OS のフォントを使う(Windows / Mac で開発するとき)
+## - assets/fonts/ の M PLUS Rounded 1c(太字)を使う(SIL Open Font License。assets/fonts/OFL.txt)
+## - 読めなかったときだけ OS のフォントを使う
 
 const BUNDLED := "res://assets/fonts/MPLUSRounded1c-Bold.ttf"
 

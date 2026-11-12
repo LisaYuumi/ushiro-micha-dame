@@ -213,3 +213,19 @@ const SLIP_TIME := 1.0
 const BOT_BANANA_CHANCE := 0.35
 const BOT_BANANA_DELAY_MIN := 0.5
 const BOT_BANANA_DELAY_MAX := 3.0
+
+# --- 見た目(A案「放課後ポップ」) ---
+## 空・壁の上のほうの色
+const COLOR_SKY := Color("8FD3E8")
+## 床の色(あとでホストが舞台を選ぶときに変えられるように、ここで持つ)
+const COLOR_FLOOR := Color("F6C945")
+## 主要ボタンなどのアクセントの色
+const COLOR_ACCENT := Color("FF6B4A")
+## 文字・輪郭線の色
+const COLOR_INK := Color("1E1B18")
+## 名札やボタンの地の色
+const COLOR_PAPER := Color("FFFFFF")
+## キャラ・小物・家具の輪郭線の太さ(メートル)
+const OUTLINE_WIDTH := 0.025
+## 床の円の半径(メートル)
+const FLOOR_RADIUS := 7.5
