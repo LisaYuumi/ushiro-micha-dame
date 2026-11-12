@@ -218,6 +218,7 @@ func _toggle_personality() -> void:
 func _show_help() -> void:
 	_menu.visible = false
 	_help_panel.visible = true
+	UiStyle.center(_help_panel)
 
 
 func _update_menu_texts() -> void:
@@ -231,9 +232,6 @@ func _panel(min_size: Vector2) -> PanelContainer:
 	st.set_content_margin_all(20)
 	p.add_theme_stylebox_override("panel", st)
 	add_child(p)
-	p.set_anchors_preset(Control.PRESET_CENTER)
-	p.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	p.grow_vertical = Control.GROW_DIRECTION_BOTH
 	p.custom_minimum_size = min_size
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 10)
@@ -259,6 +257,7 @@ func toggle_menu() -> void:
 	else:
 		_update_menu_texts()
 		_menu.visible = true
+		UiStyle.center(_menu)
 
 
 func close_menu() -> void:

@@ -91,6 +91,15 @@ static func label(text: String, font_size: int, color: Color) -> Label:
 	return l
 
 
+## パネルを画面のまん中に置く(中身の大きさが決まってから呼ぶ)
+static func center(c: Control) -> void:
+	c.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	c.reset_size()
+	var vp := c.get_viewport_rect().size
+	c.size = c.get_combined_minimum_size()
+	c.position = ((vp - c.size) / 2.0).floor()
+
+
 ## 色の丸(送った人・点数の表など)
 static func dot(color: Color, size: float = 26.0) -> Panel:
 	var s := StyleBoxFlat.new()

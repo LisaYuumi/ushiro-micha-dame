@@ -85,9 +85,6 @@ func show_result_card(title: String, sub: String, notes: Array, color: Color, ro
 	st.set_content_margin_all(22)
 	_result_card.add_theme_stylebox_override("panel", st)
 	add_child(_result_card)
-	_result_card.set_anchors_preset(Control.PRESET_CENTER)
-	_result_card.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_result_card.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_result_card.custom_minimum_size = Vector2(560, 0)
 
 	var col := VBoxContainer.new()
@@ -133,7 +130,8 @@ func show_result_card(title: String, sub: String, notes: Array, color: Color, ro
 		nb.pressed.connect(_press_next)
 		col.add_child(nb)
 		_next_button = nb
-	# ポンと出る
+	# 画面のまん中に、ポンと出る
+	UiStyle.center(_result_card)
 	_result_card.pivot_offset = _result_card.size / 2.0
 	_result_card.scale = Vector2(0.6, 0.6)
 	var tw := create_tween()
