@@ -101,7 +101,13 @@ var _skel: Skeleton3D
 ## 転ぶときの物理演算
 var _sim: PhysicalBoneSimulator3D
 var _pbones: Array[PhysicalBone3D] = []
+## 骨の番号 -> その骨の物理演算の体
+var _pb_by_bone := {}
 var _ragdoll_t := -1.0
+## 物理演算の形をどれだけ見た目に使うか(1 = 倒れている、0 = ふつうの動き)
+var _ragdoll_w := 0.0
+## 体の部品をくっつけた骨 [{"node": 骨についていく Node3D, "bone": 骨の番号}]
+var _attachments: Array = []
 var _anim: AnimationPlayer
 var _face: Node3D
 var _pose := ""
@@ -288,6 +294,7 @@ func _build_ragdoll() -> void:
 		pb.add_child(cs)
 		_sim.add_child(pb)
 		_pbones.append(pb)
+		_pb_by_bone[i] = pb
 
 
 ## 骨組みと動きを読みこむ。付属の人形(皮膚のメッシュ)は使わないので消す
@@ -363,14 +370,48 @@ func _limb(bone: String, from: String, to: String, radius: float, color: Color, 
 	_attach(bone, _mesh(cap, color, line), Transform3D(b3, (a + b) / 2.0))
 
 
-## 骨組みの座標で決めた位置(立った形のとき)に node を置き、骨 bone といっしょに動くようにする
+## 骨組みの座標で決めた位置(立った形のとき)に node を置き、骨 bone といっしょに動くようにする。
+## 骨についていく役は自分で動かす(_follow_bones。転んでいる間は物理演算の体についていく)
 func _attach(bone: String, node: Node3D, rest_transform: Transform3D) -> void:
 	var i := _skel.find_bone(bone)
-	var ba := BoneAttachment3D.new()
-	ba.bone_name = bone
-	_skel.add_child(ba)
-	ba.add_child(node)
+	var holder: Node3D = null
+	for a in _attachments:
+		if a["bone"] == i:
+			holder = a["node"]
+	if holder == null:
+		holder = Node3D.new()
+		holder.name = "On_" + bone
+		_skel.add_child(holder)
+		holder.transform = _skel.get_bone_global_rest(i)
+		_attachments.append({"node": holder, "bone": i})
+	holder.add_child(node)
 	node.transform = _skel.get_bone_global_rest(i).affine_inverse() * rest_transform
+
+
+## 体の部品を骨の位置に動かす。転んでいる間は、物理演算の体の位置とまぜる
+func _follow_bones() -> void:
+	var to_skel := _skel.global_transform.affine_inverse()
+	for a in _attachments:
+		var bone: int = a["bone"]
+		var t := _skel.get_bone_global_pose(bone)
+		if _ragdoll_w > 0.0:
+			var rt := _ragdoll_pose(bone, to_skel)
+			t = t.interpolate_with(rt, _ragdoll_w)
+		(a["node"] as Node3D).transform = t
+
+
+## 転んでいる間の骨の形(骨組みの座標で)。物理演算の体がない骨は、いちばん近い親の体についていく
+func _ragdoll_pose(bone: int, to_skel: Transform3D) -> Transform3D:
+	var b := bone
+	while b >= 0 and not _pb_by_bone.has(b):
+		b = _skel.get_bone_parent(b)
+	if b < 0:
+		return _skel.get_bone_global_pose(bone)
+	var pb: PhysicalBone3D = _pb_by_bone[b]
+	var anc := to_skel * pb.global_transform * pb.body_offset.affine_inverse()
+	if b == bone:
+		return anc
+	return anc * (_skel.get_bone_global_rest(b).affine_inverse() * _skel.get_bone_global_rest(bone))
 
 
 func _rest_pos(bone: String) -> Vector3:
@@ -525,7 +566,7 @@ func slip() -> void:
 	_sim.influence = 1.0
 	_sim.physical_bones_start_simulation()
 	_ragdoll_t = 0.0
-	print("DBG slip pbones=", _pbones.size(), " active=", _sim.active, " sim_bones=", _sim.is_simulating_physics() if _sim.has_method("is_simulating_physics") else "?")
+	_ragdoll_w = 1.0
 	# 走っていた向きへ、上半身を前に投げ出し、足をすくう
 	var fwd := -global_transform.basis.z
 	fwd.y = 0.0
@@ -543,14 +584,12 @@ func _update_ragdoll(delta: float) -> void:
 	if _ragdoll_t < 0.0:
 		return
 	_ragdoll_t += delta
-	if int(_ragdoll_t * 10.0) != int((_ragdoll_t - delta) * 10.0) and _pbones.size() > 0:
-		print("DBG t=%.2f pb0=%s simulating=%s head=%s" % [_ragdoll_t, _pbones[0].global_position, _pbones[0].is_simulating_physics(), _skel.get_bone_global_pose(_skel.find_bone("DEF-head")).origin])
 	if _ragdoll_t > RAGDOLL_FALL_TIME:
-		_sim.influence = clampf(1.0 - (_ragdoll_t - RAGDOLL_FALL_TIME) / RAGDOLL_RISE_TIME, 0.0, 1.0)
+		_ragdoll_w = clampf(1.0 - (_ragdoll_t - RAGDOLL_FALL_TIME) / RAGDOLL_RISE_TIME, 0.0, 1.0)
 	if _ragdoll_t >= RAGDOLL_FALL_TIME + RAGDOLL_RISE_TIME:
 		_sim.physical_bones_stop_simulation()
-		_sim.influence = 1.0
 		_ragdoll_t = -1.0
+		_ragdoll_w = 0.0
 
 
 ## 毎フレームの動き。running: 走っている(大げさに揺れる)
@@ -558,6 +597,7 @@ func animate(delta: float, running: bool) -> void:
 	_time += delta
 	_update_rig(delta)
 	_update_ragdoll(delta)
+	_follow_bones()
 	_hop = maxf(_hop - delta * 4.0, 0.0)
 	_lean = move_toward(_lean, 1.0 if running else 0.0, delta * 5.0)
 	_slump = move_toward(_slump, 1.0 if _expression == LOSE else 0.0, delta * 3.0)
