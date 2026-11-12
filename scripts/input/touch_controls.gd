@@ -12,6 +12,9 @@ var _oni_buttons: Array[Button] = []
 var _chase_buttons: Array[Button] = []
 var _role_button: Button
 var _look_button: Button
+## 「振り向く」ボタンの目のアイコン(残りの回数ぶん見える)
+var _eyes: Array[Control] = []
+var _looks_shown := -2
 var _mode := []
 ## 押している指の番号 -> 操作
 var _touch_action := {}
@@ -20,8 +23,9 @@ var _touch_action := {}
 func _ready() -> void:
 	layer = 2
 	# 右下: 振り向く(押している間)
-	_look_button = _add_button("振り向く", "look_back", Vector2(1, 1), Rect2(-250, -250, 220, 220), 36)
+	_look_button = _add_button("", "look_back", Vector2(1, 1), Rect2(-250, -250, 220, 220), 36)
 	_seated_buttons.append(_look_button)
+	_build_look_face(_look_button)
 	# 鬼のとき: 同じ場所に「止まる」(押している間)「落とす」、その左に「ふり」
 	_oni_buttons.append(_add_button("止まる", "oni_stop", Vector2(1, 1), Rect2(-250, -250, 220, 220), 40))
 	_oni_buttons.append(_add_button("落とす", "oni_drop", Vector2(1, 1), Rect2(-430, -170, 160, 140), 36))
@@ -59,9 +63,66 @@ func _ready() -> void:
 	set_oni_mode(false)
 
 
-## 「振り向く」ボタンに、残りの回数を出す(-1 で回数を出さない)
+## 「振り向く」ボタンの中身: 文字と、残りの回数ぶんの目のアイコン、「長押し」
+func _build_look_face(b: Button) -> void:
+	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	col.add_theme_constant_override("separation", 6)
+	b.add_child(col)
+	var title := UiStyle.label("振り向く", 36, GameConfig.COLOR_PAPER)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 10)
+	col.add_child(row)
+	for i in GameConfig.LOOKS_PER_ROUND:
+		var eye := Control.new()
+		eye.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		eye.custom_minimum_size = Vector2(58, 36)
+		eye.draw.connect(_draw_eye.bind(eye))
+		row.add_child(eye)
+		_eyes.append(eye)
+	# 押している間だけ振り向く、とわかるように
+	var hint := UiStyle.label("長押し", 20, GameConfig.COLOR_PAPER)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(hint)
+
+
+## 目のアイコン: 白目と黒目。押している間は黒目が上(後ろ)を見る
+func _draw_eye(eye: Control) -> void:
+	var c := eye.size / 2.0
+	var r := Vector2(eye.size.x * 0.45, eye.size.y * 0.42)
+	var pts := PackedVector2Array()
+	for k in 24:
+		var t := TAU * k / 24.0
+		pts.append(c + Vector2(cos(t) * r.x, sin(t) * r.y))
+	eye.draw_colored_polygon(pts, GameConfig.COLOR_PAPER)
+	pts.append(pts[0])
+	eye.draw_polyline(pts, GameConfig.COLOR_INK, 3.0, true)
+	var looking := Input.is_action_pressed("look_back")
+	var pupil := c + (Vector2(0, -r.y * 0.35) if looking else Vector2.ZERO)
+	eye.draw_circle(pupil, r.y * 0.55, GameConfig.COLOR_INK)
+
+
+## 「振り向く」ボタンの残りの回数(-1 = 数えない場面: 追いかけっこ中・勝敗のあと)。
+## 目が1つずつ消え、0 になったらボタンを薄くして押せなくする
 func set_looks_left(n: int) -> void:
-	_look_button.text = "振り向く" if n < 0 else "振り向く\n(残り%d)" % n
+	for e in _eyes:
+		e.queue_redraw()
+	if n == _looks_shown:
+		return
+	_looks_shown = n
+	for i in _eyes.size():
+		_eyes[i].modulate.a = 1.0 if n < 0 or i < n else 0.0
+	var empty := n == 0
+	_look_button.disabled = empty
+	_look_button.modulate.a = 0.45 if empty else 1.0
+	if empty:
+		_release_action("look_back")
 
 
 ## 鬼のとき/座っているとき/座っていて追いかけっこ中で、出すボタンを切りかえる
@@ -122,7 +183,7 @@ func _input(event: InputEvent) -> void:
 	if t.pressed:
 		for entry in _buttons:
 			var b: Button = entry["button"]
-			if b.visible and b.get_global_rect().has_point(t.position):
+			if b.visible and not b.disabled and b.get_global_rect().has_point(t.position):
 				_touch_action[t.index] = entry
 				UiStyle.show_pressed(b, true)
 				_send(entry["action"], true)
@@ -133,6 +194,16 @@ func _input(event: InputEvent) -> void:
 		_touch_action.erase(t.index)
 		UiStyle.show_pressed(entry["button"], false)
 		_send(entry["action"], false)
+
+
+## その操作を押している指を離したことにする(ボタンが押せなくなったときなど)
+func _release_action(action: String) -> void:
+	for index in _touch_action.keys():
+		var entry: Dictionary = _touch_action[index]
+		if entry["action"] == action:
+			_touch_action.erase(index)
+			UiStyle.show_pressed(entry["button"], false)
+			_send(action, false)
 
 
 func _send(action: String, pressed: bool) -> void:

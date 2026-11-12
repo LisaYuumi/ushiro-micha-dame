@@ -155,20 +155,10 @@ const SCORE_DECEIVE_ONI := 1
 const SCORE_MINION_ONI_WIN := 2
 ## 1ラウンドに振り向ける回数(「拾う」も1回使う)。追いかけっこ中・勝敗が出た後は数えない
 const LOOKS_PER_ROUND := 2
-## 1ラウンドに一度も振り向かずにがまんした人の点数。ただし「見える所にハンカチが落ちていないときに、
-## 鬼が自分の後ろを通った」ことが1回以上あった人だけ(気づかずに負けた人と鬼はもらえない)
-const SCORE_PATIENCE := 1
-## お手つき1回の点数
-const SCORE_OTETSUKI := -1
-## お手つきを重ねたときの特別なペナルティ(OTETSUKI_RESET_SCORE / OTETSUKI_FORCES_ONI)が起きる回数。
-## 今はどちらも使わない: お手つきは1回ごとに SCORE_OTETSUKI だけ
-const OTETSUKI_LIMIT := 3
-## お手つき OTETSUKI_LIMIT 回で、プラスの点数を 0 にするか(試した案。ルールをわかりやすくするため今は使わない)
-const OTETSUKI_RESET_SCORE := false
-## この回数お手つきすると、顔が放心顔になる(見た目だけ)
+## 外れの振り向き(後ろに何もないのに振り向く)は減点しない。振り向きの回数制限(LOOKS_PER_ROUND)だけ。
+## 外れの回数は、表情(困り眉→汗だく→放心)と、だました人の点数に使う
+## この回数外れると、顔が放心顔になる(見た目だけ)
 const OTETSUKI_DAZED_COUNT := 3
-## お手つき OTETSUKI_LIMIT 回で、次のラウンドは強制的に鬼にもするか(企画書の案。今は使わない: 次の鬼は負けた人)
-const OTETSUKI_FORCES_ONI := false
 
 # --- 落とし物の重さ(重さ 0 = ハンカチ、1 = 教卓) ---
 ## 置く音の大きさ(dB)と、聞こえる距離。重いほど大きく遠くまで

@@ -181,8 +181,6 @@ func on_event(e: Dictionary) -> void:
 	match e.get("type"):
 		"otetsuki":
 			_oops_until[e["actor"]] = _clock + 1.5
-			if e.get("limit_reached", false):
-				_dazed[e["actor"]] = true
 		"stamp":
 			# スタンプが届いた人は、びっくり顔になる
 			_surprise_until[e["target"]] = _clock + 1.0

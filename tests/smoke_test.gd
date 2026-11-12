@@ -51,7 +51,7 @@ func _initialize() -> void:
 	_test_banana_can_be_dodged()
 	_test_bots_throw_bananas()
 	_test_who_can_see_behind_whom()
-	_test_otetsuki_penalty_and_forced_oni()
+	_test_miss_has_no_penalty()
 	_test_deceiving_scores()
 	_test_minion()
 	_test_bot_personalities()
@@ -646,11 +646,6 @@ func _test_match_next_oni_is_loser() -> void:
 		var target_seat := s.drop_target_seat
 		_check(s.next_round(), "次のラウンドに進める")
 		_check(s.round_index == 1 and s.item_name() == Items.name_of(1), "2ラウンド目は %s" % Items.name_of(1))
-		var forced := s.forced_oni_id
-		if forced >= 0:
-			# お手つきが多い人がいれば、その人が強制的に鬼になる
-			_check(s.oni_id == forced, "お手つきの多い人が強制的に鬼")
-			continue
 		_check(s.oni_id == e["loser"], "負けた人が次の鬼(%s)" % reason)
 		var seated := 0
 		for a in s.actors:
@@ -884,59 +879,27 @@ func _check_visibility(n: int) -> void:
 		_check(seen == n - 3, "見えるのは向かいの %d 人" % (n - 3))
 
 
-func _test_otetsuki_penalty_and_forced_oni() -> void:
+func _test_miss_has_no_penalty() -> void:
+	# 外れの振り向きは減点しない。回数だけ数える(表情に使う)。振り向ける回数は減る
 	var s := GameState.new()
 	s.start_match(81)
 	var me := s.get_local_player()
-	me.looks_left = 99 # お手つきを重ねるため、振り向ける回数をふやしておく
-	s.scores[me.id] = 7 # プラスの点数を持っているとする
+	s.scores[me.id] = 7
 	s.set_looking_back(me.id, true)
-	_check(s.scores[me.id] == 7 + GameConfig.SCORE_OTETSUKI, "お手つきで %d 点" % GameConfig.SCORE_OTETSUKI)
-	_check(me.otetsuki_count == 1, "お手つき1回目")
-	for i in GameConfig.OTETSUKI_LIMIT - 1:
-		s.set_looking_back(me.id, false)
-		s.set_looking_back(me.id, true)
-	s.set_looking_back(me.id, false)
-	if not GameConfig.OTETSUKI_RESET_SCORE:
-		# いまのルール: お手つきは1回ごとに点が減るだけ
-		_check(s.scores[me.id] == 7 + GameConfig.SCORE_OTETSUKI * GameConfig.OTETSUKI_LIMIT, "お手つきは1回ごとに %d 点だけ" % GameConfig.SCORE_OTETSUKI)
-		_check(me.otetsuki_count == GameConfig.OTETSUKI_LIMIT, "お手つきの回数は数え続ける")
-		return
-	_check(s.scores[me.id] == 0, "お手つき %d 回で、プラスの点数が 0 になる" % GameConfig.OTETSUKI_LIMIT)
-	_check(me.otetsuki_count == 0, "そのあと回数は 0 に戻る")
-	var limit_event := false
-	for e in s.take_events():
-		if e["type"] == "otetsuki" and e["limit_reached"] and e["score_reset"]:
-			limit_event = true
-	_check(limit_event, "0点になったお知らせが出る")
-
-	# マイナスの人は、そのまま
+	_check(s.scores[me.id] == 7, "外れの振り向きでも点は減らない")
+	_check(me.otetsuki_count == 1, "外れの回数は数える")
+	_check(me.looks_left == GameConfig.LOOKS_PER_ROUND - 1, "振り向ける回数は減る")
+	_check(_has(s.take_events(), "otetsuki"), "外れのお知らせが出る(表情に使う)")
+	# がまんの点もない: 一度も振り向かなくても、勝ち負け以外の点は入らない
 	var s2 := GameState.new()
-	s2.start_match(82)
-	var me2 := s2.get_local_player()
-	me2.looks_left = 99
-	s2.scores[me2.id] = -4
-	for i in GameConfig.OTETSUKI_LIMIT:
-		s2.set_looking_back(me2.id, true)
-		s2.set_looking_back(me2.id, false)
-	_check(s2.scores[me2.id] == -4 + GameConfig.SCORE_OTETSUKI * GameConfig.OTETSUKI_LIMIT, "マイナスの点数はそのまま")
-
-	# 強制的に鬼(設定が ON のとき)
-	if not GameConfig.OTETSUKI_FORCES_ONI:
-		return
-	_run_until(s, "result", 200.0)
-	var loser: int = s.result["loser"]
-	_check(s.next_round(), "(確認用)次のラウンドへ")
-	_check(s.oni_id == me.id, "お手つき %d 回の人が、次は強制的に鬼" % GameConfig.OTETSUKI_LIMIT)
-	_check(s.forced_oni_id == me.id, "強制的に鬼になったことがわかる")
-	_check(not me.must_be_oni, "鬼になったら、強制の印は消える")
-	if loser != me.id:
-		_check(s.get_actor(loser).role == GameState.Role.SEATED, "本来鬼になるはずだった人は席に座る")
-	var seated := 0
-	for a in s.actors:
-		if a.role == GameState.Role.SEATED:
-			seated += 1
-	_check(seated == GameConfig.SEAT_COUNT, "席は全部うまっている")
+	s2.start_match(107)
+	s2.minion_id = -1
+	var before: Dictionary = s2.scores.duplicate()
+	var e := _run_until(s2, "result", 200.0)
+	for a in s2.actors:
+		if a.id == e["winner"] or a.id == e["loser"]:
+			continue
+		_check(s2.scores[a.id] == before[a.id], "%s: 振り向かなくても点は増えない" % a.display_name)
 
 
 func _test_deceiving_scores() -> void:
@@ -999,8 +962,6 @@ func _test_deceiving_scores() -> void:
 		var bh: int = s.scores[helper.id]
 		s.send_stamp(helper.id, safe_target.id, Stamps.SAFE)
 		_tick_until_no_stamps(s)
-		if s.phase == GameState.Phase.RESULT and helper.id in s.result.get("patient", []):
-			bh += GameConfig.SCORE_PATIENCE # 待っている間にラウンドが終わったら、がまんの点も入る
 		_check(s.scores[helper.id] == bh + GameConfig.SCORE_HELP_NORMAL, "鬼が通った直後の本当の『まだ平気』で、振り向かずにすんだら +%d" % GameConfig.SCORE_HELP_NORMAL)
 
 	# 本当の「落ちてる!」で振り向けたら、普通の人に +1(だましの点ではない)。手下が教えても 0
@@ -1092,8 +1053,7 @@ func _test_minion() -> void:
 	var before: int = s2.scores[minion.id]
 	var e2 := _run_until(s2, "result", 200.0)
 	_check(e2["reason"] == "missed", "(確認用)見逃しで鬼の勝ち")
-	var patience := GameConfig.SCORE_PATIENCE if minion.id in e2["patient"] else 0
-	_check(s2.scores[minion.id] == before + GameConfig.SCORE_MINION_ONI_WIN + patience, "鬼が勝ったら手下は +%d" % GameConfig.SCORE_MINION_ONI_WIN)
+	_check(s2.scores[minion.id] == before + GameConfig.SCORE_MINION_ONI_WIN, "鬼が勝ったら手下は +%d" % GameConfig.SCORE_MINION_ONI_WIN)
 	_check(e2["minion"] == minion.id and e2["minion_bonus"], "勝敗のお知らせで手下を発表する")
 	var other2 := s2.get_actor_at_seat((minion.seat_index + 2) % GameConfig.SEAT_COUNT)
 	_check(s2.snapshot(other2.id)["minion_id"] == minion.id, "勝敗のあとは、だれにでも手下がわかる")
@@ -1130,8 +1090,7 @@ func _test_minion() -> void:
 		if not e4.is_empty():
 			break
 	if not e4.is_empty() and e4["reason"] == "touched":
-		var p4 := GameConfig.SCORE_PATIENCE if m4.id in e4["patient"] else 0
-		_check(s4.scores[m4.id] == b4 + p4, "鬼が負けたら手下の +%d はない" % GameConfig.SCORE_MINION_ONI_WIN)
+		_check(s4.scores[m4.id] == b4, "鬼が負けたら手下の +%d はない" % GameConfig.SCORE_MINION_ONI_WIN)
 
 
 func _test_bot_personalities() -> void:
@@ -1174,45 +1133,6 @@ func _test_look_limit_and_patience() -> void:
 	_run_until(s3, "result", 200.0)
 	s3.next_round()
 	_check(p3.looks_left == GameConfig.LOOKS_PER_ROUND, "次のラウンドで振り向ける回数が戻る")
-	# がまんした人に +1(負けた人と鬼はのぞく)
-	var s4 := GameState.new()
-	s4.start_match(107)
-	s4.minion_id = -1
-	var before: Dictionary = s4.scores.duplicate()
-	var turner := s4.get_actor(1)
-	s4.set_looking_back(turner.id, true)
-	s4.set_looking_back(turner.id, false)
-	var e := _run_until(s4, "result", 200.0)
-	var loser: int = e["loser"]
-	for a in s4.actors:
-		if a.id == s4.oni_id or a.id == loser:
-			continue
-		if a.id == e["winner"]:
-			continue
-		var expected: int = before[a.id]
-		if a.id == turner.id:
-			expected += GameConfig.SCORE_OTETSUKI
-		elif a.tense_passes > 0:
-			expected += GameConfig.SCORE_PATIENCE
-		_check(s4.scores[a.id] == expected, "%s: ドキドキした場面でがまんした人だけ +%d" % [a.display_name, GameConfig.SCORE_PATIENCE])
-	_check(not (loser in e["patient"]), "気づかずに負けた人はがまんの点をもらえない")
-	var some_tense := false
-	for a in s4.actors:
-		if a.tense_passes > 0:
-			some_tense = true
-	_check(some_tense, "(確認用)ドキドキした場面が数えられている")
-
-	# 向かいの人の後ろに落ちたのが見えていれば、そのあと鬼が通ってもドキドキした場面にならない
-	var s5 := _dropped_state(109)
-	var dropped_seat := s5.drop_target_seat
-	var watcher_seat := (dropped_seat + 2) % GameConfig.SEAT_COUNT # 向かい側から見ている人
-	var watcher := s5.get_actor_at_seat(watcher_seat)
-	var before_tense := watcher.tense_passes
-	for i in int(40.0 / STEP):
-		s5.tick(STEP)
-		if s5.seat_pass_age[watcher_seat] < 0.05 or s5.phase == GameState.Phase.RESULT:
-			break
-	_check(watcher.tense_passes == before_tense, "落ちたのが見えていたら、鬼が通ってもがまんの場面にならない")
 
 
 func _test_online_match_setup() -> void:

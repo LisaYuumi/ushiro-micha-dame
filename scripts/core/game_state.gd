@@ -32,10 +32,8 @@ class Actor:
 	var color: Color = Color.WHITE
 	## 振り向いているか(全員から見える)
 	var looking_back: bool = false
-	## お手つきの回数(OTETSUKI_LIMIT 回でペナルティ。そのあと 0 に戻る)
+	## 外れの振り向きの回数(試合のあいだ数える。表情に使う)
 	var otetsuki_count: int = 0
-	## お手つきが多すぎて、次のラウンドは強制的に鬼
-	var must_be_oni: bool = false
 	## 走る向き(追いかけるとき。長さ 0〜1)
 	var move_dir: Vector3 = Vector3.ZERO
 	## このラウンドで送れるスタンプの残り(-1 = 何回でも)
@@ -47,8 +45,6 @@ class Actor:
 	## このラウンドで振り向ける残り回数/振り向いた回数
 	var looks_left: int = 0
 	var looks_used: int = 0
-	## このラウンドで、見える所にハンカチが落ちていないときに鬼が後ろを通った回数(がまんの点の条件)
-	var tense_passes: int = 0
 	## このラウンドでスタンプを届けた相手の id(同じ相手には1ラウンド1回まで)
 	var stamped_targets: Array = []
 	## ボットの性格(Personalities の名前。人は "")
@@ -123,8 +119,6 @@ var round_serial: int = 0
 var round_index: int = 0
 var scores: Dictionary = {}
 var match_over: bool = false
-## 直前のラウンド切りかえで、お手つきが多くて強制的に鬼になった人(いなければ -1)
-var forced_oni_id: int = -1
 var _round_start_lineup: Array = []
 var _round_start_oni: int = -1
 
@@ -290,17 +284,6 @@ func _lineup_after_result() -> Array:
 		"missed":
 			# 気づかなかった人が鬼になり、鬼がその席に入る
 			seat_ids[drop_target_seat] = oni_id
-	# お手つきが多すぎる人は、次のラウンドは強制的に鬼
-	var forced := _too_many_otetsuki()
-	forced_oni_id = forced
-	if forced >= 0:
-		if forced != next_oni:
-			var idx := seat_ids.find(forced)
-			if idx >= 0:
-				# 本来鬼になるはずだった人は、強制的に鬼になる人の席に座る
-				seat_ids[idx] = next_oni
-				next_oni = forced
-		get_actor(forced).must_be_oni = false
 	# オンラインの試遊: 鬼は人だけ。ボットが負けたら、座っている人の中から次の鬼を選ぶ
 	if humans_only_oni and get_actor(next_oni).is_bot:
 		var humans := []
@@ -313,14 +296,6 @@ func _lineup_after_result() -> Array:
 			seat_ids[idx] = next_oni
 			next_oni = human
 	return [seat_ids, next_oni]
-
-
-## お手つきが多すぎて、次は強制的に鬼になる人(いなければ -1)
-func _too_many_otetsuki() -> int:
-	for a in actors:
-		if a.must_be_oni:
-			return a.id
-	return -1
 
 
 ## seat_ids[i] の人を席 i に座らせ、oni を鬼にしてラウンドを始める
@@ -336,7 +311,6 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 		a.bananas_left = GameConfig.BANANAS_PER_ROUND
 		a.looks_left = GameConfig.LOOKS_PER_ROUND
 		a.looks_used = 0
-		a.tense_passes = 0
 		a.stamped_targets = []
 		a.slip_left = 0.0
 	for i in seat_ids.size():
@@ -456,28 +430,12 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 				st["credited"] = true
 				_award_help(st, actor_id)
 	else:
+		# 外れの振り向き: 減点はしない。回数だけ数える(表情と、だました人の点数に使う)
 		a.otetsuki_count += 1
-		scores[a.id] = scores.get(a.id, 0) + GameConfig.SCORE_OTETSUKI
-		var reset := false
-		var limit_reached := false
-		if a.otetsuki_count >= GameConfig.OTETSUKI_LIMIT \
-				and (GameConfig.OTETSUKI_RESET_SCORE or GameConfig.OTETSUKI_FORCES_ONI):
-			limit_reached = true
-		if limit_reached and GameConfig.OTETSUKI_RESET_SCORE:
-			# お手つきが多すぎる: プラスの点数は 0 に(マイナスはそのまま)
-			reset = scores[a.id] > 0
-			scores[a.id] = mini(scores[a.id], 0)
-		if limit_reached:
-			a.otetsuki_count = 0
-			if GameConfig.OTETSUKI_FORCES_ONI:
-				a.must_be_oni = true
 		events.append({
 			"type": "otetsuki",
 			"actor": actor_id,
 			"count": a.otetsuki_count,
-			"points": GameConfig.SCORE_OTETSUKI,
-			"limit_reached": limit_reached,
-			"score_reset": reset,
 		})
 		# 嘘の「落ちてる!」などにだまされて振り向いた: 送った人に点
 		for st in shown:
@@ -902,11 +860,6 @@ func _plan_drop() -> void:
 func _on_pass_behind_seat() -> void:
 	var passed_seat := _seat_at_angle(oni_angle)
 	seat_pass_age[passed_seat] = 0.0
-	# 見える所(向かいの人の後ろ)にハンカチが落ちていないのに、鬼が後ろを通った: ドキドキした場面
-	var seen_elsewhere := handkerchief_on_floor and can_see_behind(passed_seat, drop_target_seat)
-	var sitter := get_actor_at_seat(passed_seat)
-	if sitter and sitter.role == Role.SEATED and not seen_elsewhere:
-		sitter.tense_passes += 1
 	if phase == Phase.DROPPED and absf(oni_angle - (drop_angle + TAU)) < 0.001:
 		# 一周して戻ってきても気づかれなかった: 落とされた人の負け
 		var target := get_actor_at_seat(drop_target_seat)
@@ -1106,14 +1059,6 @@ func _finish(winner_id: int, loser_id: int, reason: String) -> void:
 	result["minion"] = minion_id
 	result["minion_bonus"] = minion_bonus
 	last_minion_id = minion_id
-	# 一度も振り向かずにがまんした人に点(気づかずに負けた人と、このラウンドの鬼はのぞく)
-	var patient := []
-	for a in actors:
-		if a.id == oni_id or a.id == loser_id or a.looks_used > 0 or a.tense_passes == 0:
-			continue
-		scores[a.id] += GameConfig.SCORE_PATIENCE
-		patient.append(a.id)
-	result["patient"] = patient
 	result["scores"] = scores.duplicate()
 	for a in actors:
 		a.move_dir = Vector3.ZERO

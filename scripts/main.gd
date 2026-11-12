@@ -368,9 +368,6 @@ func _on_restart_pressed() -> void:
 		if state.next_round():
 			_refresh_round()
 			var msg := "ラウンド %d: %s" % [state.round_index + 1, state.item_name()]
-			if state.forced_oni_id >= 0:
-				msg += "\nお手つき%d回で %s が鬼!" % [GameConfig.OTETSUKI_LIMIT,
-						"あなた" if state.forced_oni_id == state.local_player_id else _name(state.forced_oni_id)]
 			hud.show_message(msg, Color(0.3, 0.3, 0.3), 2.0)
 		else:
 			_show_match_result()
@@ -485,14 +482,8 @@ func _show_event(e: Dictionary) -> void:
 				hud.show_message("4周したので\n次の席で自動で落とす", Color(0.3, 0.3, 0.3), 1.5)
 		"otetsuki":
 			if e["actor"] == me:
-				var text := "お手つき! %d点\n(これで %d 回目)" % [e["points"], e["count"]]
-				if e["limit_reached"]:
-					text = "お手つき%d回!\n%s" % [GameConfig.OTETSUKI_LIMIT,
-							"プラスの点数が0点に…" if e["score_reset"] else "点数はそのまま(マイナスだったので)"]
-					if GameConfig.OTETSUKI_FORCES_ONI:
-						text += "\n次のラウンドは鬼"
-				hud.show_message(text, Color(0.85, 0.1, 0.1), GameConfig.MESSAGE_TIME * 1.5)
-				_update_help()
+				# 外れ: 減点はないが、振り向ける回数は減る
+				hud.show_message("なにもない…", Color(0.85, 0.1, 0.1), GameConfig.MESSAGE_TIME)
 		"found":
 			if e["actor"] == me:
 				hud.show_message("あった!", Color(0.1, 0.5, 0.9), GameConfig.MESSAGE_TIME)
@@ -558,8 +549,6 @@ func _show_result(r: Dictionary) -> void:
 				title = "鬼のかち!"
 				sub = "%s が気づかなかった!" % loser
 	var notes := []
-	if me in r.get("patient", []):
-		notes.append("がまんできた! +%d" % GameConfig.SCORE_PATIENCE)
 	var minion: int = r.get("minion", -1)
 	if minion == me:
 		notes.append("あなたは手下だったよ" + (" 鬼がかって +%d" % GameConfig.SCORE_MINION_ONI_WIN if r.get("minion_bonus", false) else ""))
