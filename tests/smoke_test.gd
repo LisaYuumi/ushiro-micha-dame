@@ -470,6 +470,9 @@ func _test_bots_send_and_trust_stamps() -> void:
 					var from := s.get_actor(e["sender"])
 					if from.id == s.oni_id:
 						from_oni += 1
+					elif from.role == GameState.Role.OUT:
+						# お手つきで抜けた人は、両どなりにも送れる
+						pass
 					else:
 						_check(not s.is_stamp_neighbor(from.seat_index, t.seat_index), "8人のとき、ボットは両どなりに送らない")
 					var key := "%d>%d" % [from.id, t.id]
@@ -481,7 +484,8 @@ func _test_bots_send_and_trust_stamps() -> void:
 					otetsuki_after_stamp += 1
 					var turner := s.get_actor(e["actor"])
 					if turner.is_bot:
-						var age: float = s.seat_pass_age[turner.seat_index]
+						# お手つきした人は、もう輪から抜けている(もとの席で確かめる)
+						var age: float = s.seat_pass_age[turner.home_seat]
 						_check(age != INF and age >= GameConfig.BOT_TURN_MIN_AFTER_PASS - STEP * 2.0,
 								"ボットは鬼が後ろを通ってから %d 秒たつまで振り向かない(%.1f 秒)" % [int(GameConfig.BOT_TURN_MIN_AFTER_PASS), age])
 				elif e["type"] == "picked_up":
