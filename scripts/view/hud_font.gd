@@ -7,6 +7,15 @@ extends RefCounted
 const BUNDLED := "res://assets/fonts/MPLUSRounded1c-Bold.ttf"
 
 static var _font: Font
+## 黒板の手書き文字(Yusei Magic。SIL Open Font License。assets/fonts/OFL-YuseiMagic.txt)
+const CHALK := "res://assets/fonts/YuseiMagic-Regular.ttf"
+static var _chalk: Font
+
+
+static func get_chalk_font() -> Font:
+	if _chalk == null:
+		_chalk = load(CHALK) if ResourceLoader.exists(CHALK) else get_font()
+	return _chalk
 
 
 static func get_font() -> Font:

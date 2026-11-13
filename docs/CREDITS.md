@@ -14,3 +14,8 @@
   - ライセンス: CC0 1.0(パブリックドメイン。商用利用可・クレジット不要。ここでは感謝のために記録)
   - 使い方: 人型の骨組みと動き(椅子に座る・立ち上がる・走る・歩く・立っている)だけを使う。付属の人形(皮膚のメッシュ)は表示せず、骨にA案の体(丸い頭・カプセルの胴・短い手足)をくっつけている
   - ファイル: `assets/characters/ual/`(ライセンス全文: `assets/characters/ual/LICENSE.txt`)
+- **Yusei Magic**(黒板の手書き文字)
+  - 作者: Tanukizamurai(Copyright 2020 The Yusei Magic Project Authors, https://github.com/tanukifont/YuseiMagic)
+  - 出どころ: Google Fonts(https://github.com/google/fonts/tree/main/ofl/yuseimagic)
+  - ライセンス: SIL Open Font License 1.1(商用利用・同梱できる。フォントだけを売るのは不可)
+  - ファイル: `assets/fonts/YuseiMagic-Regular.ttf`、ライセンス全文: `assets/fonts/OFL-YuseiMagic.txt`

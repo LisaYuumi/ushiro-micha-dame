@@ -543,7 +543,7 @@ func _build_front_wall(wall: Node3D, half: float) -> void:
 	var chalk_color := Color(0.98, 0.97, 0.88, 0.82)
 	var chalk := Label3D.new()
 	chalk.text = "うしろ見ちゃダメ!"
-	chalk.font = HudFont.get_font()
+	chalk.font = HudFont.get_chalk_font()
 	chalk.font_size = 104
 	chalk.pixel_size = 0.0058
 	chalk.outline_size = 6
@@ -611,11 +611,11 @@ func _build_front_extras(wall: Node3D, half: float, z: float) -> void:
 			_part(Vector3(0.16, 0.16, 0.01), Vector3(-5.08 + c * 0.19, 2.95 - r * 0.21, z + 0.05),
 					cell_colors[(r + c * 2) % cell_colors.size()], 0.0, wall)
 	# 学級目標(黒板の上の横長の紙)
-	_part(Vector3(3.8, 0.42, 0.03), Vector3(0, 3.98, z + 0.03), COLOR_PAPER_SOFT, 0.015, wall)
+	_part(Vector3(4.6, 0.44, 0.03), Vector3(0, 3.98, z + 0.03), COLOR_PAPER_SOFT, 0.015, wall)
 	var goal := Label3D.new()
 	goal.text = "なかよく げんきに がんばろう"
-	goal.font = HudFont.get_font()
-	goal.font_size = 64
+	goal.font = HudFont.get_chalk_font()
+	goal.font_size = 54
 	goal.pixel_size = 0.0045
 	goal.outline_size = 0
 	goal.modulate = Color("C2452D")
@@ -632,7 +632,7 @@ func _build_front_extras(wall: Node3D, half: float, z: float) -> void:
 func _chalk_text(parent: Node3D, text: String, pos: Vector3, size: int, tilt_deg: float) -> void:
 	var l := Label3D.new()
 	l.text = text
-	l.font = HudFont.get_font()
+	l.font = HudFont.get_chalk_font()
 	l.font_size = size
 	l.pixel_size = 0.0055
 	l.outline_size = 0

@@ -169,12 +169,15 @@ func show_popup_card(title: String, tags: Array, color: Color, hint: String, sec
 	var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 30, 6)
 	st.border_color = color
 	st.shadow_offset = Vector2(6, 8)
-	st.set_content_margin_all(24)
+	st.content_margin_left = 56
+	st.content_margin_right = 56
+	st.content_margin_top = 36
+	st.content_margin_bottom = 36
 	_popup.add_theme_stylebox_override("panel", st)
 	add_child(_popup)
 	var col := VBoxContainer.new()
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_theme_constant_override("separation", 12)
+	col.add_theme_constant_override("separation", 22)
 	_popup.add_child(col)
 	var t := UiStyle.label(title, 50, color)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -184,11 +187,16 @@ func show_popup_card(title: String, tags: Array, color: Color, hint: String, sec
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 12)
+	row.add_theme_constant_override("separation", 18)
 	col.add_child(row)
 	for tag in tags:
 		var p := UiStyle.pill(str(tag), 26)
-		(p.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = color.lightened(0.75)
+		var ps := p.get_theme_stylebox("panel") as StyleBoxFlat
+		ps.bg_color = color.lightened(0.75)
+		ps.content_margin_left = 22
+		ps.content_margin_right = 22
+		ps.content_margin_top = 8
+		ps.content_margin_bottom = 10
 		row.add_child(p)
 	if hint != "":
 		var h := UiStyle.label(hint, 22, GameConfig.COLOR_INK.lightened(0.3))
