@@ -968,7 +968,7 @@ func _build_handkerchief(state: GameState) -> void:
 			# 手に持つと縦になって裏も見えるので、表と裏の両方に赤い地を貼る
 			_item_part(Vector3(0.55, 0.03, 0.55), Vector3(0, 0.025, 0), Color.WHITE, ITEM_OUTLINE)
 			for face in [1.0, -1.0]:
-				var fy := 0.025 + face * 0.018
+				var fy: float = 0.025 + face * 0.018
 				_item_part(Vector3(0.44, 0.008, 0.44), Vector3(0, fy, 0), COLOR_HANKIE, 0.0)
 				for k in [-0.11, 0.11]:
 					_item_part(Vector3(0.44, 0.006, 0.05), Vector3(0, fy + face * 0.006, k), Color.WHITE, 0.0)
