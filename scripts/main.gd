@@ -294,8 +294,9 @@ func _physics_process(delta: float) -> void:
 	touch.set_stick_visible(me.role == GameState.Role.ONI or me.role == GameState.Role.CHASER)
 	var ov := view.get_overlay()
 	if ov:
-		# 牛乳がかかっている間は名札も見えない(鬼の名札で場所がわからないように)
-		ov.visible = not showing_result and not state.is_milked(me)
+		# 牛乳がかかっている間は名札も見えない(鬼の名札で場所がわからないように)。吹き出しは出したまま
+		ov.visible = not showing_result
+		ov.set_tags_hidden(state.is_milked(me))
 	# 左上の札(鬼の周回・自分の点数)を毎回更新する(参加者の点数は状態といっしょに届く)
 	_update_help()
 
@@ -328,8 +329,7 @@ func _update_my_stamps() -> void:
 		var sender := state.get_actor(st["sender"])
 		list.append({
 			"kind": st["kind"],
-			"item": state.round_index,
-			"sender": _short_name(st["sender"]),
+			"sender": HeadOverlay.sender_name(state, st["sender"]),
 			"sender_color": sender.color if sender else Color.WHITE,
 		})
 	hud.show_my_stamps(list)
@@ -490,10 +490,13 @@ func _on_tap(pos: Vector2) -> void:
 	var ov := view.get_overlay()
 	if ov == null:
 		return
-	var kind := ov.picker_hit(pos)
+	# 下のまん中の言葉のボタン
+	var kind := hud.send_panel_hit(pos)
 	if kind != "":
 		_send_stamp(kind)
 		return
+	if hud.send_panel_contains(pos):
+		return # ボタンのすき間: 何もしない
 	var id := ov.tag_hit(pos)
 	if id < 0:
 		id = view.pick_actor_at(state, pos)
@@ -503,9 +506,9 @@ func _on_tap(pos: Vector2) -> void:
 			cmds.oni_milk(state.local_player_id, id)
 			_milk_aiming = false
 		return
-	if ov.picker_target() >= 0:
-		# 開いているときは、同じ人か外をタップしたら閉じる。ほかの人なら、その人の選択肢を開く
-		var was := ov.picker_target()
+	if _stamp_target >= 0:
+		# 選んでいるときは、同じ人か外をタップしたら閉じる。ほかの人なら、その人を選び直す
+		var was := _stamp_target
 		_close_picker()
 		if id == was or id < 0:
 			return
@@ -515,8 +518,10 @@ func _on_tap(pos: Vector2) -> void:
 	var why := state.stamp_block_reason(state.local_player_id, id)
 	if why != "" and why != "full":
 		return
+	# 足もとが光り、頭の上に「送る相手」の印。下のまん中に「◯◯に送る」と3つの言葉
 	_stamp_target = id
-	ov.open_picker(id)
+	ov.set_send_target(id)
+	hud.open_send_panel(_short_name(id), _i_am_oni())
 
 
 ## 鬼の牛乳: ボタンを押すと「えいっ」(相手を選ぶ)になり、もう一度押すとやめる。
@@ -536,16 +541,17 @@ func _update_milk() -> void:
 
 func _close_picker() -> void:
 	_stamp_target = -1
+	hud.close_send_panel()
 	var ov := view.get_overlay()
 	if ov:
-		ov.close_picker()
+		ov.set_send_target(-1)
 
 
 func _send_stamp(kind: String) -> void:
 	if _stamp_target < 0:
 		return
 	cmds.send_stamp(state.local_player_id, _stamp_target, kind)
-	# 押したときの短い声(言葉ではない声)
+	# 押したときの短い効果音
 	view.play_stamp_sound(kind)
 	# 同じ相手には1ラウンド1回なので、送ったら閉じる
 	_close_picker()

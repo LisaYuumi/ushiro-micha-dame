@@ -23,6 +23,9 @@ var _milk_nodes := {}
 ## 鬼が牛乳の相手を選んでいる間、かけられる人の足もとに出す青い点線の丸(人ごと)
 var _milk_rings := {}
 var _milk_aim := false
+## スタンプを送る相手の足もとの、光る丸
+var _stamp_ring: Node3D
+const STAMP_RING_COLOR := Color("FFC93C")
 ## 床のバナナの皮の見た目(状態の bananas と同じ数だけ出す)
 var _banana_nodes: Array[MeshInstance3D] = []
 ## 鬼が自分の後ろに来たとき、自分の前の床に映る影
@@ -73,12 +76,11 @@ const COLOR_FLOWER := Color("F09AB0")
 const COLOR_STEEL := Color("A9B2BA")
 const COLOR_PAPER_SOFT := Color("FBF8EF")
 
-## スタンプの色(仮)
+## スタンプの色: 落ちてる!(赤)・まだへいき!(緑)・信じて!(紫)
 const STAMP_COLORS := {
-	Stamps.DROPPED: Color(0.95, 0.35, 0.2),
-	Stamps.SAFE: Color(0.2, 0.7, 0.35),
-	Stamps.FAKE: Color(0.95, 0.62, 0.1),
-	Stamps.TRUST: Color(0.6, 0.4, 0.9),
+	Stamps.DROPPED: Color("E5483B"),
+	Stamps.SAFE: Color("3AAE5C"),
+	Stamps.TRUST: Color("9B5DE5"),
 }
 ## 足音用: 鬼の前回の位置と、前の足音から歩いた距離
 var _oni_last_pos := Vector3.ZERO
@@ -135,6 +137,7 @@ func build(state: GameState) -> void:
 	_build_handkerchief(state)
 	_build_oni_shadow()
 	_milk_rings.clear()
+	_stamp_ring = null
 	_build_sounds(state)
 	_build_cameras(state)
 	# 名札(送れない相手は薄く出る)
@@ -928,10 +931,10 @@ func _build_milk_splash() -> Node3D:
 
 
 ## 牛乳をかけられる人の目印: 足もとに青い点線の丸と、うすい青の丸(ゆっくり回る)
-func _build_milk_ring() -> Node3D:
+func _build_milk_ring(color: Color = ButtonIcon.MILK_BLUE) -> Node3D:
 	var ring := Node3D.new()
 	var blue := StandardMaterial3D.new()
-	blue.albedo_color = ButtonIcon.MILK_BLUE
+	blue.albedo_color = color
 	blue.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	var dash := BoxMesh.new()
 	dash.size = Vector3(0.16, 0.01, 0.045)
@@ -952,7 +955,7 @@ func _build_milk_ring() -> Node3D:
 	fill.height = 0.004
 	fill.radial_segments = 32
 	var fill_mat := StandardMaterial3D.new()
-	fill_mat.albedo_color = Color(ButtonIcon.MILK_BLUE, 0.18)
+	fill_mat.albedo_color = Color(color, 0.25)
 	fill_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	fill_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	var fmi := MeshInstance3D.new()
@@ -1150,8 +1153,18 @@ func debug_slip_all() -> void:
 
 
 ## スタンプを送る相手(いまは頭の上の選択肢で示すので、3D の目印は出さない)
-func set_stamp_target(_state: GameState, _id: int) -> void:
-	pass
+## スタンプを送る相手の足もとを光らせる(-1 で消す)
+func set_stamp_target(state: GameState, id: int) -> void:
+	if _stamp_ring == null or not is_instance_valid(_stamp_ring):
+		_stamp_ring = _build_milk_ring(STAMP_RING_COLOR)
+	var a := state.get_actor(id)
+	_stamp_ring.visible = a != null
+	if a:
+		_stamp_ring.position = Vector3(a.position.x, 0.045, a.position.z)
+		_stamp_ring.rotation.y += get_process_delta_time() * 0.8
+		# ふわっと明るくなったり暗くなったりする
+		var k := 1.0 + 0.06 * sin(_clock * 6.0)
+		_stamp_ring.scale = Vector3(k, 1.0, k)
 
 
 ## 頭の上の名札とスタンプ(2D)

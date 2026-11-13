@@ -10,12 +10,14 @@ var _message: Label
 var _message_left := 0.0
 ## 自分に届いたスタンプ(左下の「あなたへ」の箱に、送り主つきで3つまで積む)
 var _my_box: PanelContainer
+## (送った人の色の吹き出しに「名前:言葉」)
 var _slots: Array[PanelContainer] = []
 var _slot_styles: Array[StyleBoxFlat] = []
-## 送った人の色の丸
-var _slot_dots: Array[StyleBoxFlat] = []
-var _slot_senders: Array[Label] = []
-var _slot_icons: Array[StampIcon] = []
+var _slot_labels: Array[Label] = []
+## スタンプを送るときの、下のまん中の「◯◯に送る」と3つの言葉のボタン
+var _send_panel: PanelContainer
+var _send_title: Label
+var _send_buttons: Array[Button] = []
 ## 前のフレームに出ていたスタンプ(新しく届いたものだけポンと飛び出させる)
 var _shown_keys: Array = []
 ## 自分に届いたスタンプの間、画面のふちを光らせる枠
@@ -57,7 +59,11 @@ func _ready() -> void:
 	_milk.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_milk.draw.connect(_draw_milk)
 	_milk.visible = false
-	add_child(_milk)
+	# 牛乳は 3D のすぐ上(層 0)に描く。名札の吹き出しやスタンプ、札はその上に見える
+	var milk_layer := CanvasLayer.new()
+	milk_layer.layer = 0
+	add_child(milk_layer)
+	milk_layer.add_child(_milk)
 	_build_milk_pill()
 	# 説明文は出さない(A案: 文字は札とボタンだけ)。古い呼び出しのために部品だけ残す
 	_help = _make_label(22, GameConfig.COLOR_INK)
@@ -515,7 +521,8 @@ func hide_message() -> void:
 	hide_result_card()
 
 
-## 自分に届いているスタンプを並べる。list: [{"kind", "item", "sender", "sender_color"}](届いた順)
+## 自分に届いているスタンプを並べる。list: [{"kind", "sender", "sender_color"}](届いた順)。
+## 送った人の色の吹き出しに「名前:言葉」
 func show_my_stamps(list: Array) -> void:
 	var keys := []
 	for i in _slots.size():
@@ -526,11 +533,10 @@ func show_my_stamps(list: Array) -> void:
 		var st: Dictionary = list[i]
 		var key := "%s|%s" % [st["sender"], st["kind"]]
 		keys.append(key)
-		# 白い札に「●送った人  [スタンプの絵]」。丸は送った人の体の色
-		_slot_icons[i].kind = st["kind"]
-		_slot_icons[i].item = st["item"]
-		_slot_senders[i].text = st["sender"]
-		_slot_dots[i].bg_color = st["sender_color"]
+		var col: Color = st["sender_color"]
+		_slot_styles[i].bg_color = col
+		_slot_labels[i].text = "%s:%s" % [st["sender"], Texts.stamp(st["kind"])]
+		_slot_labels[i].add_theme_color_override("font_color", text_color_on(col))
 		box.visible = true
 		if not (key in _shown_keys):
 			# 新しく届いた: ポンと大きくなってから元の大きさへ
@@ -547,6 +553,87 @@ func show_my_stamps(list: Array) -> void:
 		for r in _frame:
 			r.visible = false
 	_shown_keys = keys
+
+
+## 地の色の上で読みやすい文字の色(明るい地なら黒、暗い地なら白)
+static func text_color_on(bg: Color) -> Color:
+	return GameConfig.COLOR_INK if bg.get_luminance() > 0.55 else GameConfig.COLOR_PAPER
+
+
+## 下のまん中の「◯◯に送る」と、3つの言葉のボタン(子どもの指でも押しやすい大きさ)
+func _build_send_panel() -> void:
+	_send_panel = PanelContainer.new()
+	_send_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 22, 4)
+	st.content_margin_left = 16
+	st.content_margin_right = 16
+	st.content_margin_top = 8
+	st.content_margin_bottom = 14
+	_send_panel.add_theme_stylebox_override("panel", st)
+	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_theme_constant_override("separation", 8)
+	_send_panel.add_child(col)
+	_send_title = UiStyle.label("", 26, GameConfig.COLOR_INK)
+	_send_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(_send_title)
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 14)
+	col.add_child(row)
+	for kind in Stamps.ALL:
+		var b := Button.new()
+		b.text = Texts.stamp(kind)
+		# 押した判定は main がする(指の操作をまとめて扱うため)。ここでは見た目だけ
+		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		UiStyle.button(b, false, 32, GameConfig.COLOR_PAPER)
+		var c: Color = WorldView.STAMP_COLORS[kind]
+		b.add_theme_stylebox_override("normal", UiStyle.box(c))
+		b.add_theme_stylebox_override("hover", UiStyle.box(c))
+		b.add_theme_stylebox_override("pressed", UiStyle.pressed_box(c))
+		b.custom_minimum_size = Vector2(210, 104)
+		row.add_child(b)
+		_send_buttons.append(b)
+	add_child(_send_panel)
+	_send_panel.anchor_left = 0.5
+	_send_panel.anchor_right = 0.5
+	_send_panel.anchor_top = 1.0
+	_send_panel.anchor_bottom = 1.0
+	_send_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_send_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_send_panel.visible = false
+
+
+## 「◯◯に送る」を出す。above_buttons = true なら、鬼のボタンの上に出す(重ならないように)
+func open_send_panel(target_name: String, above_buttons: bool) -> void:
+	_send_title.text = Texts.t("send_to") % target_name
+	_send_panel.visible = true
+	var bottom := -280.0 if above_buttons else -24.0
+	# 鬼のボタン(右下)と重ならないよう、鬼のときは少し左に寄せる
+	var shift := -160.0 if above_buttons else -60.0
+	_send_panel.offset_left = shift
+	_send_panel.offset_right = shift
+	_send_panel.offset_top = bottom
+	_send_panel.offset_bottom = bottom
+
+
+func close_send_panel() -> void:
+	_send_panel.visible = false
+
+
+## 画面のこの位置にある、言葉のボタンの種類(なければ "")
+func send_panel_hit(pos: Vector2) -> String:
+	if not _send_panel.visible:
+		return ""
+	for i in _send_buttons.size():
+		if _send_buttons[i].get_global_rect().grow(6.0).has_point(pos):
+			return Stamps.ALL[i]
+	return ""
+
+
+## 「◯◯に送る」の上(ボタンのすき間など)をタップしたか(閉じないようにするため)
+func send_panel_contains(pos: Vector2) -> bool:
+	return _send_panel.visible and _send_panel.get_global_rect().has_point(pos)
 
 
 ## 自分あてにスタンプが届いたとき、画面のふちを光らせる
@@ -735,57 +822,26 @@ func _build_stamp_display() -> void:
 	col.add_theme_constant_override("separation", 10)
 	_my_box.add_child(col)
 
-	var ink := Color(0.12, 0.12, 0.14)
 	for i in GameConfig.STAMP_SLOTS:
-		# 白くて丸い札。黒いふちと、下にずらした影
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color.WHITE
-		style.border_color = ink
-		style.set_border_width_all(4)
-		style.set_corner_radius_all(16)
-		style.shadow_color = ink
-		style.shadow_size = 1
-		style.shadow_offset = Vector2(3, 5)
-		style.content_margin_left = 10
-		style.content_margin_right = 14
-		style.content_margin_top = 4
-		style.content_margin_bottom = 4
+		# 送った人の色の吹き出し(黒いふち・左下にしっぽ)に「名前:言葉」
+		var style := UiStyle.box(Color.WHITE, true, 18, 4)
+		style.content_margin_left = 16
+		style.content_margin_right = 16
+		style.content_margin_top = 6
+		style.content_margin_bottom = 8
 		var slot := PanelContainer.new()
 		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slot.add_theme_stylebox_override("panel", style)
 		slot.visible = false
+		slot.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		col.add_child(slot)
-
-		var row := HBoxContainer.new()
-		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_theme_constant_override("separation", 10)
-		slot.add_child(row)
-		# 送った人の体の色の丸
-		var dot_style := StyleBoxFlat.new()
-		dot_style.set_corner_radius_all(18)
-		dot_style.border_color = ink
-		dot_style.set_border_width_all(3)
-		var dot := Panel.new()
-		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		dot.custom_minimum_size = Vector2(34, 34)
-		dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		dot.add_theme_stylebox_override("panel", dot_style)
-		row.add_child(dot)
-		# 送った人の名前
-		var sender := _make_label(20, ink)
-		sender.add_theme_constant_override("outline_size", 0)
-		sender.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		sender.custom_minimum_size = Vector2(96, 0)
-		sender.clip_text = true
-		row.add_child(sender)
-		# スタンプの絵(落とし物アイコン+記号)
-		var icon := StampIcon.make(Stamps.DROPPED, 0, 52.0)
-		row.add_child(icon)
+		var l := UiStyle.label("", 26, GameConfig.COLOR_INK)
+		slot.add_child(l)
 		_slots.append(slot)
 		_slot_styles.append(style)
-		_slot_dots.append(dot_style)
-		_slot_senders.append(sender)
-		_slot_icons.append(icon)
+		_slot_labels.append(l)
+
+	_build_send_panel()
 
 	_badge = UiStyle.pill("", 24, true)
 	(_badge.get_child(0) as Label).add_theme_color_override("font_color", GameConfig.COLOR_PAPER)

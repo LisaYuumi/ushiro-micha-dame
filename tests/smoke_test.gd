@@ -35,6 +35,7 @@ func _initialize() -> void:
 	_test_rounds_with_bots_always_finish()
 	_test_stamp_rules()
 	_test_stamp_truthfulness()
+	_test_stamp_words()
 	_test_bots_send_and_trust_stamps()
 	_test_player_oni_setup()
 	_test_player_oni_walk_speed_and_stop()
@@ -398,7 +399,7 @@ func _test_stamp_rules() -> void:
 	_check(_blocked_reason(s.take_events()) == "neighbor", "となりには送れないお知らせが出る")
 	_check(not s.send_stamp(1, 0, Stamps.SAFE), "8人のとき、左どなりには送れない")
 	s.take_events()
-	_check(s.send_stamp(0, 3, Stamps.DROPPED) and s.send_stamp(5, 3, Stamps.FAKE), "1人に何人もスタンプを送れる")
+	_check(s.send_stamp(0, 3, Stamps.DROPPED) and s.send_stamp(5, 3, Stamps.TRUST), "1人に何人もスタンプを送れる")
 	_check(s.active_stamps[3].size() == 3, "3つ同時に表示される")
 	_check(s.active_stamps[3][0]["sender"] == 1 and s.active_stamps[3][2]["sender"] == 5, "届いた順に並ぶ")
 	s.take_events()
@@ -430,6 +431,16 @@ func _test_stamp_rules() -> void:
 	var s5 := GameState.new()
 	s5.start_match(41, false, 4)
 	_check(s5.send_stamp(1, 2, Stamps.SAFE) and s5.send_stamp(1, 0, Stamps.SAFE), "5人のときは両どなりにも送れる")
+
+
+func _test_stamp_words() -> void:
+	_check(Stamps.ALL.size() == 3, "スタンプは3つ(落ちてる!・まだへいき!・信じて!)")
+	_check(Texts.stamp(Stamps.DROPPED) == "落ちてる!" and Texts.stamp(Stamps.SAFE) == "まだへいき!" \
+			and Texts.stamp(Stamps.TRUST) == "信じて!", "スタンプの言葉")
+	for k in Stamps.ALL:
+		_check(WorldView.STAMP_COLORS.has(k), "%s に色がある" % k)
+	_check(not Stamps.says_look(Stamps.SAFE) and Stamps.says_look(Stamps.TRUST), "まだへいき=見るな、信じて=見ろ")
+	_check(Texts.t("send_to") % "ボット3" == "ボット3に送る", "「◯◯に送る」")
 
 
 func _test_stamp_truthfulness() -> void:

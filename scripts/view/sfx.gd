@@ -41,12 +41,6 @@ static func stamp(kind: String) -> AudioStreamWAV:
 				_stamp[kind] = _make_fn(0.5, func(t: float, n: float) -> float:
 					var hiss := n - 0.6 * sin(TAU * 40.0 * t) * n
 					return hiss * 0.5 * minf(t * 15.0, 1.0) * maxf(1.0 - t / 0.5, 0.0))
-			Stamps.FAKE:
-				# 「ん?」: 口を閉じた声が、くいっと上がる
-				_stamp[kind] = _make_fn(0.35, func(t: float, _n: float) -> float:
-					var f := 200.0 + (160.0 * pow(t / 0.35, 2.0))
-					var v := sin(TAU * f * t) + 0.25 * sin(TAU * 3.0 * f * t)
-					return v * 0.5 * minf(t * 20.0, 1.0) * maxf(1.0 - t / 0.35, 0.0))
 			_:
 				# 「うるっ」: 高めの声がふるえる
 				_stamp[kind] = _make_fn(0.45, func(t: float, _n: float) -> float:
