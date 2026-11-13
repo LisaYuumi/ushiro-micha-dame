@@ -558,7 +558,7 @@ func _build_front_wall(wall: Node3D, half: float) -> void:
 		_part(Vector3(0.52, 0.035, 0.01), Vector3(-2.1 + i * 0.5, 2.35 + (0.04 if i % 2 == 0 else -0.04), z + 0.1),
 				Color(0.98, 0.97, 0.88), 0.0, wall, Vector3(0, 0, 0.18 if i % 2 == 0 else -0.18))
 	for k in 3:
-		_part(Vector3(0.42, 0.035, 0.01), Vector3(2.85, 3.25, z + 0.1), Color(0.98, 0.97, 0.88), 0.0, wall, Vector3(0, 0, k * PI / 3.0))
+		_part(Vector3(0.42, 0.035, 0.01), Vector3(-3.15, 3.35, z + 0.1), Color(0.98, 0.97, 0.88), 0.0, wall, Vector3(0, 0, k * PI / 3.0))
 	# 時計
 	var face := CylinderMesh.new()
 	face.top_radius = 0.38
