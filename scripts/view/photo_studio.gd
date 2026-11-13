@@ -2,7 +2,7 @@ class_name PhotoStudio
 extends Node3D
 ## 撮影モード(開発用): SNS 画像や宣伝素材の見本を撮るための画面。ゲームの状態にはさわらない。
 ## - 無地の背景に、プレイヤーと同じ人型キャラを1体
-## - 向き(正面・横・後ろ・斜め前)、表情(ふつう・困り眉・汗だく・放心)、ポーズ(座る・立つ・走る・転ぶ)、体の色
+## - 向き(正面・横・後ろ・斜め前)、表情(ふつう・困り眉・汗だく・放心)、ポーズ(座る・体育座り・立つ・走る・転ぶ)、体の色
 ## - UI を消して、キャラだけを大きく映せる(画面をタップすると UI が戻る)
 ## - 6人が輪になって座る場面を、斜め上から見下ろして撮れる
 
@@ -12,7 +12,7 @@ signal closed
 const ORIGIN := Vector3(200, 0, 0)
 const DIRECTIONS := {"正面": PI, "横": PI / 2.0, "後ろ": 0.0, "斜め前": PI * 0.83}
 const EXPRESSIONS := ["ふつう", "困り眉", "汗だく", "放心"]
-const POSES := ["座る", "立つ", "走る", "転ぶ"]
+const POSES := ["座る", "体育座り", "立つ", "走る", "転ぶ"]
 const BACKGROUNDS := [Color("8FD3E8"), Color("FFF4DC"), Color("FFFFFF"), Color("F7C4CF"), Color("F6C945"), Color("00B140")]
 ## カメラの近さ(1体のとき。メートル)
 const ZOOMS := [1.9, 2.8, 4.0]
@@ -144,6 +144,8 @@ func _apply_pose(m: CharacterModel, pose: String) -> void:
 	match pose:
 		"座る":
 			m.set_pose("sit")
+		"体育座り":
+			m.set_pose("floor")
 		"走る":
 			m.set_pose("run")
 		"転ぶ":
@@ -182,7 +184,7 @@ func _update_camera() -> void:
 		return
 	_cam.fov = 40
 	var d: float = ZOOMS[_zoom]
-	var target_y := 0.75 if _pose == "座る" else (0.45 if _pose == "転ぶ" else 0.95)
+	var target_y := 0.75 if _pose == "座る" else (0.5 if _pose == "体育座り" else (0.45 if _pose == "転ぶ" else 0.95))
 	_cam.h_offset = 0.0 if _ui_hidden else d * 0.28
 	_cam.look_at_from_position(ORIGIN + Vector3(0, target_y + 0.25, d * 2.0), ORIGIN + Vector3(0, target_y, 0))
 

@@ -209,8 +209,8 @@ func _on_remote_command(peer_id: int, cmd: String, args: Array) -> void:
 			state.oni_drop(id)
 		"oni_feint":
 			state.oni_feint(id)
-		"oni_voice":
-			state.oni_voice(id, str(args[0]))
+		"oni_milk":
+			state.oni_milk(id)
 		"throw_banana":
 			state.throw_banana(id, int(args[0]))
 		"send_stamp":
@@ -271,19 +271,27 @@ func _physics_process(delta: float) -> void:
 	if me == null:
 		return
 	_update_my_stamps()
-	hud.set_role_badge("あなたは鬼の手下" if state.minion_id == me.id \
-			and state.phase != GameState.Phase.RESULT else "", Color(0.55, 0.2, 0.7))
+	var out := me.role == GameState.Role.OUT
+	if out and state.phase != GameState.Phase.RESULT:
+		hud.set_role_badge("お手つきでお休み中(このラウンド0点)", Color(0.35, 0.45, 0.6))
+	else:
+		hud.set_role_badge("あなたは鬼の手下" if state.minion_id == me.id \
+				and state.phase != GameState.Phase.RESULT else "", Color(0.55, 0.2, 0.7))
+	# 牛乳がかかっている間は、画面が白い
+	hud.set_milk(state.is_milked(me) and state.phase != GameState.Phase.RESULT)
+	touch.set_milk_left(state.milk_left)
 	var judged := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
 	touch.set_looks_left(me.looks_left if judged else -1)
 	# 勝敗が出ている間は、名札とゲーム用のボタンを隠して結果カードだけにする(⚙は残す)
 	var showing_result := state.phase == GameState.Phase.RESULT
 	touch.set_result_mode(showing_result)
 	touch.set_oni_mode(_i_am_oni(),
-			me.role == GameState.Role.SEATED and state.phase == GameState.Phase.CHASE)
-	touch.set_stick_visible(me.role != GameState.Role.SEATED)
+			(me.role == GameState.Role.SEATED or out) and state.phase == GameState.Phase.CHASE, out)
+	touch.set_stick_visible(me.role == GameState.Role.ONI or me.role == GameState.Role.CHASER)
 	var ov := view.get_overlay()
 	if ov:
-		ov.visible = not showing_result
+		# 牛乳がかかっている間は名札も見えない(鬼の名札で場所がわからないように)
+		ov.visible = not showing_result and not state.is_milked(me)
 	# 左上の札(鬼の周回・自分の点数)を毎回更新する(参加者の点数は状態といっしょに届く)
 	_update_help()
 
@@ -561,14 +569,24 @@ func _show_event(e: Dictionary) -> void:
 				hud.show_message("もう振り向けない!\n(1ラウンド%d回まで)" % GameConfig.LOOKS_PER_ROUND, Color(0.3, 0.3, 0.3), 1.2)
 		"drop_failed":
 			if e["actor"] == me:
-				hud.show_message("席の後ろで押してね", Color(0.3, 0.3, 0.3), 1.0)
+				var empty: bool = e.get("reason", "") == "empty"
+				hud.show_message("空いた席には落とせない" if empty else "席の後ろで押してね", Color(0.3, 0.3, 0.3), 1.0)
+		"milk_failed":
+			if e["actor"] == me:
+				hud.show_message("人の後ろで押してね", Color(0.3, 0.3, 0.3), 1.0)
+		"milk":
+			if e["target"] == me:
+				hud.show_message("牛乳かけられた!", Color(0.3, 0.45, 0.7), 1.2)
+			elif e["sender"] == me:
+				hud.show_message("%s に牛乳!" % _name(e["target"]), Color(0.3, 0.45, 0.7), 1.0)
+		"out":
+			if e["actor"] == me:
+				hud.show_message("お手つき!\n真ん中でお休み(このラウンド0点)", Color(0.85, 0.1, 0.1), 2.0)
+				_close_picker()
+				_update_help()
 		"auto_drop":
 			if _i_am_oni():
 				hud.show_message("4周したので\n次の席で自動で落とす", Color(0.3, 0.3, 0.3), 1.5)
-		"otetsuki":
-			if e["actor"] == me:
-				# 外れ: 減点はないが、振り向ける回数は減る
-				hud.show_message("なにもない…", Color(0.85, 0.1, 0.1), GameConfig.MESSAGE_TIME)
 		"found":
 			if e["actor"] == me:
 				hud.show_message("あった!", Color(0.1, 0.5, 0.9), GameConfig.MESSAGE_TIME)
@@ -633,6 +651,14 @@ func _show_result(r: Dictionary) -> void:
 			else:
 				title = "鬼のかち!"
 				sub = "%s が気づかなかった!" % loser
+		"all_out":
+			if r["winner"] == me:
+				title = "全員お手つき!"
+				sub = "だれも残らなかった〜!"
+				color = win
+			else:
+				title = "全員お手つき…"
+				sub = "鬼のかち! みんな振り向きすぎ!"
 	var notes := []
 	# 手下は「手下はだれ?」のカードをめくると見られる
 	var minion: int = r.get("minion", -1)

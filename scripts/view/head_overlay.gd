@@ -97,7 +97,7 @@ func update(state: GameState, cam: Camera3D) -> void:
 		return
 	var vp := get_viewport().get_visible_rect().size
 	var me := state.get_local_player()
-	var can_stamp := me != null and (me.role == GameState.Role.SEATED or me.role == GameState.Role.ONI) \
+	var can_stamp := me != null and (me.role == GameState.Role.SEATED or me.role == GameState.Role.ONI or me.role == GameState.Role.OUT) \
 			and (state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED)
 	var placed: Array[Rect2] = []
 	# 手前(カメラに近い)人から置く。重なったら奥の人の札を上へずらす

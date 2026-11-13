@@ -39,9 +39,19 @@ var _card_back: Control
 var _flipping := false
 ## 役のお知らせカード(手下になったときなど)。しばらくすると消える
 var _popup: PanelContainer
+## 牛乳がかかったときの白い画面(いちばん下に置く。札やスタンプはその上に見える)
+var _milk: Control
+var _milk_on := false
+var _milk_a := 0.0
 
 
 func _ready() -> void:
+	_milk = Control.new()
+	_milk.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_milk.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_milk.draw.connect(_draw_milk)
+	_milk.visible = false
+	add_child(_milk)
 	# 説明文は出さない(A案: 文字は札とボタンだけ)。古い呼び出しのために部品だけ残す
 	_help = _make_label(22, GameConfig.COLOR_INK)
 	_help.visible = false
@@ -61,6 +71,13 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	# 牛乳: かかるとすぐ白く、終わるときはゆっくり晴れる
+	var want := 1.0 if _milk_on else 0.0
+	if _milk_a != want or (_milk_on and _milk.visible):
+		_milk_a = move_toward(_milk_a, want, delta / (0.15 if _milk_on else 0.8))
+		_milk.visible = _milk_a > 0.0
+		_milk.modulate.a = _milk_a
+		_milk.queue_redraw()
 	if _message_left > 0.0:
 		_message_left -= delta
 		if _message_left <= 0.0:
@@ -536,6 +553,34 @@ func flash_stamp(color: Color) -> void:
 		_frame_tween.tween_callback(_set_frame_alpha.bind(0.9))
 		_frame_tween.tween_interval(0.15)
 	_frame_tween.tween_callback(_set_frame_alpha.bind(0.5))
+
+
+## 牛乳がかかっている間は、画面を白くする(鬼の影や向かいの人の後ろが見えにくい)
+func set_milk(on: bool) -> void:
+	_milk_on = on
+
+
+func is_milk_shown() -> bool:
+	return _milk.visible
+
+
+## 白い膜と、上からたれる牛乳のしずく、ゆっくり動くむら
+func _draw_milk() -> void:
+	var sz := _milk.size
+	var t := Time.get_ticks_msec() / 1000.0
+	var white := Color(1.0, 0.99, 0.96)
+	_milk.draw_rect(Rect2(Vector2.ZERO, sz), Color(white, 0.9))
+	# 上のふちから、しずくがたれる
+	for i in 9:
+		var x := sz.x * (float(i) + 0.5) / 9.0 + sin(float(i) * 7.3) * 30.0
+		var drip := sz.y * (0.18 + 0.12 * absf(sin(float(i) * 3.1))) + sin(t * 0.8 + float(i)) * 12.0
+		var w := 34.0 + 18.0 * absf(sin(float(i) * 5.7))
+		_milk.draw_rect(Rect2(x - w / 2.0, 0.0, w, drip), white)
+		_milk.draw_circle(Vector2(x, drip), w * 0.62, white)
+	# 牛乳のむら(少し青みがかった、ゆっくり動くしみ)
+	for i in 4:
+		var c := Vector2(sz.x * (0.2 + 0.2 * float(i)), sz.y * (0.55 + 0.15 * sin(float(i) * 2.0 + t * 0.3)))
+		_milk.draw_circle(c, sz.y * 0.09, Color(0.92, 0.94, 0.97, 0.35))
 
 
 ## 画面の上のまん中に、役を出す(空文字で消す)。color の地に白い文字

@@ -11,11 +11,10 @@ static func apply(state: GameState, cmds: Object, cam_basis: Basis) -> void:
 	if state.get_actor(id) == null:
 		return
 	if state.oni_id == id:
-		# 鬼のとき: 止まる・落とす・声(咳/口笛/手拍子/叫ぶ)・落とす音
+		# 鬼のとき: 止まる・落とす・落とす音・牛乳
 		cmds.set_oni_stop(id, Input.is_action_pressed("oni_stop"))
-		for i in Voices.ALL.size():
-			if Input.is_action_just_pressed("voice_%d" % i):
-				cmds.oni_voice(id, Voices.ALL[i])
+		if Input.is_action_just_pressed("oni_milk"):
+			cmds.oni_milk(id)
 		if Input.is_action_just_pressed("oni_drop"):
 			cmds.oni_drop(id)
 		if Input.is_action_just_pressed("oni_feint"):
@@ -23,6 +22,10 @@ static func apply(state: GameState, cmds: Object, cam_basis: Basis) -> void:
 	else:
 		# 振り向く = 後ろに落ちていたら、そのまま拾って立ち上がる(「拾う」ボタンはない)
 		var me := state.get_actor(id)
+		# お手つきで抜けた人は振り向けない(バナナとスタンプだけ)
+		if me.role == GameState.Role.OUT:
+			_bananas(state, cmds, id)
+			return
 		var holding := Input.is_action_pressed("look_back")
 		if Input.is_action_just_pressed("look_back") or Input.is_action_just_pressed("pick_up"):
 			cmds.pick_up(id)
@@ -30,11 +33,7 @@ static func apply(state: GameState, cmds: Object, cam_basis: Basis) -> void:
 			# 振り向いたまま待っていたら、後ろに落とされた: そのまま拾う
 			cmds.pick_up(id)
 		cmds.set_looking_back(id, holding)
-		# 追いかけっこ中: 鬼か追いかける人にバナナの皮
-		if Input.is_action_just_pressed("banana_oni"):
-			cmds.throw_banana(id, state.oni_id)
-		if Input.is_action_just_pressed("banana_chaser"):
-			cmds.throw_banana(id, state.chaser_id)
+		_bananas(state, cmds, id)
 
 	var v := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	var right := cam_basis.x
@@ -43,3 +42,11 @@ static func apply(state: GameState, cmds: Object, cam_basis: Basis) -> void:
 	forward.y = 0.0
 	var dir := right.normalized() * v.x + forward.normalized() * -v.y
 	cmds.set_move(id, dir)
+
+
+## 追いかけっこ中: 鬼か追いかける人にバナナの皮
+static func _bananas(state: GameState, cmds: Object, id: int) -> void:
+	if Input.is_action_just_pressed("banana_oni"):
+		cmds.throw_banana(id, state.oni_id)
+	if Input.is_action_just_pressed("banana_chaser"):
+		cmds.throw_banana(id, state.chaser_id)

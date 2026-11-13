@@ -23,7 +23,6 @@ func _initialize() -> void:
 	_test_drop_happens_for_every_seed()
 	_test_otetsuki_when_nothing_behind()
 	_test_found_when_handkerchief_behind()
-	_test_found_when_already_looking_back()
 	_test_decoy_rustle_is_behind_a_seat()
 	_test_bot_cannot_look_back_as_oni()
 	_test_missed_when_nobody_notices()
@@ -45,13 +44,12 @@ func _initialize() -> void:
 	_test_match_next_oni_is_loser()
 	_test_match_scores_and_end()
 	_test_heavier_items_slow_the_chaser()
-	_test_oni_voice_masks_the_drop()
-	_test_bot_oni_uses_voices()
 	_test_banana_rules()
 	_test_banana_can_be_dodged()
 	_test_bots_throw_bananas()
 	_test_who_can_see_behind_whom()
-	_test_miss_has_no_penalty()
+	_test_miss_goes_out()
+	_test_milk()
 	_test_deceiving_scores()
 	_test_minion()
 	_test_bot_personalities()
@@ -86,8 +84,8 @@ func _process(delta: float) -> bool:
 	elif _frames == 120:
 		_press("sound_test", true)
 		_press("sound_test", false)
-		_press("voice_0", true)
-		_press("voice_0", false)
+		_press("oni_milk", true)
+		_press("oni_milk", false)
 		_press("banana_oni", true)
 		_press("banana_oni", false)
 		# 相手を選ばずにスタンプ → 相手を選んでスタンプ
@@ -200,11 +198,11 @@ func _test_otetsuki_when_nothing_behind() -> void:
 	var ev := s.take_events()
 	_check(_has(ev, "otetsuki"), "何もないのに振り向くとお手つき")
 	_check(s.get_local_player().otetsuki_count == 1, "お手つきが1回数えられる")
+	_check(s.get_local_player().role == GameState.Role.OUT, "お手つきしたら輪から抜ける")
 	s.set_looking_back(s.local_player_id, true)
-	_check(s.take_events().is_empty(), "押しっぱなしでは何度もお手つきにならない")
 	s.set_looking_back(s.local_player_id, false)
 	s.set_looking_back(s.local_player_id, true)
-	_check(s.get_local_player().otetsuki_count == 2, "もう一度振り向くと2回目")
+	_check(s.get_local_player().otetsuki_count == 1, "抜けたあとは振り向けない(お手つきも増えない)")
 
 
 func _test_found_when_handkerchief_behind() -> void:
@@ -220,21 +218,6 @@ func _test_found_when_handkerchief_behind() -> void:
 	var other := s.get_actor_at_seat((s.drop_target_seat + 1) % GameConfig.SEAT_COUNT)
 	s.set_looking_back(other.id, true)
 	_check(_has(s.take_events(), "otetsuki"), "落とされていない人が振り向くとお手つき")
-
-
-func _test_found_when_already_looking_back() -> void:
-	var s := GameState.new()
-	s.start_round(5)
-	var target := s.get_actor_at_seat(s.drop_target_seat)
-	s.set_looking_back(target.id, true)
-	s.take_events()
-	var ev := []
-	for i in int(120.0 / STEP):
-		s.tick(STEP)
-		ev.append_array(s.take_events())
-		if s.handkerchief_on_floor:
-			break
-	_check(_has(ev, "found"), "振り向いたまま待っていて落とされたら見つかる")
 
 
 func _test_decoy_rustle_is_behind_a_seat() -> void:
@@ -777,58 +760,6 @@ func _test_heavier_items_slow_the_chaser() -> void:
 	print("chaser speed: handkerchief %.2f / heaviest %.2f" % [speeds[0], speeds[1]])
 
 
-func _test_oni_voice_masks_the_drop() -> void:
-	var s := GameState.new()
-	s.start_match(71, true)
-	var oni := s.oni_id
-	_check(s.oni_voice(oni, Voices.WHISTLE), "鬼は声を出せる")
-	_check(_has(s.take_events(), "voice"), "声のお知らせが出る")
-	_check(not s.oni_voice(oni, Voices.COUGH), "すぐには続けて出せない")
-	_check(not s.oni_voice(0, Voices.COUGH), "座っている人は鬼の声を出せない")
-	# 席の後ろまで歩いて、声を出してすぐ落とす → かき消される
-	while s.oni_angle < s.next_seat_crossing - 0.01:
-		s.tick(STEP)
-	for i in int(GameConfig.ONI_VOICE_COOLDOWN / STEP) + 2:
-		s.set_oni_stop(oni, true)
-		s.tick(STEP)
-	_check(s.oni_voice(oni, Voices.CLAP), "休んだあとはまた出せる")
-	s.tick(STEP)
-	_check(s.oni_drop(oni), "(確認用)落とせる")
-	var dropped := {}
-	for e in s.take_events():
-		if e["type"] == "dropped":
-			dropped = e
-	_check(dropped.get("masked", false), "声のすぐあとに落とすと、置く音がかき消される")
-	# 声を出さずに落とすと、かき消されない
-	var s2 := GameState.new()
-	s2.start_match(71, true)
-	while s2.oni_angle < s2.next_seat_crossing - 0.01:
-		s2.tick(STEP)
-	s2.oni_drop(s2.oni_id)
-	var d2 := {}
-	for e in s2.take_events():
-		if e["type"] == "dropped":
-			d2 = e
-	_check(not d2.get("masked", true), "声を出さなければ、置く音はそのまま")
-
-
-func _test_bot_oni_uses_voices() -> void:
-	var voices := 0
-	var masked := 0
-	for seed_value in 20:
-		var s := GameState.new()
-		s.start_match(seed_value)
-		for i in int(60.0 / STEP):
-			s.tick(STEP)
-			for e in s.take_events():
-				if e["type"] == "voice":
-					voices += 1
-				elif e["type"] == "dropped" and e["masked"]:
-					masked += 1
-	_check(voices > 0, "ボットの鬼も声を出す")
-	_check(masked > 0, "ボットの鬼も、声で置く音をかき消すことがある")
-
-
 func _test_banana_rules() -> void:
 	var s := _chasing_state(73)
 	var thrower := s.get_actor_at_seat((s.vacant_seat + 2) % GameConfig.SEAT_COUNT)
@@ -924,27 +855,114 @@ func _check_visibility(n: int) -> void:
 		_check(seen == n - 3, "見えるのは向かいの %d 人" % (n - 3))
 
 
-func _test_miss_has_no_penalty() -> void:
-	# 外れの振り向きは減点しない。回数だけ数える(表情に使う)。振り向ける回数は減る
+func _test_miss_goes_out() -> void:
+	# お手つきは減点しない。そのかわり輪から抜けて真ん中で体育座り、このラウンドの点は0点
 	var s := GameState.new()
 	s.start_match(81)
 	var me := s.get_local_player()
+	var seat := me.seat_index
 	s.scores[me.id] = 7
+	s._round_base_scores[me.id] = 5
 	s.set_looking_back(me.id, true)
-	_check(s.scores[me.id] == 7, "外れの振り向きでも点は減らない")
-	_check(me.otetsuki_count == 1, "外れの回数は数える")
-	_check(me.looks_left == GameConfig.LOOKS_PER_ROUND - 1, "振り向ける回数は減る")
-	_check(_has(s.take_events(), "otetsuki"), "外れのお知らせが出る(表情に使う)")
-	# がまんの点もない: 一度も振り向かなくても、勝ち負け以外の点は入らない
+	var ev := s.take_events()
+	_check(_has(ev, "otetsuki") and _has(ev, "out"), "お手つきと、抜けたお知らせが出る")
+	_check(s.scores[me.id] == 5, "このラウンドで取った点はなくなる(ラウンドの最初の点に戻る)")
+	_check(me.role == GameState.Role.OUT and me.seat_index == -1 and me.home_seat == seat, "輪から抜けて、もとの席を覚えている")
+	_check(s.get_actor_at_seat(seat) == null, "席は空いたまま")
+	_check(Vector2(me.position.x, me.position.z).length() < 1.5, "真ん中に座る")
+	# 抜けた人は全員の後ろが見え、だれにでもスタンプを送れる(両どなりにも)
+	var nb := s.get_actor_at_seat((seat + 1) % s.seat_count)
+	_check(s.sees_behind(me.id, (seat + 1) % s.seat_count), "抜けた人は両どなりの後ろも見える")
+	_check(s.stamp_block_reason(me.id, nb.id) == "", "抜けた人は両どなりにもスタンプを送れる")
+	_check(s.send_stamp(me.id, nb.id, Stamps.SAFE), "抜けた人もスタンプを送れる")
+	_check(s.stamp_block_reason(nb.id, me.id) == "invalid", "抜けた人にはスタンプを送れない")
+	# 抜けた人がだましても教えても、このラウンドは0点
+	s.scores[me.id] = 5
+	var st: Dictionary = s.active_stamps[nb.id][0]
+	st["scorable"] = true
+	s._award_help(st, nb.id)
+	_check(s.scores[me.id] == 5, "抜けた人には点が入らない")
+	# 抜けた人の席の後ろには、鬼(人)は落とせない
 	var s2 := GameState.new()
-	s2.start_match(107)
-	s2.minion_id = -1
-	var before: Dictionary = s2.scores.duplicate()
-	var e := _run_until(s2, "result", 200.0)
-	for a in s2.actors:
-		if a.id == e["winner"] or a.id == e["loser"]:
-			continue
-		_check(s2.scores[a.id] == before[a.id], "%s: 振り向かなくても点は増えない" % a.display_name)
+	s2.start_round(55, true)
+	var out_seat := s2._seat_at_angle(s2.next_seat_crossing)
+	s2.set_looking_back(s2.get_actor_at_seat(out_seat).id, true)
+	while s2.oni_angle < s2.next_seat_crossing - 0.01:
+		s2.tick(STEP)
+	_check(not s2.oni_drop(s2.oni_id), "空いた席の後ろには落とせない")
+	# ボットの鬼が落とす予定だった人が抜けたら、ほかの人に落とす
+	var s3 := GameState.new()
+	s3.start_round(57)
+	var planned := s3.get_actor_at_seat(s3.drop_target_seat)
+	s3.set_looking_back(planned.id, true)
+	_check(s3.get_actor_at_seat(s3.drop_target_seat) != null, "落とす相手を選び直す")
+	var d := _run_until(s3, "dropped", 200.0)
+	_check(not d.is_empty() and s3.get_actor_at_seat(d["seat"]) != null, "座っている人の後ろに落とす")
+	# 次のラウンドでは、もとの席に戻る
+	var s4 := GameState.new()
+	s4.start_match(83)
+	s4.minion_id = -1
+	var p4 := s4.get_local_player()
+	var home := p4.seat_index
+	s4.set_looking_back(p4.id, true)
+	var r := _run_until(s4, "result", 200.0)
+	_check(not r.is_empty(), "抜けた人がいてもラウンドは終わる")
+	if not r.is_empty() and r["loser"] != p4.id:
+		s4.next_round()
+		_check(p4.role == GameState.Role.SEATED and p4.seat_index == home, "次のラウンドは、もとの席に戻る")
+	# 全員が抜けたら、鬼の勝ち(負けた人はいない。次も同じ鬼)
+	var s5 := GameState.new()
+	s5.start_match(85, false, 5)
+	var oni5 := s5.oni_id
+	var before5: Dictionary = s5.scores.duplicate()
+	for a in s5.actors.duplicate():
+		if a.role == GameState.Role.SEATED:
+			s5.set_looking_back(a.id, true)
+	_check(s5.phase == GameState.Phase.RESULT and s5.result["reason"] == "all_out", "全員お手つきで抜けたら鬼の勝ち")
+	for a in s5.actors:
+		if a.id != oni5 and a.id != s5.minion_id:
+			_check(s5.scores[a.id] == before5[a.id], "%s: 全員抜けたときは、だれも減点されない" % a.display_name)
+	s5.next_round()
+	_check(s5.oni_id == oni5, "全員抜けたときは、次も同じ鬼")
+
+
+func _test_milk() -> void:
+	var s := GameState.new()
+	s.start_round(61, true)
+	var oni := s.oni_id
+	_check(s.milk_left == GameConfig.MILK_PER_ROUND, "鬼は牛乳を %d 回かけられる" % GameConfig.MILK_PER_ROUND)
+	_check(not s.oni_milk(0), "座っている人は牛乳をかけられない")
+	# 席と席のまん中からは、かけられない
+	_check(not s.oni_milk(oni), "席の後ろから離れているとかけられない")
+	while s.oni_angle < s.next_seat_crossing - 0.01:
+		s.tick(STEP)
+	var victim := s.get_actor_at_seat(s._seat_at_angle(s.next_seat_crossing))
+	s.take_events()
+	_check(s.oni_milk(oni), "席の後ろならかけられる")
+	_check(_has(s.take_events(), "milk"), "牛乳のお知らせが出る")
+	_check(s.is_milked(victim), "かけられた人は画面が白い")
+	_check(not s.oni_milk(oni), "1ラウンド %d 回まで" % GameConfig.MILK_PER_ROUND)
+	# 鬼が半周歩くと晴れる
+	var start := s.oni_angle
+	while s.oni_angle - start < GameConfig.MILK_LAPS * TAU - 0.05:
+		s.tick(STEP)
+	_check(s.is_milked(victim), "半周するまでは白いまま")
+	for i in int(5.0 / STEP):
+		s.tick(STEP)
+	_check(not s.is_milked(victim), "半周したら晴れる")
+	# 通信で送れる
+	var guest := GameState.new()
+	guest.apply_snapshot(s.snapshot())
+	_check(guest.milk_left == 0 and guest.get_actor(victim.id).milk_angle == victim.milk_angle, "牛乳の状態が写る")
+	# ボットの鬼も牛乳を使う
+	var used := 0
+	for seed_value in 20:
+		var s2 := GameState.new()
+		s2.start_round(seed_value)
+		if not _run_until(s2, "milk", 120.0).is_empty():
+			used += 1
+	_check(used > 0, "ボットの鬼も牛乳を使う")
+	print("bot oni milk used in %d/20 rounds" % used)
 
 
 func _test_deceiving_scores() -> void:
@@ -995,7 +1013,8 @@ func _test_deceiving_scores() -> void:
 	for i in int(60.0 / STEP):
 		s.tick(STEP)
 		for seat in GameConfig.SEAT_COUNT:
-			if s.seat_pass_age[seat] < 0.5 and seat != s.drop_target_seat and not s.active_stamps.has(s.get_actor_at_seat(seat).id):
+			if s.seat_pass_age[seat] < 0.5 and seat != s.drop_target_seat and s.get_actor_at_seat(seat) != null \
+					and not s.active_stamps.has(s.get_actor_at_seat(seat).id):
 				other_seat = seat
 		if other_seat >= 0 or s.phase != GameState.Phase.WALKING and s.phase != GameState.Phase.DROPPED:
 			break
@@ -1157,9 +1176,7 @@ func _test_look_limit_and_patience() -> void:
 	s.start_match(101)
 	var me := s.get_local_player()
 	_check(me.looks_left == GameConfig.LOOKS_PER_ROUND, "振り向ける回数は %d 回" % GameConfig.LOOKS_PER_ROUND)
-	for i in GameConfig.LOOKS_PER_ROUND:
-		s.set_looking_back(me.id, true)
-		s.set_looking_back(me.id, false)
+	me.looks_left = 0
 	s.take_events()
 	s.set_looking_back(me.id, true)
 	_check(not me.looking_back, "回数を使い切ると振り向けない")

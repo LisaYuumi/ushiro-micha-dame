@@ -43,18 +43,14 @@ func update(state: GameState, delta: float) -> void:
 				_update_banana(state, a, delta)
 			GameState.Role.CHASER:
 				_update_chaser(state, a)
+			GameState.Role.OUT:
+				# お手つきで抜けたボット: 全員の後ろが見えるので、スタンプとバナナだけ
+				_update_stamp(state, a, delta)
+				_update_banana(state, a, delta)
 
 
 ## GameState からのお知らせを見て反応する(届いたスタンプ・鬼の「ふり」の物音)
 func on_event(state: GameState, e: Dictionary) -> void:
-	if e.get("type") == "voice":
-		# 鬼の声: いちばん近い席のボットがときどき「落とされた?」と振り向く
-		var near := state.get_actor_at_seat(e["seat"])
-		if near and near.is_bot and near.role == GameState.Role.SEATED and may_turn(state, near) \
-				and rng.randf() < GameConfig.BOT_VOICE_FOOL_CHANCE:
-			state.pick_up(near.id)
-			_look_left[near.id] = GameConfig.BOT_LOOK_TIME
-		return
 	if e.get("type") == "rustle" and e.get("feint", false):
 		# 人の鬼が「ふり」をした: その席のボットがときどきだまされて振り向く
 		var fooled := state.get_actor_at_seat(e["seat"])
@@ -118,9 +114,9 @@ func _update_seated(state: GameState, a: GameState.Actor, delta: float) -> void:
 	if not _notice_left.has(a.id):
 		# 重い落とし物ほど置く音が大きいので、早く気づく
 		var k := lerpf(1.0, GameConfig.BOT_NOTICE_HEAVY, state.item_weight())
-		if state.drop_masked:
-			# 声で置く音がかき消されていたら、気づくのが遅れる
-			k *= GameConfig.BOT_NOTICE_MASKED
+		if state.is_milked(a):
+			# 牛乳がかかって前が白いと、気づくのが遅れる
+			k *= GameConfig.BOT_MILK_NOTICE_MULT
 		# せっかちな性格ほど早く気づく
 		k *= Personalities.params(a.personality)["notice"]
 		_notice_left[a.id] = rng.randf_range(GameConfig.BOT_NOTICE_TIME_MIN, GameConfig.BOT_NOTICE_TIME_MAX) * k

@@ -9,7 +9,8 @@ extends RefCounted
 ## 将来のオンライン対戦では、ホストだけがこのクラスを動かし、
 ## snapshot() と events を全員に配る想定。
 
-enum Role { SEATED, ONI, CHASER }
+## OUT: お手つきで輪から抜けて、真ん中で体育座りしている(そのラウンドの間)
+enum Role { SEATED, ONI, CHASER, OUT }
 ## WALKING: 鬼がハンカチを持って歩いている
 ## DROPPED: 落とした後、鬼は歩き続けている(もう一周で見逃し)
 ## CHASE: 拾った人が鬼を追いかけている
@@ -49,6 +50,10 @@ class Actor:
 	var stamped_targets: Array = []
 	## ボットの性格(Personalities の名前。人は "")
 	var personality: String = ""
+	## お手つきで抜けた人の、もとの席(次のラウンドはここに戻る。抜けていなければ -1)
+	var home_seat: int = -1
+	## 牛乳をかけられたときの鬼の角度(INF = かかっていない)。鬼が半周歩くまで画面が白い
+	var milk_angle: float = INF
 
 
 ## 席の位置(床の上)
@@ -100,10 +105,14 @@ var result: Dictionary = {}
 
 ## 鬼の声: 次に出せるまでの時間/最後に声を出してから何秒たったか/
 ## 本物を落としたとき声でかき消されたか/ボットの鬼が次に声を出すまで
-var oni_voice_cooldown: float = 0.0
-var last_voice_age: float = INF
-var drop_masked: bool = false
-var _bot_oni_voice_left: float = 0.0
+## 鬼がこのラウンドでかけられる牛乳の残り
+var milk_left: int = 0
+## ボットの鬼: 牛乳をかける席と、かけてよくなる角度(-1 = かけない)/落とすときに落とす相手にかけるか
+var _bot_milk_seat: int = -1
+var _bot_milk_after: float = 0.0
+var _bot_milk_at_drop: bool = false
+## このラウンドが始まったときの点数(お手つきで抜けた人は、ここに戻す = そのラウンド0点)
+var _round_base_scores: Dictionary = {}
 
 ## 床に落ちているバナナの皮 [{"pos": Vector3, "sender": id}]
 var bananas: Array = []
@@ -273,6 +282,9 @@ func _lineup_after_result() -> Array:
 	for a in actors:
 		if a.role == Role.SEATED and a.seat_index >= 0:
 			seat_ids[a.seat_index] = a.id
+		elif a.role == Role.OUT and a.home_seat >= 0:
+			# お手つきで抜けた人は、もとの席に戻る
+			seat_ids[a.home_seat] = a.id
 	var next_oni: int = result["loser"]
 	match result["reason"]:
 		"touched":
@@ -284,6 +296,9 @@ func _lineup_after_result() -> Array:
 		"missed":
 			# 気づかなかった人が鬼になり、鬼がその席に入る
 			seat_ids[drop_target_seat] = oni_id
+		"all_out":
+			# 全員お手つきで抜けた: 鬼はそのまま
+			next_oni = oni_id
 	# オンラインの試遊: 鬼は人だけ。ボットが負けたら、座っている人の中から次の鬼を選ぶ
 	if humans_only_oni and get_actor(next_oni).is_bot:
 		var humans := []
@@ -313,6 +328,8 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 		a.looks_used = 0
 		a.stamped_targets = []
 		a.slip_left = 0.0
+		a.home_seat = -1
+		a.milk_angle = INF
 	for i in seat_ids.size():
 		_sit(get_actor(seat_ids[i]), i)
 	oni_id = oni
@@ -340,10 +357,8 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	result = {}
 	active_stamps = {}
 	bananas = []
-	oni_voice_cooldown = 0.0
-	last_voice_age = INF
-	drop_masked = false
-	_bot_oni_voice_left = rng.randf_range(GameConfig.BOT_ONI_VOICE_INTERVAL_MIN, GameConfig.BOT_ONI_VOICE_INTERVAL_MAX)
+	milk_left = GameConfig.MILK_PER_ROUND
+	_round_base_scores = scores.duplicate()
 	var step := TAU / seat_count
 	next_seat_crossing = ceilf(oni_angle / step) * step
 	if oni_is_player:
@@ -352,6 +367,7 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 		drop_angle = INF
 	else:
 		_plan_drop()
+		_plan_bot_milk()
 	events.append({"type": "round_start", "round": round_index, "item": item_name()})
 	# 座っている人(ボットも)から1人を手下にする。本人にだけ知らせる
 	minion_id = seat_ids[rng.randi_range(0, seat_ids.size() - 1)]
@@ -361,8 +377,6 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 ## 時間を delta 秒すすめる。
 func tick(delta: float) -> void:
 	_tick_stamps(delta)
-	oni_voice_cooldown = maxf(oni_voice_cooldown - delta, 0.0)
-	last_voice_age += delta
 	for i in seat_pass_age.size():
 		seat_pass_age[i] += delta
 	match phase:
@@ -378,15 +392,10 @@ func _tick_walking(delta: float) -> void:
 		return
 
 	var oni := get_actor(oni_id)
-	if not oni_is_player:
-		# ボットの鬼も、ときどき声を出す(ふりになる)
-		_bot_oni_voice_left -= delta
-		if _bot_oni_voice_left <= 0.0:
-			_bot_oni_voice_left = rng.randf_range(GameConfig.BOT_ONI_VOICE_INTERVAL_MIN, GameConfig.BOT_ONI_VOICE_INTERVAL_MAX)
-			_emit_voice(Voices.ALL[rng.randi_range(0, Voices.ALL.size() - 1)])
 	oni_angle += _oni_walk_speed(oni) / GameConfig.ONI_WALK_RADIUS * delta
 	if oni_is_player and phase == Phase.WALKING and drop_angle == INF \
-			and oni_angle - oni_start_angle >= GameConfig.ONI_MAX_LAPS_BEFORE_DROP * TAU:
+			and oni_angle - oni_start_angle >= GameConfig.ONI_MAX_LAPS_BEFORE_DROP * TAU \
+			and get_actor_at_seat(_seat_at_angle(next_seat_crossing)) != null:
 		# 何周しても落とさない: 次の席の後ろで自動的に落とす
 		drop_angle = next_seat_crossing
 		drop_target_seat = _seat_at_angle(next_seat_crossing)
@@ -442,6 +451,51 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 			if st["scorable"] and Stamps.says_look(st["kind"]) and not st["truthful"] and not st["credited"]:
 				st["credited"] = true
 				_award_deceive(st, actor_id)
+		# 1回でもお手つきしたら、輪から抜けて真ん中で体育座り(このラウンドは0点)
+		_go_out(a)
+
+
+## お手つきした人が輪から抜ける。席は空いたまま残り、次のラウンドで戻る。
+## 抜けた人は全員の後ろが見え、だれにでもスタンプを送れ、バナナも投げられる。このラウンドの点は0点
+func _go_out(a: Actor) -> void:
+	a.looking_back = false
+	a.home_seat = a.seat_index
+	a.seat_index = -1
+	a.role = Role.OUT
+	a.milk_angle = INF
+	# 輪の真ん中に、もとの席の方を向いて座る
+	var ang := seat_angle(a.home_seat)
+	a.position = _ring_point(ang, GameConfig.OUT_SIT_RADIUS)
+	a.yaw = ang + PI
+	# このラウンドで取った点はなし(0点)
+	scores[a.id] = _round_base_scores.get(a.id, scores.get(a.id, 0))
+	# この人あてのスタンプは消える(点数は決めない)
+	for st in active_stamps.get(a.id, []):
+		events.append({"type": "stamp_end", "target": a.id, "sender": st["sender"]})
+	active_stamps.erase(a.id)
+	events.append({"type": "out", "actor": a.id})
+	# ボットの鬼が落とす予定だった人が抜けたら、ほかの人を選び直す
+	if not oni_is_player and phase == Phase.WALKING and drop_target_seat == a.home_seat:
+		_plan_drop_from_here()
+	if _bot_milk_seat == a.home_seat:
+		_bot_milk_seat = -1
+	# 全員が抜けて、もう落とす相手がいない: 鬼の勝ち(負けた人はいない)
+	if phase == Phase.WALKING and _occupied_seats().is_empty():
+		_finish(oni_id, -1, "all_out")
+
+
+## 人が座っている席の番号
+func _occupied_seats() -> Array:
+	var out := []
+	for i in seat_count:
+		if get_actor_at_seat(i) != null:
+			out.append(i)
+	return out
+
+
+## 牛乳がかかっていて、画面が白いか(鬼が半周歩くまで)
+func is_milked(a: Actor) -> bool:
+	return a != null and a.milk_angle != INF and oni_angle - a.milk_angle < GameConfig.MILK_LAPS * TAU
 
 
 ## 後ろのハンカチを拾って立ち上がる。
@@ -483,7 +537,7 @@ func stamp_block_reason(sender_id: int, target_id: int) -> String:
 	var target := get_actor(target_id)
 	if sender == null or target == null or sender_id == target_id:
 		return "invalid"
-	if (sender.role != Role.SEATED and sender.role != Role.ONI) or target.role != Role.SEATED:
+	if (sender.role != Role.SEATED and sender.role != Role.ONI and sender.role != Role.OUT) or target.role != Role.SEATED:
 		return "invalid"
 	if phase != Phase.WALKING and phase != Phase.DROPPED:
 		return "phase"
@@ -565,28 +619,42 @@ func set_move(actor_id: int, dir: Vector3) -> void:
 
 # --- 人が鬼のときの命令 ---
 
-## 鬼が声を出す(人の鬼の命令)。出せたら true
-func oni_voice(actor_id: int, kind: String) -> bool:
+## 牛乳をかける(人の鬼の命令)。いちばん近い席の人に、後ろからかける(1ラウンド MILK_PER_ROUND 回)。
+## かかった人は、鬼が半周歩くまで画面が白くなる(見た目だけ。音は聞こえる)。かけられたら true
+func oni_milk(actor_id: int) -> bool:
 	if not _is_player_oni(actor_id):
 		return false
-	return _emit_voice(kind)
+	var crossing := _nearest_seat_crossing()
+	var target := get_actor_at_seat(_seat_at_angle(crossing))
+	if target == null or absf(oni_angle - crossing) * GameConfig.ONI_WALK_RADIUS > GameConfig.MILK_REACH:
+		if phase == Phase.WALKING or phase == Phase.DROPPED:
+			events.append({"type": "milk_failed", "actor": actor_id, "private_to": actor_id})
+		return false
+	return _milk(target)
 
 
-func _emit_voice(kind: String) -> bool:
-	if not (kind in Voices.ALL) or oni_voice_cooldown > 0.0:
+func _milk(target: Actor) -> bool:
+	if milk_left <= 0 or target == null or target.role != Role.SEATED:
 		return false
 	if phase != Phase.WALKING and phase != Phase.DROPPED:
 		return false
-	oni_voice_cooldown = GameConfig.ONI_VOICE_COOLDOWN
-	last_voice_age = 0.0
-	var oni := get_actor(oni_id)
-	events.append({
-		"type": "voice",
-		"kind": kind,
-		"pos": oni.position,
-		"seat": _seat_at_angle(_nearest_seat_crossing()),
-	})
+	milk_left -= 1
+	target.milk_angle = oni_angle
+	events.append({"type": "milk", "sender": oni_id, "target": target.id})
 	return true
+
+
+## ボットの鬼が牛乳をかける予定: 落とすときに落とす相手にかけるか、どこかの席でかける
+func _plan_bot_milk() -> void:
+	_bot_milk_seat = -1
+	_bot_milk_at_drop = false
+	if rng.randf() >= GameConfig.BOT_ONI_MILK_CHANCE:
+		return
+	if rng.randf() < GameConfig.BOT_ONI_MILK_AT_DROP:
+		_bot_milk_at_drop = true
+		return
+	_bot_milk_seat = rng.randi_range(0, seat_count - 1)
+	_bot_milk_after = oni_angle + TAU * rng.randf_range(0.3, 1.5)
 
 
 ## バナナの皮を投げる。座っている人が、追いかけっこ中に、鬼か追いかける人を狙う。
@@ -596,7 +664,7 @@ func throw_banana(sender_id: int, target_id: int) -> bool:
 	var target := get_actor(target_id)
 	if sender == null or target == null or phase != Phase.CHASE:
 		return false
-	if sender.role != Role.SEATED or sender.bananas_left <= 0:
+	if (sender.role != Role.SEATED and sender.role != Role.OUT) or sender.bananas_left <= 0:
 		return false
 	if target_id != oni_id and target_id != chaser_id:
 		return false
@@ -622,6 +690,10 @@ func oni_drop(actor_id: int) -> bool:
 	var crossing := _nearest_seat_crossing()
 	if absf(oni_angle - crossing) * GameConfig.ONI_WALK_RADIUS > GameConfig.ONI_DROP_REACH:
 		events.append({"type": "drop_failed", "actor": actor_id})
+		return false
+	if get_actor_at_seat(_seat_at_angle(crossing)) == null:
+		# お手つきで抜けた人の空いた席には落とせない
+		events.append({"type": "drop_failed", "actor": actor_id, "reason": "empty"})
 		return false
 	drop_angle = crossing
 	drop_target_seat = _seat_at_angle(crossing)
@@ -722,7 +794,8 @@ func sees_behind(viewer_id: int, to_seat: int) -> bool:
 	var v := get_actor(viewer_id)
 	if v == null:
 		return false
-	if v.role == Role.ONI:
+	if v.role == Role.ONI or v.role == Role.OUT:
+		# 鬼と、お手つきで真ん中に抜けた人は、全員の後ろが見える
 		return true
 	if v.role != Role.SEATED or v.seat_index == to_seat:
 		return false
@@ -764,6 +837,8 @@ func snapshot(viewer: int = -1) -> Dictionary:
 			"bananas_left": a.bananas_left,
 			"stamped": a.stamped_targets,
 			"personality": a.personality,
+			"home_seat": a.home_seat,
+			"milk_angle": a.milk_angle,
 		})
 	return {
 		"actors": list,
@@ -783,7 +858,7 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"scores": scores,
 		"match_over": match_over,
 		"bananas": bananas,
-		"drop_masked": drop_masked,
+		"milk_left": milk_left,
 		"round_serial": round_serial,
 		"seat_count": seat_count,
 		"minion_id": minion_shown,
@@ -821,6 +896,8 @@ func apply_snapshot(s: Dictionary) -> void:
 		a.bananas_left = d["bananas_left"]
 		a.stamped_targets = d.get("stamped", [])
 		a.personality = d.get("personality", "")
+		a.home_seat = d.get("home_seat", -1)
+		a.milk_angle = d.get("milk_angle", INF)
 	phase = s["phase"]
 	oni_id = s["oni_id"]
 	oni_is_player = s["oni_is_player"]
@@ -837,7 +914,7 @@ func apply_snapshot(s: Dictionary) -> void:
 	scores = s["scores"]
 	match_over = s["match_over"]
 	bananas = s["bananas"]
-	drop_masked = s["drop_masked"]
+	milk_left = s.get("milk_left", 0)
 	round_serial = s["round_serial"]
 	minion_id = s.get("minion_id", -1)
 	last_minion_id = s.get("last_minion_id", -1)
@@ -856,6 +933,17 @@ func _plan_drop() -> void:
 	drop_angle = target + ceilf((earliest - target) / TAU) * TAU
 
 
+## 落とす相手を、座っている人から選び直す(ボットの鬼。今の位置から先で、はじめて後ろを通るとき)
+func _plan_drop_from_here() -> void:
+	var seats := _occupied_seats()
+	if seats.is_empty():
+		return
+	drop_target_seat = seats[rng.randi_range(0, seats.size() - 1)]
+	var target := seat_angle(drop_target_seat)
+	var earliest := oni_angle + 0.001
+	drop_angle = target + ceilf((earliest - target) / TAU) * TAU
+
+
 ## 鬼が席の真後ろに来たとき: 本当に落とす/ニセで立ち止まる/そのまま通りすぎる
 func _on_pass_behind_seat() -> void:
 	var passed_seat := _seat_at_angle(oni_angle)
@@ -867,14 +955,21 @@ func _on_pass_behind_seat() -> void:
 		return
 	if phase == Phase.WALKING and absf(oni_angle - drop_angle) < 0.001:
 		oni_pause_left = GameConfig.ONI_PAUSE_TIME
-		if not oni_is_player and rng.randf() < GameConfig.BOT_ONI_VOICE_AT_DROP:
-			# ボットの鬼: 声で置く音をかき消す
-			oni_voice_cooldown = 0.0
-			_emit_voice(Voices.ALL[rng.randi_range(0, Voices.ALL.size() - 1)])
+		if not oni_is_player and _bot_milk_at_drop:
+			# ボットの鬼: 落とす相手に牛乳をかけてから落とす(影が見えなくなる)
+			_bot_milk_at_drop = false
+			_milk(get_actor_at_seat(drop_target_seat))
 		_drop()
 	elif oni_is_player:
-		# 人が鬼のときは、立ち止まるのも物音も本人が決める
+		# 人が鬼のときは、立ち止まるのも物音も牛乳も本人が決める
 		return
+	elif get_actor_at_seat(passed_seat) == null:
+		# お手つきで抜けた人の空いた席: 立ち止まらない
+		return
+	elif _bot_milk_seat == passed_seat and oni_angle >= _bot_milk_after:
+		_bot_milk_seat = -1
+		oni_pause_left = GameConfig.ONI_PAUSE_TIME
+		_milk(get_actor_at_seat(passed_seat))
 	elif rng.randf() < GameConfig.DECOY_STOP_CHANCE:
 		oni_pause_left = GameConfig.ONI_PAUSE_TIME
 		if rng.randf() < GameConfig.BOT_ONI_FAKE_DROP_CHANCE:
@@ -918,9 +1013,10 @@ func _end_stamp(target_id: int, st: Dictionary, judge: bool) -> void:
 func _award_help(st: Dictionary, target_id: int) -> void:
 	var points: int = {"normal": GameConfig.SCORE_HELP_NORMAL, "minion": GameConfig.SCORE_HELP_MINION,
 			"oni": GameConfig.SCORE_HELP_ONI}[st["sender_role"]]
-	if points == 0:
-		return
 	var sender_id: int = st["sender"]
+	# お手つきで抜けた人は、このラウンドは0点
+	if points == 0 or _is_out(sender_id):
+		return
 	scores[sender_id] = scores.get(sender_id, 0) + points
 	# 点が入ったことは送った本人にだけ知らせる(手下がばれないように)
 	events.append({
@@ -936,9 +1032,10 @@ func _award_help(st: Dictionary, target_id: int) -> void:
 func _award_deceive(st: Dictionary, target_id: int) -> void:
 	var points: int = {"normal": GameConfig.SCORE_DECEIVE_NORMAL, "minion": GameConfig.SCORE_DECEIVE_MINION,
 			"oni": GameConfig.SCORE_DECEIVE_ONI}[st["sender_role"]]
-	if points == 0:
-		return
 	var sender_id: int = st["sender"]
+	# お手つきで抜けた人は、このラウンドは0点
+	if points == 0 or _is_out(sender_id):
+		return
 	scores[sender_id] = scores.get(sender_id, 0) + points
 	events.append({
 		"type": "deceived",
@@ -948,6 +1045,11 @@ func _award_deceive(st: Dictionary, target_id: int) -> void:
 		"points": points,
 		"private_to": sender_id,
 	})
+
+
+func _is_out(actor_id: int) -> bool:
+	var a := get_actor(actor_id)
+	return a != null and a.role == Role.OUT
 
 
 func _tick_chase(delta: float) -> void:
@@ -1048,12 +1150,14 @@ func _finish(winner_id: int, loser_id: int, reason: String) -> void:
 			scores[winner_id] += GameConfig.SCORE_ONI_SAT
 		"touched":
 			scores[winner_id] += GameConfig.SCORE_CHASER_TOUCHED
-	scores[loser_id] += GameConfig.SCORE_LOSE
+	if loser_id >= 0:
+		scores[loser_id] += GameConfig.SCORE_LOSE
 	# 表示中のスタンプは、ここで消える(「まだ平気」の点もここで決まる)
 	_clear_stamps(true)
 	# 鬼が勝ったら、手下にも点(手下が負けた本人のときはもらえない)
 	var minion_bonus := false
-	if minion_id >= 0 and (reason == "sat" or reason == "missed") and minion_id != loser_id:
+	if minion_id >= 0 and (reason == "sat" or reason == "missed" or reason == "all_out") and minion_id != loser_id \
+			and not _is_out(minion_id):
 		scores[minion_id] += GameConfig.SCORE_MINION_ONI_WIN
 		minion_bonus = true
 	result["minion"] = minion_id
@@ -1079,15 +1183,12 @@ func _seat_at_angle(angle: float) -> int:
 func _drop() -> void:
 	phase = Phase.DROPPED
 	handkerchief_on_floor = true
-	# 声を出した直後なら、置く音はかき消される
-	drop_masked = last_voice_age <= GameConfig.VOICE_MASK_WINDOW
 	handkerchief_position = _ring_point(drop_angle, GameConfig.DROP_RADIUS)
 	events.append({
 		"type": "dropped",
 		"seat": drop_target_seat,
 		"pos": handkerchief_position,
 		"weight": item_weight(),
-		"masked": drop_masked,
 	})
 	# 振り向いたまま待っていた人の後ろに落とした場合は、その場で見つかる
 	var target := get_actor_at_seat(drop_target_seat)

@@ -28,6 +28,11 @@ const RIG_SCENE := preload("res://assets/characters/ual/AnimationLibrary_Godot_S
 const BODY_SCALE := 1.0
 ## 座っているとき、腰が椅子の上に来るように体全体を前へずらす量(メートル。体の向きで前)
 const SEAT_SHIFT := 0.33
+## 体育座り(床に座る): 座る動きのまま体を後ろへ傾け、腰を床まで下げて、ひざを立てる
+const FLOOR_LEAN := 0.55
+## いすに座ったときの腰の高さ/体育座りの腰の高さ(メートル)
+const SIT_HIP_HEIGHT := 0.5
+const FLOOR_HIP_HEIGHT := 0.14
 ## 転ぶ: 物理演算でぐにゃっと倒れる時間と、起き上がる(動きに戻る)時間(秒)。合わせて GameConfig.SLIP_TIME くらい
 const RAGDOLL_FALL_TIME := 0.7
 const RAGDOLL_RISE_TIME := 0.35
@@ -85,6 +90,8 @@ var _anim: AnimationPlayer
 var _face: Node3D
 var _pose := ""
 var _seat_shift := 0.0
+## 体育座りの度合い(0 = いす、1 = 床)
+var _floor_w := 0.0
 var _look_target := 0.0
 var _look_head := 0.0
 var _look_body := 0.0
@@ -402,7 +409,7 @@ func _queue(base: String) -> void:
 		_anim.queue(real)
 
 
-## 姿勢: "sit"(座る)/"walk"(歩く)/"run"(走る)/"idle"(立っている)
+## 姿勢: "sit"(座る)/"floor"(体育座り)/"walk"(歩く)/"run"(走る)/"idle"(立っている)
 ## 座っている→走るときは立ち上がってから、立っている→座るときは座ってから続ける
 func set_pose(pose: String) -> void:
 	if pose == _pose or _anim == null:
@@ -411,14 +418,16 @@ func set_pose(pose: String) -> void:
 	_pose = pose
 	_anim.clear_queue()
 	match pose:
-		"sit":
+		"sit", "floor":
+			if prev == "sit" or prev == "floor":
+				return
 			if prev == "":
 				_play(ANIM_SIT)
 			else:
 				_play(ANIM_SIT_DOWN, 0.15, 2.0)
 				_queue(ANIM_SIT)
 		"run":
-			if prev == "sit":
+			if prev == "sit" or prev == "floor":
 				_play(ANIM_STAND_UP, 0.1, 3.0)
 				_queue(ANIM_RUN)
 			else:
@@ -598,11 +607,18 @@ func animate(delta: float, running: bool) -> void:
 	else:
 		_pivot.position.x = 0.0
 	# 座っているときは、ゆっくり少し揺れる
-	if _pose == "sit":
+	if _pose == "sit" or _pose == "floor":
 		_pivot.rotation.z += sin(_time * 1.6 + float(get_instance_id() % 7)) * 0.025
 	# 走る動きは素材が前のめりなので、ここでは少しだけ足す
 	_pivot.rotation.x = -0.1 * _lean * (1.0 - _slip) - 0.25 * _slump
 	_pivot.scale = Vector3(1.0, 1.0 - 0.08 * _slump, 1.0)
+	# 体育座り: 腰を中心に後ろへ傾ける(ひざが立つ)。腰が床の上に来るように下げる
+	_floor_w = move_toward(_floor_w, 1.0 if _pose == "floor" else 0.0, delta * 2.5)
+	if _floor_w > 0.0:
+		var lean := FLOOR_LEAN * _floor_w
+		_pivot.rotation.x += lean
+		var hip_y := lerpf(SIT_HIP_HEIGHT, FLOOR_HIP_HEIGHT, _floor_w)
+		_pivot.position += Vector3(0, hip_y - SIT_HIP_HEIGHT * cos(lean), -SIT_HIP_HEIGHT * sin(lean))
 	# 汗はぷるぷる揺れる
 	if _sweat.visible:
 		_sweat.position.y = HEAD_Y + 0.1 + sin(_time * 10.0) * 0.015
@@ -637,7 +653,7 @@ func _update_rig(delta: float) -> void:
 		_skel.set_bone_pose_rotation(i, _skel.get_bone_rest(i).basis.get_rotation_quaternion())
 	_anim.advance(delta)
 	# 座る動きは腰が後ろに下がるので、体全体を前へずらして椅子の上に乗せる
-	_seat_shift = move_toward(_seat_shift, SEAT_SHIFT if _pose == "sit" else 0.0, delta / 0.5 * SEAT_SHIFT)
+	_seat_shift = move_toward(_seat_shift, SEAT_SHIFT if _pose == "sit" or _pose == "floor" else 0.0, delta / 0.5 * SEAT_SHIFT)
 	_rig.position = Vector3(0, 0, -_seat_shift)
 	# 振り向き: 頭は速く、上半身はゆっくり
 	_look_head = move_toward(_look_head, _look_target, delta / LOOK_HEAD_TIME)

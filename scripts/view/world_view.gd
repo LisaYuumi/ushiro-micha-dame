@@ -10,13 +10,16 @@ const HIDDEN_LAYER := 3
 
 var _actor_nodes := {} # id -> Node3D
 var _seat_cam: Camera3D
+## 席のカメラの、ふだんの横の見える幅(お手つきで抜けて上から見ている間は変える)
+var _seat_fov := 100.0
 var _top_cam: Camera3D
 var _handkerchief: Node3D
 var _drop_player: AudioStreamPlayer3D
 var _step_player: AudioStreamPlayer3D
 var _beep_player: AudioStreamPlayer
 var _stamp_player: AudioStreamPlayer
-var _voice_player: AudioStreamPlayer3D
+## 牛乳がかかった人の頭の上の白い牛乳(id -> Node3D)
+var _milk_nodes := {}
 ## 床のバナナの皮の見た目(状態の bananas と同じ数だけ出す)
 var _banana_nodes: Array[MeshInstance3D] = []
 ## 鬼が自分の後ろに来たとき、自分の前の床に映る影
@@ -105,6 +108,7 @@ func build(state: GameState) -> void:
 	_last_pos.clear()
 	_still_time.clear()
 	_banana_nodes.clear()
+	_milk_nodes.clear()
 
 	_build_environment()
 	_room_state = state
@@ -118,6 +122,13 @@ func build(state: GameState) -> void:
 		var blob := _make_blob(Vector2(0.95, 0.95))
 		add_child(blob)
 		_blobs[a.id] = blob
+		var milk := _build_milk_splash()
+		if a.id == state.local_player_id:
+			# 自分の頭の牛乳は、座っているときの自分のカメラには映さない(画面が白くなるので)
+			for c in milk.get_children():
+				(c as VisualInstance3D).layers = 1 << (SELF_LAYER - 1)
+		add_child(milk)
+		_milk_nodes[a.id] = milk
 	_build_handkerchief(state)
 	_build_oni_shadow()
 	_build_sounds(state)
@@ -149,6 +160,7 @@ func sync(state: GameState, delta: float) -> void:
 				model.set_look(a.looking_back)
 				model.set_pose(_pose_of(state, a))
 			_update_expression(state, a, model, delta)
+			_update_milk(state, a, model)
 	_update_seat_camera(state, delta)
 	if _overlay:
 		_overlay.update(state, get_viewport().get_camera_3d())
@@ -172,6 +184,9 @@ func sync(state: GameState, delta: float) -> void:
 func _pose_of(state: GameState, a: GameState.Actor) -> String:
 	if a.role == GameState.Role.SEATED:
 		return "sit"
+	if a.role == GameState.Role.OUT:
+		# お手つきで抜けた人は、真ん中で体育座り
+		return "floor"
 	if state.phase == GameState.Phase.RESULT:
 		return "idle"
 	if state.phase == GameState.Phase.CHASE:
@@ -338,19 +353,16 @@ func on_event(e: Dictionary) -> void:
 				m.slip()
 			_pop(e["actor"], "★", Color("F2C14E"))
 			_oops_until[e["actor"]] = _clock + GameConfig.SLIP_TIME
-		"voice":
-			_voice_player.stream = Sfx.voice(e["kind"])
-			_voice_player.position = e["pos"]
-			_voice_player.pitch_scale = randf_range(0.92, 1.08)
-			_voice_player.play()
+		"out":
+			_pop(e["actor"], "お手つき!", Color("6EA8F0"))
+		"milk":
+			_surprise_until[e["target"]] = _clock + 1.2
+			_pop(e["target"], "ばしゃっ", Color.WHITE)
 		"dropped", "rustle":
 			# 本物もニセの物音も、まったく同じ音。重い物ほど大きく、低く、遠くまで聞こえる
 			var w: float = e.get("weight", 0.0)
 			_drop_player.position = e["pos"]
 			_drop_player.volume_db = lerpf(GameConfig.DROP_VOLUME_DB, GameConfig.DROP_VOLUME_DB_HEAVY, w)
-			if e.get("masked", false):
-				# 鬼の声でかき消された
-				_drop_player.volume_db += GameConfig.VOICE_MASK_DB
 			_drop_player.unit_size = lerpf(GameConfig.DROP_SOUND_RANGE, GameConfig.DROP_SOUND_RANGE_HEAVY, w)
 			_drop_player.pitch_scale = lerpf(1.0, 0.5, w) * randf_range(0.9, 1.1)
 			_drop_player.play()
@@ -883,6 +895,42 @@ func _update_oni_shadow(state: GameState) -> void:
 	_oni_shadow_mat.albedo_color = Color(0, 0, 0, GameConfig.ONI_SHADOW_ALPHA * near)
 
 
+## 頭からかぶった牛乳: 白いかたまりと、顔の横にたれるしずく(輪郭線つき)
+func _build_milk_splash() -> Node3D:
+	var root := Node3D.new()
+	var cap := SphereMesh.new()
+	cap.radius = 0.2
+	cap.height = 0.16
+	cap.radial_segments = 14
+	cap.rings = 6
+	var top := Toon.mesh(cap, Color(1.0, 0.99, 0.95), 0.02)
+	top.position = Vector3(0, 0.36, 0)
+	root.add_child(top)
+	for k in 4:
+		var drop := SphereMesh.new()
+		drop.radius = 0.045
+		drop.height = 0.12
+		drop.radial_segments = 8
+		drop.rings = 4
+		var d := Toon.mesh(drop, Color(1.0, 0.99, 0.95), 0.015)
+		var ang := TAU * (float(k) + 0.25) / 4.0
+		d.position = Vector3(sin(ang) * 0.21, 0.24 - 0.05 * float(k % 2), cos(ang) * 0.21)
+		root.add_child(d)
+	root.visible = false
+	return root
+
+
+## 牛乳がかかっている人は、頭の上に牛乳が乗っている(全員から見える)
+func _update_milk(state: GameState, a: GameState.Actor, model: CharacterModel) -> void:
+	var milk: Node3D = _milk_nodes.get(a.id)
+	if milk == null:
+		return
+	milk.visible = model != null and state.is_milked(a) and state.phase != GameState.Phase.RESULT
+	if milk.visible:
+		var head := model.bone_world("DEF-head")
+		milk.global_transform = Transform3D(model.global_transform.basis.orthonormalized(), head.origin)
+
+
 ## バナナの皮: 状態の bananas に合わせて、黄色い三日月っぽい形を出す
 func _update_bananas(state: GameState) -> void:
 	while _banana_nodes.size() < state.bananas.size():
@@ -1015,11 +1063,6 @@ func _build_sounds(state: GameState) -> void:
 	_stamp_player.volume_db = -6.0
 	add_child(_stamp_player)
 
-	_voice_player = AudioStreamPlayer3D.new()
-	_voice_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
-	_voice_player.volume_db = -2.0
-	add_child(_voice_player)
-
 	_beep_player = AudioStreamPlayer.new()
 	_beep_player.stream = Sfx.beep()
 	_beep_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
@@ -1093,6 +1136,7 @@ func _build_cameras(state: GameState) -> void:
 	# 横の見える幅を固定する(横長の画面でも、両どなりの後ろが見えないように)
 	_seat_cam.keep_aspect = Camera3D.KEEP_WIDTH
 	_seat_cam.fov = GameConfig.SEAT_CAM_HFOV if state.seat_count > 5 else GameConfig.SEAT_CAM_HFOV_SMALL
+	_seat_fov = _seat_cam.fov
 	_seat_cam.near = 0.05
 	# 自分の体のレイヤーを映さない
 	_seat_cam.cull_mask = 0xFFFFF & ~(1 << (SELF_LAYER - 1)) & ~(1 << (HIDDEN_LAYER - 1))
@@ -1122,6 +1166,17 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 		return
 	# 座っているときは自分の体を映さない。立ち上がって追いかけるときは映す
 	var self_bit := 1 << (SELF_LAYER - 1)
+	if me.role == GameState.Role.OUT:
+		# お手つきで抜けた: 真ん中の上の高いところから、輪の全員の後ろを見下ろす(天井は映さない)
+		_seat_cam.cull_mask = 0xFFFFF & ~(1 << (CEILING_LAYER - 1))
+		_seat_cam.keep_aspect = Camera3D.KEEP_HEIGHT
+		_seat_cam.fov = GameConfig.OUT_CAM_FOV
+		var want := GameConfig.OUT_CAM_POS
+		var w := 1.0 if delta == 0.0 else clampf(delta * 3.0, 0.0, 1.0)
+		_seat_cam.look_at_from_position(_seat_cam.position.lerp(want, w), GameConfig.OUT_CAM_LOOK)
+		return
+	_seat_cam.keep_aspect = Camera3D.KEEP_WIDTH
+	_seat_cam.fov = _seat_fov
 	if me.role != GameState.Role.SEATED:
 		_seat_cam.cull_mask = 0xFFFFF
 	else:

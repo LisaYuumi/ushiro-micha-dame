@@ -11,6 +11,11 @@ var _oni_buttons: Array[Button] = []
 ## 座っていて、追いかけっこ中だけ出すボタン(バナナの皮)
 var _chase_buttons: Array[Button] = []
 var _look_button: Button
+## 鬼の「牛乳をかける」ボタンと、表示中の残り回数
+var _milk_button: Button
+var _milk_shown := -1
+## お手つきで抜けて、真ん中で見ているか(振り向くボタンを隠す)
+var _out := false
 ## ⚙ボタンで開くメニューと、その中の「あそびかた」
 var _menu: PanelContainer
 var _help_panel: PanelContainer
@@ -42,10 +47,10 @@ func _ready() -> void:
 	_oni_buttons.append(_add_button("止まる", "oni_stop", Vector2(1, 1), Rect2(-UiStyle.SAFE - 220, -250, 220, 220), 40))
 	_oni_buttons.append(_add_button("落とす", "oni_drop", Vector2(1, 1), Rect2(-UiStyle.SAFE - 400, -170, 160, 140), 36))
 	_oni_buttons.append(_add_button("落とす音", "oni_feint", Vector2(1, 1), Rect2(-UiStyle.SAFE - 400, -330, 160, 140), 30))
-	# 鬼の声(下のまん中。座っているときのスタンプと同じ場所)
-	for i in Voices.ALL.size():
-		var v: String = Voices.ALL[i]
-		_oni_buttons.append(_add_button(Voices.LABELS[v], "voice_%d" % i, Vector2(0.5, 1), Rect2(-385 + i * 150, -100, 140, 80), 26))
+	# 鬼の牛乳(いちばん近い席の人に後ろからかける。1ラウンド1回。使ったら灰色)
+	_milk_button = _add_button("牛乳をかける", "oni_milk", Vector2(1, 1), Rect2(-UiStyle.SAFE - 400, -490, 160, 140), 26)
+	_milk_button.add_theme_stylebox_override("disabled", UiStyle.box(Color("B9B4AC")))
+	_oni_buttons.append(_milk_button)
 	# 追いかけっこ中のバナナの皮(下のまん中)
 	_chase_buttons.append(_add_button("鬼にバナナ", "banana_oni", Vector2(0.5, 1), Rect2(-300, -110, 280, 90), 28))
 	_chase_buttons.append(_add_button("追う人にバナナ", "banana_chaser", Vector2(0.5, 1), Rect2(20, -110, 280, 90), 28))
@@ -141,13 +146,25 @@ func set_looks_left(n: int) -> void:
 		_release_action("look_back")
 
 
-## 鬼のとき/座っているとき/座っていて追いかけっこ中で、出すボタンを切りかえる
-func set_oni_mode(is_oni: bool, seated_in_chase: bool = false) -> void:
-	if _mode == [is_oni, seated_in_chase, _result]:
+## 鬼の牛乳の残り回数。0 回なら灰色で押せない
+func set_milk_left(n: int) -> void:
+	if n == _milk_shown:
 		return
-	_mode = [is_oni, seated_in_chase, _result]
+	_milk_shown = n
+	_milk_button.disabled = n <= 0
+	_milk_button.text = "牛乳をかける" if n > 0 else "牛乳\n(使った)"
+	if n <= 0:
+		_release_action("oni_milk")
+
+
+## 鬼のとき/座っているとき/座っていて追いかけっこ中/お手つきで抜けたときで、出すボタンを切りかえる
+func set_oni_mode(is_oni: bool, seated_in_chase: bool = false, out: bool = false) -> void:
+	if _mode == [is_oni, seated_in_chase, _result, out]:
+		return
+	_mode = [is_oni, seated_in_chase, _result, out]
+	_out = out
 	for b in _seated_buttons:
-		b.visible = not is_oni and not seated_in_chase and not _result
+		b.visible = not is_oni and not seated_in_chase and not _result and not out
 	for b in _oni_buttons:
 		b.visible = is_oni and not _result
 	for b in _chase_buttons:
@@ -210,11 +227,12 @@ func _build_menu() -> void:
 	_menu_button(hcol, "とじる", close_menu, true)
 
 
-const HOW_TO_PLAY := """・振り向く(長押し): 押している間だけ後ろを見る。落ちていたら、そのまま拾って走る。1ラウンド2回まで(外れても減点なし)
+const HOW_TO_PLAY := """・振り向く(長押し): 押している間だけ後ろを見る。落ちていたら、そのまま拾って走る
+・お手つき(なにもないのに振り向く): 輪から抜けて真ん中で休む。そのラウンドは0点。全員の後ろが見えて、だれにでもスタンプを送れる
 ・人をタップ: その人の頭の上にスタンプが出るので、選んで送る(同じ人には1ラウンド1回)
-・鬼: スティックで歩く速さ。止まる・落とす・落とす音・声(咳/口笛/手拍子/叫ぶ)
+・鬼: スティックで歩く速さ。止まる・落とす・落とす音・牛乳(近くの人の画面が半周のあいだ白くなる。1ラウンド1回)
 ・追いかけっこ: 自動で走る。スティックの上で内側(近道)、下で外側。座っている人はバナナを投げられる
-キーボード: スペース=振り向く/止まる 1〜4=スタンプ/声 Z X C V=鬼のスタンプ W/S=内側/外側 A/D=鬼の速さ
+キーボード: スペース=振り向く/止まる 1〜4=スタンプ M=牛乳 Z X C V=鬼のスタンプ W/S=内側/外側 A/D=鬼の速さ
  E=落とす F=落とす音 B/N=バナナ R=やり直し O=役を変える F1=上から見る K=転ぶ(確認用) Tab=メニュー"""
 
 

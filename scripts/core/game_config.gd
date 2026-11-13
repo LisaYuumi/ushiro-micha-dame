@@ -167,7 +167,7 @@ const SCORE_DECEIVE_ONI := 1
 const SCORE_MINION_ONI_WIN := 2
 ## 1ラウンドに振り向ける回数(「拾う」も1回使う)。追いかけっこ中・勝敗が出た後は数えない
 const LOOKS_PER_ROUND := 2
-## 外れの振り向き(後ろに何もないのに振り向く)は減点しない。振り向きの回数制限(LOOKS_PER_ROUND)だけ。
+## 外れの振り向き(お手つき)は減点しない。1回でもしたら輪から抜けて、そのラウンドは0点。
 ## 外れの回数は、表情(困り眉→汗だく→放心)と、だました人の点数に使う
 ## この回数外れると、顔が放心顔になる(見た目だけ)
 const OTETSUKI_DAZED_COUNT := 3
@@ -189,21 +189,26 @@ const ONI_SHADOW_RANGE := 3.0
 ## 影のいちばん濃いときの濃さ(0〜1)
 const ONI_SHADOW_ALPHA := 0.55
 
-# --- 鬼の声 ---
-## 声を出したあと、次に出せるまで(秒)
-const ONI_VOICE_COOLDOWN := 1.5
-## 声を出してからこの秒数以内に落とすと、置く音がかき消される
-const VOICE_MASK_WINDOW := 0.8
-## かき消されたときの置く音の小ささ(dB、元の音から引く)
-const VOICE_MASK_DB := -14.0
-## かき消されたとき、ボットが気づくまでの時間の倍率
-const BOT_NOTICE_MASKED := 1.6
-## 鬼の声で、いちばん近い席のボットがだまされて振り向く確率
-const BOT_VOICE_FOOL_CHANCE := 0.2
-## ボットの鬼が、落とす直前に声を出す確率/ふだんに声を出す間隔(秒)
-const BOT_ONI_VOICE_AT_DROP := 0.5
-const BOT_ONI_VOICE_INTERVAL_MIN := 5.0
-const BOT_ONI_VOICE_INTERVAL_MAX := 14.0
+# --- 鬼の牛乳 ---
+## 鬼が1ラウンドにかけられる回数
+const MILK_PER_ROUND := 1
+## かかった人の画面が白い長さ(鬼が歩く周の割合。0.5 = 半周)
+const MILK_LAPS := 0.5
+## 席の真後ろからこの距離(メートル)以内なら、その席の人にかけられる
+const MILK_REACH := 1.4
+## ボットの鬼が、そのラウンドで牛乳を使う確率/使うとき、落とす相手に落とす瞬間かける確率
+const BOT_ONI_MILK_CHANCE := 0.8
+const BOT_ONI_MILK_AT_DROP := 0.5
+## 牛乳がかかっているボットが、落とされたのに気づくまでの時間の倍率
+const BOT_MILK_NOTICE_MULT := 1.6
+
+# --- お手つきで抜けた人 ---
+## 輪の真ん中で体育座りする位置(中心からの距離・メートル)
+const OUT_SIT_RADIUS := 0.75
+## 抜けた人のカメラ: 輪の上の高いところから全員を見下ろす(位置・見る点・縦の見える角度)
+const OUT_CAM_POS := Vector3(0, 9.5, 5.5)
+const OUT_CAM_LOOK := Vector3(0, 0, 0.3)
+const OUT_CAM_FOV := 60.0
 
 # --- バナナの皮 ---
 ## 1人が1ラウンドに投げられる数
