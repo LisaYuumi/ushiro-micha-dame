@@ -586,11 +586,8 @@ func _build_send_panel() -> void:
 		b.text = Texts.stamp(kind)
 		# 押した判定は main がする(指の操作をまとめて扱うため)。ここでは見た目だけ
 		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		UiStyle.button(b, false, 32, GameConfig.COLOR_PAPER)
-		var c: Color = WorldView.STAMP_COLORS[kind]
-		b.add_theme_stylebox_override("normal", UiStyle.box(c))
-		b.add_theme_stylebox_override("hover", UiStyle.box(c))
-		b.add_theme_stylebox_override("pressed", UiStyle.pressed_box(c))
+		# 3つとも白い地に黒い文字(絵文字で区別する)
+		UiStyle.button(b, false, 32, GameConfig.COLOR_INK)
 		b.custom_minimum_size = Vector2(210, 104)
 		row.add_child(b)
 		_send_buttons.append(b)

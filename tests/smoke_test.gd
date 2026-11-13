@@ -446,8 +446,13 @@ func _test_milk_art() -> void:
 
 func _test_stamp_words() -> void:
 	_check(Stamps.ALL.size() == 3, "スタンプは3つ(落ちてる!・まだへいき!・信じて!)")
-	_check(Texts.stamp(Stamps.DROPPED) == "落ちてる!" and Texts.stamp(Stamps.SAFE) == "まだへいき!" \
-			and Texts.stamp(Stamps.TRUST) == "信じて!", "スタンプの言葉")
+	_check(Texts.stamp(Stamps.DROPPED) == "落ちてる😨" and Texts.stamp(Stamps.SAFE) == "平気👍" \
+			and Texts.stamp(Stamps.TRUST) == "信じて🥺", "スタンプの言葉と絵文字")
+	_check(Texts.stamp(Stamps.SAFE, "だいじょぶ") == "だいじょぶ👍", "言葉を変えても絵文字はそのまま")
+	var font := HudFont.get_font()
+	_check(not font.fallbacks.is_empty(), "絵文字フォントが入っている")
+	_check(font.fallbacks[0].has_char(0x1f628) and font.fallbacks[0].has_char(0x1f44d) and font.fallbacks[0].has_char(0x1f97a),
+			"絵文字フォントに 😨👍🥺 がある")
 	for k in Stamps.ALL:
 		_check(WorldView.STAMP_COLORS.has(k), "%s に色がある" % k)
 	_check(not Stamps.says_look(Stamps.SAFE) and Stamps.says_look(Stamps.TRUST), "まだへいき=見るな、信じて=見ろ")

@@ -8,9 +8,9 @@ static var lang := "ja"
 
 const TABLE := {
 	"ja": {
-		"stamp_dropped": "落ちてる!",
-		"stamp_safe": "まだへいき!",
-		"stamp_trust": "信じて!",
+		"stamp_dropped": "落ちてる",
+		"stamp_safe": "平気",
+		"stamp_trust": "信じて",
 		## %s = 相手の名前
 		"send_to": "%sに送る",
 		"send_target": "送る相手",
@@ -26,6 +26,20 @@ static func t(key: String) -> String:
 	return table.get(key, key)
 
 
-## スタンプの言葉(Stamps の種類から)
-static func stamp(kind: String) -> String:
+## スタンプの絵文字(言葉を変えても、絵文字と意味は変わらない)
+const STAMP_EMOJI := {
+	"dropped": "😨",
+	"safe": "👍",
+	"trust": "🥺",
+}
+
+
+## スタンプの初期の言葉(絵文字なし)
+static func stamp_word(kind: String) -> String:
 	return t("stamp_" + kind)
+
+
+## スタンプに出す文字: 言葉+絵文字(word が "" なら初期の言葉)。例: 「落ちてる😨」
+static func stamp(kind: String, word: String = "") -> String:
+	var w := word if word != "" else stamp_word(kind)
+	return w + STAMP_EMOJI.get(kind, "")
