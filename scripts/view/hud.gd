@@ -95,14 +95,14 @@ func show_result_card(title: String, sub: String, notes: Array, color: Color, ro
 	_result_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 28, 5)
 	st.shadow_offset = Vector2(6, 8)
-	st.set_content_margin_all(22)
+	st.set_content_margin_all(32)
 	_result_card.add_theme_stylebox_override("panel", st)
 	add_child(_result_card)
-	_result_card.custom_minimum_size = Vector2(560, 0)
+	_result_card.custom_minimum_size = Vector2(600, 0)
 
 	var col := VBoxContainer.new()
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_theme_constant_override("separation", 8)
+	col.add_theme_constant_override("separation", 16)
 	_result_card.add_child(col)
 	var t := UiStyle.label(title, 54, color)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -122,20 +122,21 @@ func show_result_card(title: String, sub: String, notes: Array, color: Color, ro
 		col.add_child(nrow)
 		for n in notes:
 			nrow.add_child(UiStyle.pill(str(n), 20))
-	# 左に得点表(1列)、右に手下のカード(タップすると、そのカードだけ裏返る)
+	# 左に得点(大きい数字のカードを2段に並べる)、右に手下のカード(タップすると、そのカードだけ裏返る)
 	var body := HBoxContainer.new()
 	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	body.alignment = BoxContainer.ALIGNMENT_CENTER
-	body.add_theme_constant_override("separation", 18)
+	body.add_theme_constant_override("separation", 28)
 	col.add_child(body)
 	var grid := GridContainer.new()
 	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	grid.columns = 1 if not minion.is_empty() else 2
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 6)
+	grid.columns = maxi(1, ceili(rows.size() / 2.0))
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 12)
+	grid.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	body.add_child(grid)
 	for r in rows:
-		grid.add_child(_score_row(r))
+		grid.add_child(_score_chip(r))
 	if not minion.is_empty():
 		_build_minion_card(body, minion)
 	if footer != "":
@@ -225,7 +226,7 @@ func _build_minion_card(parent: Container, minion: Dictionary) -> void:
 	var purple := Color(0.55, 0.2, 0.7)
 	var holder := Control.new()
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	holder.custom_minimum_size = Vector2(390, 290)
+	holder.custom_minimum_size = Vector2(360, 236)
 	holder.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	parent.add_child(holder)
 	_minion_card = holder
@@ -245,7 +246,7 @@ func _build_minion_card(parent: Container, minion: Dictionary) -> void:
 	var q1 := UiStyle.label("手下はだれ?", 30, Color.WHITE)
 	q1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bcol.add_child(q1)
-	var q2 := UiStyle.label("?", 110, Color.WHITE)
+	var q2 := UiStyle.label("?", 84, Color.WHITE)
 	q2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bcol.add_child(q2)
 	var hint := UiStyle.pill("タップでめくってね", 22)
@@ -343,6 +344,46 @@ func _input(event: InputEvent) -> void:
 	if _minion_card and _minion_card.get_global_rect().has_point(pos):
 		_flip_minion_card()
 		get_viewport().set_input_as_handled()
+
+
+## 得点のカード: 上に色の丸と名前(小さく)、まん中に点数(大きく)、下にこのラウンドで増えた分
+func _score_chip(r: Dictionary) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var st := UiStyle.box(Color("FFF6D8") if r["me"] else GameConfig.COLOR_PAPER, true, 16, 3)
+	st.border_color = GameConfig.COLOR_ACCENT if r["me"] else GameConfig.COLOR_INK
+	st.shadow_offset = Vector2(3, 4)
+	st.set_content_margin_all(8)
+	panel.add_theme_stylebox_override("panel", st)
+	panel.custom_minimum_size = Vector2(128, 104)
+	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_theme_constant_override("separation", 0)
+	panel.add_child(col)
+	var top := HBoxContainer.new()
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.alignment = BoxContainer.ALIGNMENT_CENTER
+	top.add_theme_constant_override("separation", 5)
+	col.add_child(top)
+	top.add_child(UiStyle.dot(r["color"], 16))
+	var n := UiStyle.label(r["name"], 17, GameConfig.COLOR_INK)
+	n.clip_text = true
+	n.custom_minimum_size = Vector2(0, 0)
+	top.add_child(n)
+	var mark: String = r.get("mark", "")
+	if mark != "":
+		var mk := UiStyle.label(mark, 17, GameConfig.COLOR_ACCENT.darkened(0.2))
+		mk.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(mk)
+	var sc := UiStyle.label("%d点" % r["score"], 36, GameConfig.COLOR_INK)
+	sc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(sc)
+	var d: int = r.get("delta", 0)
+	var dl := UiStyle.label(("%+d" % d) if d != 0 else " ", 18, Color("2E9E5B") if d > 0 else Color("D9483B"))
+	dl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(dl)
+	return panel
 
 
 func _score_row(r: Dictionary) -> PanelContainer:
