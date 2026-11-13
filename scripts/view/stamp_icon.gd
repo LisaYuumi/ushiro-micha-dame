@@ -53,7 +53,7 @@ func _draw() -> void:
 	if kind == Stamps.TRUST:
 		_draw_teary_face(ic, r * 0.62, line)
 	else:
-		_draw_item(ic, r * 0.5, line)
+		_draw_item(ic, r * 0.6, line)
 	# 右下の記号バッジ
 	var bc := c + Vector2(r * 0.6, r * 0.6)
 	var br := r * 0.42
