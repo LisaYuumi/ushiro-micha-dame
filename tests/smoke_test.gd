@@ -475,6 +475,7 @@ func _test_bots_send_and_trust_stamps() -> void:
 		var b := BotBrain.new()
 		b.reset(seed_value)
 		var pairs := {}
+		var bot_turns := 0
 		for i in int(40.0 / STEP):
 			b.update(s, STEP)
 			s.tick(STEP)
@@ -495,6 +496,15 @@ func _test_bots_send_and_trust_stamps() -> void:
 							"ボットは鬼がついさっき後ろを通った人にだけスタンプを送る")
 				elif e["type"] == "otetsuki":
 					otetsuki_after_stamp += 1
+					var turner := s.get_actor(e["actor"])
+					if turner.is_bot:
+						var age: float = s.seat_pass_age[turner.seat_index]
+						_check(age != INF and age >= GameConfig.BOT_TURN_MIN_AFTER_PASS - STEP * 2.0,
+								"ボットは鬼が後ろを通ってから %d 秒たつまで振り向かない(%.1f 秒)" % [int(GameConfig.BOT_TURN_MIN_AFTER_PASS), age])
+				elif e["type"] == "picked_up":
+					var age: float = s.seat_pass_age[s.vacant_seat]
+					_check(age >= GameConfig.BOT_TURN_MIN_AFTER_PASS - STEP * 2.0,
+							"落とされたボットも、鬼が通ってすぐには拾わない(%.1f 秒)" % age)
 				b.on_event(s, e)
 			if s.phase == GameState.Phase.RESULT:
 				break

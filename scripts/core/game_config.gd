@@ -128,6 +128,10 @@ const BOT_STAMP_INTERVAL_MAX := 18.0
 const BOT_STAMP_RECENT_PASS := 10.0 # STAMP_SCORE_RECENT_PASS と同じにしておく
 ## ボットが振り向いてから前を向くまで(秒)
 const BOT_LOOK_TIME := 0.8
+## ボットは、鬼が自分の後ろを通ってからこの秒数がたつまで振り向かない(気づいたとき・声やスタンプでも)。
+## 鬼が一度も後ろを通っていないときも振り向かない。置いた瞬間に振り向かれると、逃げる鬼に
+## バナナを置く間がなくなるため
+const BOT_TURN_MIN_AFTER_PASS := 5.0
 
 # --- 人が鬼をやるとき ---
 ## 歩く速さの範囲(メートル/秒)。スティック左でゆっくり、右で速く。何もしなければ ONI_WALK_SPEED

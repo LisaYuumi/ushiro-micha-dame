@@ -12,6 +12,8 @@ var _stamp_left := {}
 var _look_left := {}
 ## バナナを投げるまでの時間(id -> 秒。-1 は今回の追いかけっこでは投げない)
 var _banana_left := {}
+## 振り向いてよくなる前に届いたスタンプを、あとで考え直す人(id -> true)
+var _stamp_pending := {}
 
 
 func reset(seed_value: int = -1) -> void:
@@ -19,6 +21,7 @@ func reset(seed_value: int = -1) -> void:
 	_stamp_left.clear()
 	_look_left.clear()
 	_banana_left.clear()
+	_stamp_pending.clear()
 	if seed_value >= 0:
 		rng.seed = seed_value
 	else:
@@ -47,7 +50,7 @@ func on_event(state: GameState, e: Dictionary) -> void:
 	if e.get("type") == "voice":
 		# 鬼の声: いちばん近い席のボットがときどき「落とされた?」と振り向く
 		var near := state.get_actor_at_seat(e["seat"])
-		if near and near.is_bot and near.role == GameState.Role.SEATED \
+		if near and near.is_bot and near.role == GameState.Role.SEATED and may_turn(state, near) \
 				and rng.randf() < GameConfig.BOT_VOICE_FOOL_CHANCE:
 			state.pick_up(near.id)
 			_look_left[near.id] = GameConfig.BOT_LOOK_TIME
@@ -55,7 +58,7 @@ func on_event(state: GameState, e: Dictionary) -> void:
 	if e.get("type") == "rustle" and e.get("feint", false):
 		# 人の鬼が「ふり」をした: その席のボットがときどきだまされて振り向く
 		var fooled := state.get_actor_at_seat(e["seat"])
-		if fooled and fooled.is_bot and fooled.role == GameState.Role.SEATED \
+		if fooled and fooled.is_bot and fooled.role == GameState.Role.SEATED and may_turn(state, fooled) \
 				and rng.randf() < GameConfig.BOT_FEINT_FOOL_CHANCE:
 			state.pick_up(fooled.id)
 			_look_left[fooled.id] = GameConfig.BOT_LOOK_TIME
@@ -65,6 +68,24 @@ func on_event(state: GameState, e: Dictionary) -> void:
 	var me := state.get_actor(e["target"])
 	if me == null or not me.is_bot or me.role != GameState.Role.SEATED:
 		return
+	if not may_turn(state, me):
+		# まだ振り向いてよくない: 振り向いてよくなったら考え直す
+		_stamp_pending[me.id] = true
+		return
+	_consider_stamps(state, me)
+
+
+## 鬼が自分の後ろを通ってから BOT_TURN_MIN_AFTER_PASS 秒たっているか(一度も通っていなければ false)。
+## ボットはこれが true のときだけ振り向く
+static func may_turn(state: GameState, a: GameState.Actor) -> bool:
+	if a.seat_index < 0 or a.seat_index >= state.seat_pass_age.size():
+		return false
+	var age: float = state.seat_pass_age[a.seat_index]
+	return age != INF and age >= GameConfig.BOT_TURN_MIN_AFTER_PASS
+
+
+## 届いているスタンプを見て、振り向くか決める
+func _consider_stamps(state: GameState, me: GameState.Actor) -> void:
 	# 届いているスタンプの多数決: 「見ろ」は +1、「まだ平気」は -1。
 	# 前のラウンドで手下だった人のスタンプは、あまり信用しない
 	var vote := 0.0
@@ -88,6 +109,10 @@ func on_event(state: GameState, e: Dictionary) -> void:
 
 ## 座っているボット: 後ろに落とされたら、しばらくして気づいて拾う
 func _update_seated(state: GameState, a: GameState.Actor, delta: float) -> void:
+	if _stamp_pending.has(a.id) and may_turn(state, a):
+		_stamp_pending.erase(a.id)
+		if not state.active_stamps.get(a.id, []).is_empty():
+			_consider_stamps(state, a)
 	if not state.has_handkerchief_behind(a):
 		return
 	if not _notice_left.has(a.id):
@@ -100,7 +125,8 @@ func _update_seated(state: GameState, a: GameState.Actor, delta: float) -> void:
 		k *= Personalities.params(a.personality)["notice"]
 		_notice_left[a.id] = rng.randf_range(GameConfig.BOT_NOTICE_TIME_MIN, GameConfig.BOT_NOTICE_TIME_MAX) * k
 	_notice_left[a.id] -= delta
-	if _notice_left[a.id] <= 0.0:
+	# 気づいても、鬼がまだすぐ後ろ(通って BOT_TURN_MIN_AFTER_PASS 秒以内)なら待つ
+	if _notice_left[a.id] <= 0.0 and may_turn(state, a):
 		state.pick_up(a.id)
 
 
