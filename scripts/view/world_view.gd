@@ -301,19 +301,32 @@ func _build_floor() -> void:
 ## 前: 黒板(チョークの文字つき)と時計
 func _build_front_wall(wall: Node3D, half: float) -> void:
 	var z := -half + 0.12
-	# 黒板は高めに(手前の人の名札と重なりにくいように)
-	_part(Vector3(5.6, 1.7, 0.1), Vector3(0, 2.75, z), COLOR_WOOD, 0.03, wall)
-	_part(Vector3(5.2, 1.35, 0.1), Vector3(0, 2.75, z + 0.04), COLOR_BOARD, 0.02, wall)
-	_part(Vector3(5.2, 0.06, 0.18), Vector3(0, 2.05, z + 0.1), COLOR_WOOD, 0.02, wall)
+	# 黒板は高めに(手前の人の名札と重なりにくいように)。文字が収まるように横に広く
+	_part(Vector3(7.4, 1.9, 0.1), Vector3(0, 2.8, z), COLOR_WOOD, 0.03, wall)
+	_part(Vector3(7.0, 1.55, 0.1), Vector3(0, 2.8, z + 0.04), COLOR_BOARD, 0.02, wall)
+	_part(Vector3(7.0, 0.06, 0.18), Vector3(0, 2.0, z + 0.1), COLOR_WOOD, 0.02, wall)
+	# チョークの文字: 少し黄みがかった白で、少し透けて、手書きっぽく傾ける
+	var chalk_color := Color(0.98, 0.97, 0.88, 0.82)
 	var chalk := Label3D.new()
 	chalk.text = "うしろ見ちゃダメ!"
 	chalk.font = HudFont.get_font()
-	chalk.font_size = 120
-	chalk.pixel_size = 0.006
-	chalk.outline_size = 0
-	chalk.modulate = Color(0.97, 0.97, 0.92)
-	chalk.position = Vector3(0, 2.85, z + 0.1)
+	chalk.font_size = 104
+	chalk.pixel_size = 0.0058
+	chalk.outline_size = 6
+	chalk.outline_modulate = Color(0.98, 0.97, 0.88, 0.18)
+	chalk.modulate = chalk_color
+	chalk.shaded = false
+	chalk.position = Vector3(-0.1, 2.92, z + 0.1)
+	chalk.rotation.z = deg_to_rad(2.5)
 	wall.add_child(chalk)
+	# チョークの落書き: 文字の下の波線と、すみの星
+	for i in 9:
+		var seg := _part(Vector3(0.52, 0.035, 0.01), Vector3(-2.1 + i * 0.5, 2.35 + (0.04 if i % 2 == 0 else -0.04), z + 0.1),
+				Color(0.98, 0.97, 0.88), 0.0, wall)
+		seg.rotation.z = 0.18 if i % 2 == 0 else -0.18
+	for k in 3:
+		var ray := _part(Vector3(0.42, 0.035, 0.01), Vector3(2.85, 3.25, z + 0.1), Color(0.98, 0.97, 0.88), 0.0, wall)
+		ray.rotation.z = k * PI / 3.0
 	# 時計
 	var face := CylinderMesh.new()
 	face.top_radius = 0.38
@@ -321,10 +334,10 @@ func _build_front_wall(wall: Node3D, half: float) -> void:
 	face.height = 0.06
 	var clock := Toon.mesh(face, GameConfig.COLOR_PAPER)
 	clock.rotation.x = PI / 2.0
-	clock.position = Vector3(3.6, 3.3, z + 0.02)
+	clock.position = Vector3(4.6, 3.35, z + 0.02)
 	wall.add_child(clock)
-	_part(Vector3(0.04, 0.26, 0.02), Vector3(3.6, 3.4, z + 0.07), GameConfig.COLOR_INK, 0.0, wall)
-	var minute := _part(Vector3(0.03, 0.32, 0.02), Vector3(3.7, 3.35, z + 0.08), GameConfig.COLOR_INK, 0.0, wall)
+	_part(Vector3(0.04, 0.26, 0.02), Vector3(4.6, 3.45, z + 0.07), GameConfig.COLOR_INK, 0.0, wall)
+	var minute := _part(Vector3(0.03, 0.32, 0.02), Vector3(4.7, 3.4, z + 0.08), GameConfig.COLOR_INK, 0.0, wall)
 	minute.rotation.z = -1.0
 
 
