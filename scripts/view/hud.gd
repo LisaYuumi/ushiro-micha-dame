@@ -32,8 +32,10 @@ var _extra_pill: PanelContainer
 ## ラウンドが終わったときの結果カード(全員の点数もここに出す。手下がばれないように、ふだんは出さない)
 var _result_card: PanelContainer
 var _next_button: Button
-## 結果カードの「手下はだれ?」(タップでめくる)
-var _reveal: MinionReveal
+## 結果カードの表(得点表)と裏(手下)。カードをタップすると、くるっと裏返る
+var _card_front: Control
+var _card_back: Control
+var _flipping := false
 ## 役のお知らせカード(手下になったときなど)。しばらくすると消える
 var _popup: PanelContainer
 
@@ -83,8 +85,8 @@ func set_round_info(round_text: String, item_text: String, extra_text: String, s
 ## title: 大きい見出し / sub: その下の一言 / notes: 小さい札(がまん・手下の発表など)/ color: 見出しの色 /
 ## rows: [{"name", "color", "score", "delta", "me", "mark"}](この順に並べる)/ footer: いちばん下の案内
 ## next_label: 「次へ」ボタンの文字("" なら出さない。ホストとひとりのときだけ出す)
-## minion: {"name", "color", "is_me", "bonus"}。あれば「手下はだれ?」のカードを出し、
-## めくるまで点数の表は隠す(手下のボーナスで手下がわかってしまうので)
+## minion: {"name", "color", "is_me", "bonus"}。あれば、カードの表は得点表、
+## タップして裏返すと手下(左にキャラの絵、右に名前)が出る
 func show_result_card(title: String, sub: String, notes: Array, color: Color, rows: Array, footer: String,
 		next_label: String = "", minion: Dictionary = {}) -> void:
 	hide_result_card()
@@ -119,24 +121,53 @@ func show_result_card(title: String, sub: String, notes: Array, color: Color, ro
 		col.add_child(nrow)
 		for n in notes:
 			nrow.add_child(UiStyle.pill(str(n), 20))
-	if not minion.is_empty():
-		_reveal = MinionReveal.new()
-		_reveal.setup(minion["name"], minion["color"], minion["is_me"], minion["bonus"])
-		col.add_child(_reveal)
-	# 全員の点数(2列)
+	# 表: 全員の点数(2列)
+	var front := VBoxContainer.new()
+	front.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	front.add_theme_constant_override("separation", 8)
+	col.add_child(front)
 	var grid := GridContainer.new()
 	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 6)
-	col.add_child(grid)
+	front.add_child(grid)
 	for r in rows:
 		grid.add_child(_score_row(r))
-	if _reveal:
-		grid.visible = false
-		_reveal.flipped.connect(func() -> void:
-			grid.visible = true
-			_recenter_result.call_deferred())
+	_card_front = front
+	if not minion.is_empty():
+		front.add_child(_flip_hint("うらがえすと 手下がわかるよ ↻"))
+		# 裏: 左に手下のキャラの絵、右に名前
+		var back := VBoxContainer.new()
+		back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		back.add_theme_constant_override("separation", 8)
+		back.visible = false
+		col.add_child(back)
+		var row := HBoxContainer.new()
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 18)
+		row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		back.add_child(row)
+		row.add_child(MinionPortrait.new(minion["color"]))
+		var info := VBoxContainer.new()
+		info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		info.alignment = BoxContainer.ALIGNMENT_CENTER
+		info.add_theme_constant_override("separation", 6)
+		row.add_child(info)
+		var purple := Color(0.55, 0.2, 0.7)
+		info.add_child(UiStyle.label("鬼の手下は…", 24, GameConfig.COLOR_INK.lightened(0.3)))
+		var nm := UiStyle.label("あなた!" if minion["is_me"] else "%s!" % minion["name"], 44, purple)
+		nm.add_theme_color_override("font_outline_color", GameConfig.COLOR_INK)
+		nm.add_theme_constant_override("outline_size", 8)
+		info.add_child(nm)
+		info.add_child(UiStyle.label("だったよ!", 26, GameConfig.COLOR_INK))
+		if minion["bonus"]:
+			var bp := UiStyle.pill("鬼がかって +%d点" % GameConfig.SCORE_MINION_ONI_WIN, 20)
+			(bp.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = purple.lightened(0.75)
+			info.add_child(bp)
+		back.add_child(_flip_hint("↻ 得点表にもどる"))
+		_card_back = back
 	if footer != "":
 		var f := UiStyle.label(footer, 20, GameConfig.COLOR_INK.lightened(0.35))
 		f.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -213,7 +244,41 @@ func hide_result_card() -> void:
 		_result_card.queue_free()
 		_result_card = null
 		_next_button = null
-		_reveal = null
+		_card_front = null
+		_card_back = null
+		_flipping = false
+
+
+## カードの裏返しをうながす札(ぴょこぴょこ動く)
+func _flip_hint(text: String) -> Control:
+	var p := UiStyle.pill(text, 22)
+	(p.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = Color("F2E6FA")
+	p.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var tw := p.create_tween().set_loops()
+	tw.tween_property(p, "modulate", Color(1, 1, 1, 0.55), 0.6)
+	tw.tween_property(p, "modulate", Color.WHITE, 0.6)
+	return p
+
+
+## 結果カードをくるっと裏返す(横につぶれて、表と裏を入れかえて、また広がる)
+func _flip_result_card() -> void:
+	if _flipping or _card_back == null or _result_card == null:
+		return
+	_flipping = true
+	var card := _result_card
+	# 裏の大きさを表にそろえる(カードの大きさが変わらないように)
+	_card_back.custom_minimum_size = Vector2(0, _card_front.size.y)
+	card.pivot_offset = card.size / 2.0
+	var tw := create_tween()
+	tw.tween_property(card, "scale:x", 0.0, 0.15)
+	tw.tween_callback(func() -> void:
+		if not is_instance_valid(card) or _card_front == null:
+			return
+		var to_back := _card_front.visible
+		_card_front.visible = not to_back
+		_card_back.visible = to_back)
+	tw.tween_property(card, "scale:x", 1.0, 0.15)
+	tw.tween_callback(func() -> void: _flipping = false)
 
 
 ## 結果カードの大きさが変わったら、まん中に置き直す
@@ -233,21 +298,21 @@ func _press_next() -> void:
 		Input.parse_input_event(ev)
 
 
-## スマホの指(と PC のクリック): 「手下はだれ?」をめくる/結果カードの「次へ」を押す
+## スマホの指(と PC のクリック): 結果カードの「次へ」を押す/カードをタップして裏返す
 func _input(event: InputEvent) -> void:
 	var tap: bool = (event is InputEventScreenTouch and event.pressed) \
 			or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT)
 	if not tap:
 		return
 	var pos: Vector2 = event.position
-	if _reveal and not _reveal.is_open() and _reveal.get_global_rect().has_point(pos):
-		_reveal.flip()
-		get_viewport().set_input_as_handled()
+	if _next_button and _next_button.is_visible_in_tree() and _next_button.get_global_rect().has_point(pos):
+		if event is InputEventScreenTouch:
+			_press_next()
+			get_viewport().set_input_as_handled()
 		return
-	if _next_button == null or not event is InputEventScreenTouch:
-		return
-	if _next_button.is_visible_in_tree() and _next_button.get_global_rect().has_point(pos):
-		_press_next()
+	# カードのほかの所をタップしたら裏返す
+	if _card_back and _result_card.get_global_rect().has_point(pos):
+		_flip_result_card()
 		get_viewport().set_input_as_handled()
 
 
