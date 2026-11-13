@@ -275,12 +275,12 @@ func _physics_process(delta: float) -> void:
 			and state.phase != GameState.Phase.RESULT else "", Color(0.55, 0.2, 0.7))
 	var judged := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
 	touch.set_looks_left(me.looks_left if judged else -1)
+	# 勝敗が出ている間は、名札とゲーム用のボタンを隠して結果カードだけにする(⚙は残す)
+	var showing_result := state.phase == GameState.Phase.RESULT
+	touch.set_result_mode(showing_result)
 	touch.set_oni_mode(_i_am_oni(),
 			me.role == GameState.Role.SEATED and state.phase == GameState.Phase.CHASE)
 	touch.set_stick_visible(me.role != GameState.Role.SEATED)
-	# 勝敗が出ている間は、名札とボタンを隠して結果カードだけにする
-	var showing_result := state.phase == GameState.Phase.RESULT
-	touch.visible = not showing_result
 	var ov := view.get_overlay()
 	if ov:
 		ov.visible = not showing_result

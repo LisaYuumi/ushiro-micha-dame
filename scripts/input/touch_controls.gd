@@ -23,6 +23,8 @@ var _look_badge: PanelContainer
 var _look_badge_label: Label
 var _looks_shown := -2
 var _mode := []
+## 結果カードが出ている間は、ゲーム用のボタンを隠す(⚙は残す)
+var _result := false
 ## 押している指の番号 -> 操作
 var _touch_action := {}
 
@@ -141,15 +143,15 @@ func set_looks_left(n: int) -> void:
 
 ## 鬼のとき/座っているとき/座っていて追いかけっこ中で、出すボタンを切りかえる
 func set_oni_mode(is_oni: bool, seated_in_chase: bool = false) -> void:
-	if _mode == [is_oni, seated_in_chase]:
+	if _mode == [is_oni, seated_in_chase, _result]:
 		return
-	_mode = [is_oni, seated_in_chase]
+	_mode = [is_oni, seated_in_chase, _result]
 	for b in _seated_buttons:
-		b.visible = not is_oni and not seated_in_chase
+		b.visible = not is_oni and not seated_in_chase and not _result
 	for b in _oni_buttons:
-		b.visible = is_oni
+		b.visible = is_oni and not _result
 	for b in _chase_buttons:
-		b.visible = seated_in_chase
+		b.visible = seated_in_chase and not _result
 	# 切りかえで押しっぱなしになった指を離しておく
 	for index in _touch_action.keys():
 		var entry: Dictionary = _touch_action[index]
@@ -262,8 +264,14 @@ func _menu_button(parent: Container, text: String, on_press: Callable, accent :=
 	return b
 
 
+## 結果カードが出ている間: ゲーム用のボタンとスティックを隠す(⚙とメニューは使える)
+func set_result_mode(v: bool) -> void:
+	_result = v
+
+
 ## ジョイスティックは、立っているとき(鬼・追いかける人)だけ出す
 func set_stick_visible(v: bool) -> void:
+	v = v and not _result
 	if _stick.visible != v:
 		_stick.visible = v
 
