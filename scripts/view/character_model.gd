@@ -133,6 +133,10 @@ var _slip := 0.0
 ## まばたき: 次のまばたきまでの時間と、目を閉じている残り時間
 var _blink_wait := randf_range(1.5, 4.0)
 var _blink_left := 0.0
+## 鬼だけがかぶる、学校の黄色い帽子
+var _hat: Node3D
+const COLOR_HAT := Color("FFD43B")
+const COLOR_HAT_BAND := Color("F2B705")
 
 
 func build(color: Color, display_name: String, font: Font) -> void:
@@ -145,6 +149,7 @@ func build(color: Color, display_name: String, font: Font) -> void:
 
 	_face = Node3D.new()
 	_attach("DEF-head", _face, _head_transform())
+	_build_hat()
 
 	# 点の目
 	for x in [-0.08, 0.08]:
@@ -325,6 +330,46 @@ func _build_body(color: Color) -> void:
 		hand.height = 0.15
 		var at := Transform3D(Basis.IDENTITY, _rest_pos("DEF-hand." + side) + _bone_dir("DEF-hand." + side) * 0.05)
 		_attach("DEF-hand." + side, _mesh(hand, color, line), at)
+
+
+## 学校の黄色い帽子: 丸い山と、ぐるっと一周のつば、帽子の帯(ふだんは隠しておく)
+func _build_hat() -> void:
+	var line := GameConfig.OUTLINE_WIDTH / BODY_SCALE
+	_hat = Node3D.new()
+	_attach("DEF-head", _hat, _head_transform())
+	var crown := SphereMesh.new()
+	crown.radius = 0.215
+	crown.height = 0.215
+	crown.is_hemisphere = true
+	var crown_mi := _mesh(crown, COLOR_HAT, line)
+	crown_mi.position = Vector3(0, HEAD_Y + 0.13, 0)
+	crown_mi.scale = Vector3(1.0, 0.8, 1.0)
+	_hat.add_child(crown_mi)
+	var band := CylinderMesh.new()
+	band.top_radius = 0.218
+	band.bottom_radius = 0.222
+	band.height = 0.04
+	band.radial_segments = 24
+	var band_mi := _mesh(band, COLOR_HAT_BAND, 0.0)
+	band_mi.position = Vector3(0, HEAD_Y + 0.155, 0)
+	_hat.add_child(band_mi)
+	var brim := CylinderMesh.new()
+	brim.top_radius = 0.3
+	brim.bottom_radius = 0.31
+	brim.height = 0.022
+	brim.radial_segments = 28
+	var brim_mi := _mesh(brim, COLOR_HAT, line)
+	brim_mi.position = Vector3(0, HEAD_Y + 0.13, 0)
+	# つばは前(-Z)が少し下がる
+	brim_mi.rotation.x = -0.08
+	_hat.add_child(brim_mi)
+	_hat.visible = false
+
+
+## 帽子をかぶる/ぬぐ(鬼だけがかぶる)
+func set_hat(v: bool) -> void:
+	if _hat:
+		_hat.visible = v
 
 
 ## 頭の球の位置と向き(骨組みの座標で)。顔の -Z が体の正面(素材の +Z)を向く

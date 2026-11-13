@@ -159,6 +159,8 @@ func sync(state: GameState, delta: float) -> void:
 				# 振り向いた姿は全員に見える(頭→上半身の順に後ろを向く)
 				model.set_look(a.looking_back)
 				model.set_pose(_pose_of(state, a))
+				# 鬼だけが学校の黄色い帽子をかぶる
+				model.set_hat(a.id == state.oni_id)
 			_update_expression(state, a, model, delta)
 			_update_milk(state, a, model)
 	_update_seat_camera(state, delta)
