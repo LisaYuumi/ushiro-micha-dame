@@ -41,6 +41,14 @@ const COLOR_DESK_TOP := Color("E2CDA6")
 const COLOR_DESK_BOX := Color("9AA3AD")
 const COLOR_METAL := Color("8E8E94")
 const COLOR_CHAIR := Color("C9A16E")
+## 壁と天井
+const COLOR_BASEBOARD := Color("8B6240")
+const COLOR_PILLAR := Color("F1E7D3")
+const COLOR_CEILING := Color("F3F0E6")
+const COLOR_LAMP_FRAME := Color("DADADF")
+const COLOR_LAMP := Color("FFFFF4")
+## 天井を置くレイヤー(上から見る確認用カメラには映さない)
+const CEILING_LAYER := 4
 
 ## スタンプの色(仮)
 const STAMP_COLORS := {
@@ -275,8 +283,9 @@ func _build_environment() -> void:
 func _build_floor() -> void:
 	var half := ROOM_HALF
 	_batch = StaticBatch.new()
-	# 床(床板の継ぎ目つき)
-	_part(Vector3(half * 2.0, 0.04, half * 2.0), Vector3(0, -0.02, 0), GameConfig.COLOR_FLOOR, 0.0)
+	# 床: 下地+少しずつ色のちがう床板(継ぎ目をずらして並べる)
+	_part(Vector3(half * 2.0, 0.04, half * 2.0), Vector3(0, -0.02, 0), GameConfig.COLOR_FLOOR.darkened(0.12), 0.0)
+	_build_floor_planks(half)
 	# 転んだ体が乗る床(物理演算用。見た目はない)
 	var floor_body := StaticBody3D.new()
 	floor_body.collision_layer = 1 << (CharacterModel.FLOOR_LAYER - 1)
@@ -284,9 +293,8 @@ func _build_floor() -> void:
 	floor_shape.shape = WorldBoundaryShape3D.new()
 	floor_body.add_child(floor_shape)
 	add_child(floor_body)
-	var seam := GameConfig.COLOR_FLOOR.darkened(0.12)
-	for i in range(-int(half) + 1, int(half)):
-		_part(Vector3(half * 2.0, 0.004, 0.035), Vector3(0, 0.002, i), seam, 0.0)
+	_build_ceiling(half)
+	_build_window_light()
 	# 4つの壁: 下は腰板(白っぽい)、上は水色。境目は黒い線
 	for side in 4:
 		var wall := Node3D.new()
@@ -295,6 +303,11 @@ func _build_floor() -> void:
 		_part(Vector3(half * 2.0, 1.1, 0.2), Vector3(0, 0.55, -half), COLOR_WAINSCOT, 0.03, wall)
 		_part(Vector3(half * 2.0, ROOM_HEIGHT - 1.1, 0.2), Vector3(0, 1.1 + (ROOM_HEIGHT - 1.1) / 2.0, -half),
 				GameConfig.COLOR_SKY, 0.03, wall)
+		# 幅木(壁の下の帯)と、腰板の上の手すり
+		_part(Vector3(half * 2.0, 0.14, 0.06), Vector3(0, 0.07, -half + 0.13), COLOR_BASEBOARD, 0.02, wall)
+		_part(Vector3(half * 2.0, 0.06, 0.07), Vector3(0, 1.12, -half + 0.13), COLOR_WOOD, 0.02, wall)
+		# 角の柱
+		_part(Vector3(0.32, ROOM_HEIGHT, 0.32), Vector3(-half + 0.14, ROOM_HEIGHT / 2.0, -half + 0.14), COLOR_PILLAR, 0.03, wall)
 		match side:
 			0:
 				_build_front_wall(wall, half)
@@ -308,6 +321,60 @@ func _build_floor() -> void:
 	# 色ごとにまとめた背景を置く
 	_batch.build(self)
 	_batch = null
+
+
+## 床板: 0.4 m 幅の板を、長さと継ぎ目をずらして並べる。色は3段階で少しずつちがう
+func _build_floor_planks(half: float) -> void:
+	var tones := [GameConfig.COLOR_FLOOR, GameConfig.COLOR_FLOOR.lightened(0.05), GameConfig.COLOR_FLOOR.darkened(0.05)]
+	var width := 0.4
+	var rows := int(half * 2.0 / width)
+	for r in rows:
+		var z := -half + width * (r + 0.5)
+		var x := -half - float((r * 7) % 5) * 0.55
+		var k := r
+		while x < half:
+			var length := 2.4 + float((k * 13) % 4) * 0.4
+			var x0 := maxf(x, -half)
+			var x1 := minf(x + length, half)
+			if x1 - x0 > 0.05:
+				_part(Vector3(x1 - x0 - 0.03, 0.02, width - 0.03), Vector3((x0 + x1) / 2.0, 0.01, z), tones[k % tones.size()], 0.0)
+			x += length
+			k += 1
+
+
+## 天井と蛍光灯(上から見る確認用カメラには映さない)
+func _build_ceiling(half: float) -> void:
+	var ceiling := Node3D.new()
+	add_child(ceiling)
+	var b := StaticBatch.new()
+	b.add_box(Vector3(half * 2.0, 0.1, half * 2.0), Transform3D(Basis.IDENTITY, Vector3(0, ROOM_HEIGHT + 0.05, 0)), COLOR_CEILING, 0.0)
+	for x in [-3.6, 0.0, 3.6]:
+		for z in [-3.2, 3.2]:
+			b.add_box(Vector3(1.6, 0.08, 0.36), Transform3D(Basis.IDENTITY, Vector3(x, ROOM_HEIGHT - 0.04, z)), COLOR_LAMP_FRAME, 0.02)
+			b.add_box(Vector3(1.4, 0.05, 0.16), Transform3D(Basis.IDENTITY, Vector3(x, ROOM_HEIGHT - 0.09, z)), COLOR_LAMP, 0.0)
+	b.build(ceiling)
+	for c in ceiling.get_children():
+		(c as VisualInstance3D).layers = 1 << (CEILING_LAYER - 1)
+
+
+## 窓から床に差しこむ日差し(半透明の帯。光の計算はしない)
+func _build_window_light() -> void:
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(1.0, 0.98, 0.82, 0.28)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	for z in [-4.5, 0.0, 4.5]:
+		var quad := PlaneMesh.new()
+		quad.size = Vector2(3.2, 1.7)
+		var mi := MeshInstance3D.new()
+		mi.mesh = quad
+		mi.material_override = mat
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# 窓の壁(x = -8)から内側へ、斜めにのびる
+		mi.position = Vector3(-ROOM_HALF + 1.7, 0.025, z + 0.5)
+		mi.rotation.y = deg_to_rad(-18.0)
+		add_child(mi)
 
 
 ## 後ろの壁際に寄せて積んだ机と椅子(ハンカチ落としの場所を作るために机を下げた様子)。
@@ -517,7 +584,7 @@ func _update_oni_shadow(state: GameState) -> void:
 	var near := 1.0 - dist / GameConfig.ONI_SHADOW_RANGE
 	_oni_shadow.visible = true
 	# 自分の前(輪の内側)の床に、鬼の左右の位置に合わせて映す
-	_oni_shadow.position = me.position - back * (0.9 + 0.5 * near) + right * rel.dot(right) * 0.5 + Vector3(0, 0.006, 0)
+	_oni_shadow.position = me.position - back * (0.9 + 0.5 * near) + right * rel.dot(right) * 0.5 + Vector3(0, 0.03, 0)
 	_oni_shadow.rotation.y = me.yaw
 	_oni_shadow.scale = Vector3(0.8 + 0.5 * near, 1.0, 1.6 + 1.4 * near)
 	_oni_shadow_mat.albedo_color = Color(0, 0, 0, GameConfig.ONI_SHADOW_ALPHA * near)
@@ -536,7 +603,7 @@ func _update_bananas(state: GameState) -> void:
 		var shown := i < state.bananas.size()
 		_banana_nodes[i].visible = shown
 		if shown:
-			_banana_nodes[i].position = state.bananas[i]["pos"] + Vector3(0, 0.03, 0)
+			_banana_nodes[i].position = state.bananas[i]["pos"] + Vector3(0, 0.05, 0)
 
 
 ## 座っている自分から見えない席(両どなり)の後ろに落ちた物は、自分の席のカメラに映さない。
@@ -736,6 +803,7 @@ func _build_cameras(state: GameState) -> void:
 
 	_top_cam = Camera3D.new()
 	_top_cam.fov = 60
+	_top_cam.cull_mask = 0xFFFFF & ~(1 << (CEILING_LAYER - 1))
 	add_child(_top_cam)
 	_top_cam.look_at_from_position(Vector3(0, 13, 6), Vector3.ZERO)
 

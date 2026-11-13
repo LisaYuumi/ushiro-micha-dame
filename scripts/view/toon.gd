@@ -43,6 +43,26 @@ void fragment() {
 }
 """
 
+## まとめた背景用の塗り: 頂点の明るさ(COLOR)をかける(床に近いほど暗く・部品ごとの色むら)
+const _TOON_BATCHED_CODE := """
+shader_type spatial;
+render_mode specular_disabled, ambient_light_disabled;
+
+uniform vec4 albedo : source_color = vec4(1.0);
+uniform float shade_mid = 0.82;
+uniform float shade_dark = 0.66;
+
+void fragment() {
+	ALBEDO = albedo.rgb * COLOR.rgb;
+}
+
+void light() {
+	float ndl = dot(NORMAL, LIGHT);
+	float band = ndl > 0.25 ? 1.0 : (ndl > -0.25 ? shade_mid : shade_dark);
+	DIFFUSE_LIGHT = max(DIFFUSE_LIGHT, vec3(band));
+}
+"""
+
 ## まとめた背景用の輪郭線: 箱ごとの中心(CUSTOM0)からふくらませる
 const _OUTLINE_BATCHED_CODE := """
 shader_type spatial;
@@ -65,6 +85,7 @@ void fragment() {
 static var _toon_shader: Shader
 static var _outline_shader: Shader
 static var _outline_batched_shader: Shader
+static var _toon_batched_shader: Shader
 ## 同じ色・同じ太さの材質は使い回す(色ごとに1つ)
 static var _cache := {}
 
@@ -97,7 +118,12 @@ static func material_batched(color: Color, outline: float) -> Material:
 	var key := "B|%s|%.3f" % [color.to_html(), outline]
 	if _cache.has(key):
 		return _cache[key]
-	var base: ShaderMaterial = (material(color, 0.0) as ShaderMaterial).duplicate()
+	if _toon_batched_shader == null:
+		_toon_batched_shader = Shader.new()
+		_toon_batched_shader.code = _TOON_BATCHED_CODE
+	var base := ShaderMaterial.new()
+	base.shader = _toon_batched_shader
+	base.set_shader_parameter("albedo", color)
 	if outline > 0.0:
 		if _outline_batched_shader == null:
 			_outline_batched_shader = Shader.new()

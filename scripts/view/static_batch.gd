@@ -3,7 +3,13 @@ extends RefCounted
 ## 動かない背景の箱を、色ごとに1つの形(メッシュ)にまとめて描く(スマホで軽くするため)。
 ## 輪郭線は、箱ごとの中心からふくらませる(まとめても線が切れないように、中心を頂点に持たせる)。
 
-## 色と輪郭線の太さ -> {"color", "outline", "v": 頂点, "n": 法線, "c": 箱の中心, "i": 番号}
+## 立体感: 床に近いほど少し暗く(この高さ(メートル)で元の明るさ)、いちばん下の明るさ
+const AO_HEIGHT := 1.3
+const AO_FLOOR := 0.8
+## 部品ごとの色むら(明るさを ± この割合だけ変える)
+const JITTER := 0.05
+
+## 色と輪郭線の太さ -> {"color", "outline", "v": 頂点, "n": 法線, "c": 箱の中心, "k": 頂点の明るさ, "i": 番号}
 var _groups := {}
 
 static var _box_cache := {}
@@ -14,7 +20,7 @@ func add_box(size: Vector3, xf: Transform3D, color: Color, outline: float) -> vo
 	var key := "%s|%.3f" % [color.to_html(), outline]
 	if not _groups.has(key):
 		_groups[key] = {"color": color, "outline": outline, "v": PackedVector3Array(), "n": PackedVector3Array(),
-				"c": PackedFloat32Array(), "i": PackedInt32Array()}
+				"c": PackedFloat32Array(), "k": PackedColorArray(), "i": PackedInt32Array()}
 	var g: Dictionary = _groups[key]
 	var arrays := _unit_box()
 	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
@@ -26,16 +32,28 @@ func add_box(size: Vector3, xf: Transform3D, color: Color, outline: float) -> vo
 	var v: PackedVector3Array = g["v"]
 	var n: PackedVector3Array = g["n"]
 	var c: PackedFloat32Array = g["c"]
+	var kk: PackedColorArray = g["k"]
 	var ii: PackedInt32Array = g["i"]
+	# 部品ごとに少しだけ明るさを変える(位置から決めるので、毎回同じ)
+	var h := absf(sin(center.x * 12.9898 + center.y * 78.233 + center.z * 37.719) * 43758.5453)
+	var jitter := 1.0 + (fmod(h, 1.0) * 2.0 - 1.0) * JITTER
+	# 薄い物(床板・貼り紙など)は床に近くても暗くしない
+	var ao := size.y > 0.12
 	for k in verts.size():
-		v.append(xf * (verts[k] * size))
+		var p := xf * (verts[k] * size)
+		v.append(p)
 		n.append((nb * norms[k]).normalized())
 		c.append_array(PackedFloat32Array([center.x, center.y, center.z, 0.0]))
+		var b := jitter
+		if ao:
+			b *= lerpf(AO_FLOOR, 1.0, clampf(p.y / AO_HEIGHT, 0.0, 1.0))
+		kk.append(Color(b, b, b))
 	for k in idx:
 		ii.append(base + k)
 	g["v"] = v
 	g["n"] = n
 	g["c"] = c
+	g["k"] = kk
 	g["i"] = ii
 
 
@@ -48,6 +66,7 @@ func build(parent: Node3D) -> void:
 		arrays[Mesh.ARRAY_VERTEX] = g["v"]
 		arrays[Mesh.ARRAY_NORMAL] = g["n"]
 		arrays[Mesh.ARRAY_CUSTOM0] = g["c"]
+		arrays[Mesh.ARRAY_COLOR] = g["k"]
 		arrays[Mesh.ARRAY_INDEX] = g["i"]
 		var mesh := ArrayMesh.new()
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {},
