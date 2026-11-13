@@ -116,12 +116,12 @@ func sync(state: GameState, delta: float) -> void:
 
 	var holder := state.get_actor(state.chaser_id)
 	if holder:
-		# 追いかける人が持って(大きい物は頭の上にかついで)走る
+		# 追いかける人が持って走る: ハンカチ・上履きは右手に、大きい物は背中に背負う
 		_handkerchief.visible = true
-		_handkerchief.position = holder.position + Vector3(0, _item_carry_height, 0)
+		_carry_item(_actor_nodes.get(holder.id) as CharacterModel)
 	else:
 		_handkerchief.visible = state.handkerchief_on_floor
-		_handkerchief.position = state.handkerchief_position
+		_handkerchief.transform = Transform3D(Basis.IDENTITY, state.handkerchief_position)
 	_hide_item_if_not_visible_to_me(state)
 	_update_footsteps(state)
 
@@ -503,7 +503,33 @@ const ITEM_SHAPES := [
 	[Vector3(0.6, 0.7, 0.45), Color(0.65, 0.45, 0.25)],  # 机
 	[Vector3(0.9, 1.0, 0.5), Color(0.4, 0.25, 0.15)],    # 教卓
 ]
-var _item_carry_height := 1.0
+## いまの落とし物の番号と大きさ(持ち方を決める)
+var _item_index := 0
+var _item_size := Vector3.ONE
+
+
+## 追いかける人が落とし物を持つ: 小さい物(ハンカチ・上履き)は右手に、大きい物は背中に
+func _carry_item(m: CharacterModel) -> void:
+	if m == null:
+		return
+	var body := m.global_transform.basis.orthonormalized()
+	# キャラの正面は -Z、背中は +Z
+	var back := body.z.normalized()
+	match _item_index:
+		0:
+			# ハンカチ: 手からぶら下がる(布を縦にして、少し小さく)
+			var hand := m.bone_world("DEF-hand.R").origin
+			var b := body * Basis(Vector3.RIGHT, PI / 2.0)
+			_handkerchief.transform = Transform3D(b.scaled(Vector3.ONE * 0.6), hand + Vector3(0, -0.17, 0))
+		1:
+			# 上履き: 手に持つ
+			var hand := m.bone_world("DEF-hand.R").origin
+			_handkerchief.transform = Transform3D(body.scaled(Vector3.ONE * 0.85), hand + Vector3(0, -0.08, 0))
+		_:
+			# ランドセル・机・教卓: 背中に背負う(背中の上のほうに、はみ出して乗せる)
+			var chest := m.bone_world("DEF-spine.003").origin
+			var pos := chest + back * (0.2 + _item_size.z / 2.0) + Vector3(0, -_item_size.y * 0.6, 0)
+			_handkerchief.transform = Transform3D(body, pos)
 
 
 ## 落とし物の輪郭線(床の上で目立つように、ふつうより太く)
@@ -536,8 +562,9 @@ func _build_handkerchief(state: GameState) -> void:
 			_item_part(size, Vector3(0, size.y / 2.0, 0), shape[1], ITEM_OUTLINE)
 	_handkerchief.visible = false
 	add_child(_handkerchief)
-	# 小さい物は手に持ち、大きい物は頭の上にかつぐ
-	_item_carry_height = 0.9 if size.y < 0.3 else 1.75
+	# 小さい物は手に持ち、大きい物は背負う(_carry_item)
+	_item_index = index
+	_item_size = size
 
 
 func _build_sounds(state: GameState) -> void:

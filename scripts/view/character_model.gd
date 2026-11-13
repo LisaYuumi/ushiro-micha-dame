@@ -198,6 +198,15 @@ func _build_name_tag(_display_name: String, _font: Font) -> void:
 	_name_tag = tag
 
 
+## 骨の今の位置と向き(世界の座標)。手に持つ・背負う物の位置に使う
+func bone_world(bone: String) -> Transform3D:
+	var i := _skel.find_bone(bone) if _skel else -1
+	for a in _attachments:
+		if a["bone"] == i:
+			return (a["node"] as Node3D).global_transform
+	return global_transform
+
+
 ## 名札を出す位置(世界の座標)
 func tag_anchor() -> Vector3:
 	return _name_tag.global_position if _name_tag and _name_tag.is_inside_tree() else global_position + Vector3(0, 2.0, 0)
