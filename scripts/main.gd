@@ -367,6 +367,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			var loser := state.get_actor_at_seat(maxi(state.drop_target_seat, 0))
 			if loser:
 				state._finish(state.oni_id, loser.id, "missed")
+	elif event.is_action_pressed("debug_milk"):
+		# 確認用(ひとりのときだけ): 自分に牛乳をかけて、白い画面を見る
+		var me := state.get_local_player()
+		if mode == Mode.SOLO and me and me.role == GameState.Role.SEATED:
+			me.milk_angle = state.oni_angle
 	elif event.is_action_pressed("debug_slip"):
 		view.debug_slip_all()
 	elif event.is_action_pressed("sound_test"):
