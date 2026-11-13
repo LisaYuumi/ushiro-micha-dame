@@ -10,7 +10,7 @@ extends CanvasLayer
 ## 見た目だけ。状態は読むだけで変えない(押されたスタンプは main が命令にする)。
 
 const FONT_SIZE := 20
-const BUBBLE_FONT := 17
+const BUBBLE_FONT := 20
 ## 名札を置かない上の帯(左上の札の下から)
 const TOP_LIMIT := 70.0
 ## 送れない相手(8人のときの両どなり・このラウンド送った人)の名札の濃さ
