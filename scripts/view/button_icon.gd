@@ -31,11 +31,11 @@ func _draw() -> void:
 		"drop":
 			_draw_hankie(c, s, line, false)
 		"fake":
-			_draw_hankie(c + Vector2(-s * 0.18, 0), s * 0.75, line * 0.8, true)
+			_draw_hankie(c + Vector2(-s * 0.3, 0), s * 0.9, line, true)
 			# 音の波
 			for k in 2:
-				var r := s * (0.2 + 0.14 * k)
-				draw_arc(c + Vector2(s * 0.12, 0), r, -0.7, 0.7, 10, INK, line * 0.8, true)
+				var r := s * (0.22 + 0.18 * k)
+				draw_arc(c + Vector2(s * 0.2, 0), r, -0.75, 0.75, 10, INK, line, true)
 
 
 ## 牛乳びん: 白いびん、青いふたと帯(ほかの絵からも使う)
