@@ -26,6 +26,8 @@ var _oni_shadow_mat: StandardMaterial3D
 var _overlay: HeadOverlay
 ## 教室を作っている間だけ使う、背景の箱のまとめ役
 var _batch: StaticBatch
+## 教室を作るときに見る状態(ラウンドで変わる黒板の落書き・時計・日直)
+var _room_state: GameState
 
 ## 教室の大きさと色
 const ROOM_HALF := 8.0
@@ -49,6 +51,16 @@ const COLOR_LAMP_FRAME := Color("DADADF")
 const COLOR_LAMP := Color("FFFFF4")
 ## 天井を置くレイヤー(上から見る確認用カメラには映さない)
 const CEILING_LAYER := 4
+## 窓の外と小物
+const COLOR_FIELD := Color("9CC98A")
+const COLOR_GROUND := Color("D9C08F")
+const COLOR_TRUNK := Color("8B6240")
+const COLOR_TREE := Color("6FAE6A")
+const COLOR_POT := Color("C9764F")
+const COLOR_LEAF := Color("72A866")
+const COLOR_FLOWER := Color("F09AB0")
+const COLOR_STEEL := Color("A9B2BA")
+const COLOR_PAPER_SOFT := Color("FBF8EF")
 
 ## スタンプの色(仮)
 const STAMP_COLORS := {
@@ -88,6 +100,7 @@ func build(state: GameState) -> void:
 	_banana_nodes.clear()
 
 	_build_environment()
+	_room_state = state
 	_build_floor()
 	for i in state.seat_positions.size():
 		_build_chair(state.seat_positions[i], state.seat_yaws[i])
@@ -383,7 +396,7 @@ func _build_stacked_desks() -> void:
 	for side in [-1.0, 1.0]:
 		for col in 5:
 			for row in 3:
-				var x: float = side * (4.4 + col * 0.66)
+				var x: float = side * (5.0 + col * 0.58)
 				var z := 7.55 - row * 0.5
 				var tilt := deg_to_rad(((col * 7 + row * 3) % 5 - 2) * 1.5)
 				_school_desk(Vector3(x, 0, z), tilt)
@@ -443,8 +456,129 @@ func _build_front_wall(wall: Node3D, half: float) -> void:
 	clock.rotation.x = PI / 2.0
 	clock.position = Vector3(4.6, 3.35, z + 0.02)
 	wall.add_child(clock)
-	_part(Vector3(0.04, 0.26, 0.02), Vector3(4.6, 3.45, z + 0.07), GameConfig.COLOR_INK, 0.0, wall)
-	_part(Vector3(0.03, 0.32, 0.02), Vector3(4.7, 3.4, z + 0.08), GameConfig.COLOR_INK, 0.0, wall, Vector3(0, 0, -1.0))
+	_build_front_extras(wall, half, z)
+
+
+## 前の壁の小物: 時計の針(試合が進むと進む)・日付と日直・黒板の落書き(ラウンドで変わる)・
+## 教卓・時間割表・学級目標・スピーカー
+func _build_front_extras(wall: Node3D, half: float, z: float) -> void:
+	var round_no := _room_state.round_index if _room_state else 0
+	# 時計の針: 1ラウンドで10分進む(1時間目の始まりから)
+	var minutes := 30.0 + round_no * 10.0
+	for hand in [[0.3, 0.03, minutes / 60.0 * TAU], [0.2, 0.045, (9.0 + minutes / 60.0) / 12.0 * TAU]]:
+		var box := BoxMesh.new()
+		box.size = Vector3(hand[1], hand[0], 0.02)
+		var mi := Toon.mesh(box, GameConfig.COLOR_INK, 0.0)
+		var pivot := Node3D.new()
+		pivot.position = Vector3(4.6, 3.35, z + 0.08)
+		pivot.rotation.z = -hand[2]
+		wall.add_child(pivot)
+		mi.position = Vector3(0, hand[0] / 2.0, 0)
+		pivot.add_child(mi)
+	# 日付と日直(黒板の右はし、縦書き風に)
+	var d := Time.get_date_dict_from_system()
+	var days := ["日", "月", "火", "水", "木", "金", "土"]
+	var duty := "あおい"
+	if _room_state and not _room_state.actors.is_empty():
+		var a: GameState.Actor = _room_state.actors[(round_no * 3 + 1) % _room_state.actors.size()]
+		duty = a.display_name.get_slice("(", 0)
+	_chalk_text(wall, "%d月%d日(%s)" % [d["month"], d["day"], days[d["weekday"]]], Vector3(2.5, 3.42, z + 0.1), 34, 0.0)
+	_chalk_text(wall, "日直 %s" % duty, Vector3(2.5, 2.15, z + 0.1), 34, 0.0)
+	# 黒板の左はしの落書き(ラウンドごとにちがう)
+	_chalk_doodle(wall, round_no % 4, Vector3(-3.0, 2.32, z + 0.1))
+	# 教卓(黒板の前の床)
+	_part(Vector3(1.3, 0.95, 0.6), Vector3(0, 0.48, -half + 1.0), COLOR_WOOD.darkened(0.1), 0.03, wall)
+	_part(Vector3(1.4, 0.06, 0.66), Vector3(0, 0.98, -half + 1.0), COLOR_WOOD, 0.02, wall)
+	_part(Vector3(0.36, 0.06, 0.26), Vector3(-0.3, 1.04, -half + 1.0), COLOR_PAPER_SOFT, 0.012, wall, Vector3(0, 0.2, 0))
+	# 時間割表(黒板の左)
+	_part(Vector3(1.0, 1.3, 0.03), Vector3(-4.7, 2.6, z + 0.03), COLOR_PAPER_SOFT, 0.015, wall)
+	_part(Vector3(1.0, 0.18, 0.035), Vector3(-4.7, 3.16, z + 0.035), Color("8FB8DE"), 0.0, wall)
+	var cell_colors := [Color("F4C7C3"), Color("C9E4C5"), Color("FBE7A1"), Color("CFE0F5"), Color("E8D3F0")]
+	for r in 5:
+		for c in 5:
+			_part(Vector3(0.16, 0.16, 0.01), Vector3(-5.08 + c * 0.19, 2.95 - r * 0.21, z + 0.05),
+					cell_colors[(r + c * 2) % cell_colors.size()], 0.0, wall)
+	# 学級目標(黒板の上の横長の紙)
+	_part(Vector3(3.8, 0.42, 0.03), Vector3(0, 3.98, z + 0.03), COLOR_PAPER_SOFT, 0.015, wall)
+	var goal := Label3D.new()
+	goal.text = "なかよく げんきに がんばろう"
+	goal.font = HudFont.get_font()
+	goal.font_size = 64
+	goal.pixel_size = 0.0045
+	goal.outline_size = 0
+	goal.modulate = Color("C2452D")
+	goal.shaded = false
+	goal.position = Vector3(0, 3.98, z + 0.06)
+	wall.add_child(goal)
+	# スピーカー(左上のすみ)
+	_part(Vector3(0.55, 0.38, 0.2), Vector3(-6.7, 3.95, z + 0.06), COLOR_PILLAR, 0.02, wall)
+	for i in 4:
+		_part(Vector3(0.4, 0.025, 0.01), Vector3(-6.7, 4.06 - i * 0.07, z + 0.165), COLOR_METAL, 0.0, wall)
+
+
+## チョークの文字(少し黄みがかった白、少し透ける)
+func _chalk_text(parent: Node3D, text: String, pos: Vector3, size: int, tilt_deg: float) -> void:
+	var l := Label3D.new()
+	l.text = text
+	l.font = HudFont.get_font()
+	l.font_size = size
+	l.pixel_size = 0.0055
+	l.outline_size = 0
+	l.modulate = Color(0.98, 0.97, 0.88, 0.85)
+	l.shaded = false
+	l.position = pos
+	l.rotation.z = deg_to_rad(tilt_deg)
+	parent.add_child(l)
+
+
+## チョークの線(細い箱)
+func _chalk_line(parent: Node3D, a: Vector2, b: Vector2, z: float) -> void:
+	var d := b - a
+	_part(Vector3(d.length() + 0.03, 0.03, 0.01), Vector3((a.x + b.x) / 2.0, (a.y + b.y) / 2.0, z), Color(0.98, 0.97, 0.88),
+			0.0, parent, Vector3(0, 0, d.angle()))
+
+
+## 黒板の落書き: 0 にこにこ顔 / 1 ねこ / 2 おうち / 3 かさ
+func _chalk_doodle(parent: Node3D, kind: int, at: Vector3) -> void:
+	var c := Vector2(at.x, at.y)
+	var z := at.z
+	var circle := func(center: Vector2, r: float, n: int) -> void:
+		for i in n:
+			var a0 := TAU * i / n
+			var a1 := TAU * (i + 1) / n
+			_chalk_line(parent, center + Vector2(cos(a0), sin(a0)) * r, center + Vector2(cos(a1), sin(a1)) * r, z)
+	match kind:
+		0:
+			circle.call(c, 0.3, 12)
+			circle.call(c + Vector2(-0.1, 0.08), 0.03, 4)
+			circle.call(c + Vector2(0.1, 0.08), 0.03, 4)
+			_chalk_line(parent, c + Vector2(-0.14, -0.08), c + Vector2(0, -0.16), z)
+			_chalk_line(parent, c + Vector2(0, -0.16), c + Vector2(0.14, -0.08), z)
+		1:
+			circle.call(c, 0.26, 12)
+			_chalk_line(parent, c + Vector2(-0.22, 0.14), c + Vector2(-0.16, 0.38), z)
+			_chalk_line(parent, c + Vector2(-0.16, 0.38), c + Vector2(-0.05, 0.25), z)
+			_chalk_line(parent, c + Vector2(0.05, 0.25), c + Vector2(0.16, 0.38), z)
+			_chalk_line(parent, c + Vector2(0.16, 0.38), c + Vector2(0.22, 0.14), z)
+			for s2 in [-1.0, 1.0]:
+				_chalk_line(parent, c + Vector2(s2 * 0.12, -0.04), c + Vector2(s2 * 0.4, 0.0), z)
+				_chalk_line(parent, c + Vector2(s2 * 0.12, -0.08), c + Vector2(s2 * 0.4, -0.12), z)
+		2:
+			_chalk_line(parent, c + Vector2(-0.3, -0.3), c + Vector2(0.3, -0.3), z)
+			_chalk_line(parent, c + Vector2(-0.3, -0.3), c + Vector2(-0.3, 0.05), z)
+			_chalk_line(parent, c + Vector2(0.3, -0.3), c + Vector2(0.3, 0.05), z)
+			_chalk_line(parent, c + Vector2(-0.38, 0.05), c + Vector2(0, 0.36), z)
+			_chalk_line(parent, c + Vector2(0, 0.36), c + Vector2(0.38, 0.05), z)
+			_chalk_line(parent, c + Vector2(-0.08, -0.3), c + Vector2(-0.08, -0.1), z)
+			_chalk_line(parent, c + Vector2(0.08, -0.3), c + Vector2(0.08, -0.1), z)
+		_:
+			for i in 6:
+				var a0 := PI * i / 6.0
+				var a1 := PI * (i + 1) / 6.0
+				_chalk_line(parent, c + Vector2(cos(a0), sin(a0)) * 0.34, c + Vector2(cos(a1), sin(a1)) * 0.34, z)
+			_chalk_line(parent, c + Vector2(-0.34, 0), c + Vector2(0.34, 0), z)
+			_chalk_line(parent, c + Vector2(0, 0.34), c + Vector2(0, -0.3), z)
+			_chalk_line(parent, c + Vector2(0, -0.3), c + Vector2(0.08, -0.36), z)
 
 
 ## 横: 窓が3つ(水色のガラス、白い枠、ピンクのカーテン)
@@ -453,10 +587,23 @@ func _build_window_wall(wall: Node3D, half: float) -> void:
 	for x in [-4.5, 0.0, 4.5]:
 		_part(Vector3(2.2, 1.9, 0.08), Vector3(x, 2.3, z), GameConfig.COLOR_PAPER, 0.03, wall)
 		_part(Vector3(1.9, 1.6, 0.06), Vector3(x, 2.3, z + 0.03), COLOR_GLASS, 0.0, wall)
+		# 窓の外: 校庭(緑の地面と土のグラウンド)と木
+		_part(Vector3(1.9, 0.42, 0.01), Vector3(x, 1.71, z + 0.065), COLOR_FIELD, 0.0, wall)
+		_part(Vector3(1.9, 0.12, 0.01), Vector3(x, 1.56, z + 0.066), COLOR_GROUND, 0.0, wall)
+		var tx: float = x + (0.45 if int(x) % 2 == 0 else -0.5)
+		_part(Vector3(0.08, 0.32, 0.01), Vector3(tx, 2.0, z + 0.067), COLOR_TRUNK, 0.0, wall)
+		_part(Vector3(0.5, 0.42, 0.01), Vector3(tx, 2.32, z + 0.068), COLOR_TREE, 0.008, wall)
+		_part(Vector3(0.34, 0.3, 0.01), Vector3(tx - 0.62, 2.12, z + 0.068), COLOR_TREE.lightened(0.08), 0.008, wall)
 		_part(Vector3(0.06, 1.6, 0.08), Vector3(x, 2.3, z + 0.05), GameConfig.COLOR_PAPER, 0.015, wall)
 		_part(Vector3(1.9, 0.06, 0.08), Vector3(x, 2.3, z + 0.05), GameConfig.COLOR_PAPER, 0.015, wall)
 		for sx in [-1.25, 1.25]:
 			_part(Vector3(0.35, 2.1, 0.08), Vector3(x + sx, 2.25, z + 0.08), COLOR_CURTAIN, 0.025, wall)
+		# 窓台と植木鉢
+		_part(Vector3(2.3, 0.05, 0.3), Vector3(x, 1.4, z + 0.15), COLOR_PILLAR, 0.02, wall)
+		for px in [-0.55, 0.5]:
+			_part(Vector3(0.22, 0.2, 0.22), Vector3(x + px, 1.53, z + 0.17), COLOR_POT, 0.018, wall)
+			_part(Vector3(0.3, 0.22, 0.26), Vector3(x + px, 1.74, z + 0.17), COLOR_LEAF, 0.018, wall, Vector3(0, 0, 0.12))
+			_part(Vector3(0.12, 0.08, 0.12), Vector3(x + px + 0.05, 1.9, z + 0.17), COLOR_FLOWER, 0.012, wall)
 
 
 ## 後ろ: ロッカー(ランドセルが入っている)
@@ -473,6 +620,23 @@ func _build_back_wall(wall: Node3D, half: float) -> void:
 			if (row * 8 + col) % 3 != 1:
 				_part(Vector3(0.4, 0.34, 0.2), Vector3(x, y - 0.02, z + 0.22),
 						bags[(row * 3 + col) % bags.size()], 0.02, wall)
+	# 後ろの黒板(おしらせとマグネット)
+	var bz := -half + 0.12
+	_part(Vector3(4.8, 1.4, 0.08), Vector3(0, 2.45, bz), COLOR_WOOD, 0.03, wall)
+	_part(Vector3(4.5, 1.1, 0.08), Vector3(0, 2.45, bz + 0.03), COLOR_BOARD, 0.02, wall)
+	_chalk_text(wall, "きょうの めあて", Vector3(-0.9, 2.75, bz + 0.08), 64, 0.0)
+	_chalk_text(wall, "わすれものを しない", Vector3(-0.6, 2.3, bz + 0.08), 56, -1.5)
+	for i in 4:
+		_part(Vector3(0.12, 0.12, 0.04), Vector3(1.1 + i * 0.28, 2.85, bz + 0.09), [Color("E26D5A"), Color("5B8FD9"), Color("F2C14E"), Color("6DB58A")][i], 0.01, wall)
+	_part(Vector3(0.7, 0.5, 0.02), Vector3(1.55, 2.3, bz + 0.08), COLOR_PAPER_SOFT, 0.01, wall, Vector3(0, 0, 0.04))
+	# 掃除用具入れ(灰色のスチール。戸のすじと、通気の穴)
+	var cx := -4.25
+	_part(Vector3(0.78, 1.9, 0.5), Vector3(cx, 0.95, -half + 0.35), COLOR_STEEL, 0.03, wall)
+	_part(Vector3(0.02, 1.7, 0.02), Vector3(cx, 0.95, -half + 0.61), COLOR_STEEL.darkened(0.3), 0.0, wall)
+	for i in 4:
+		_part(Vector3(0.26, 0.025, 0.02), Vector3(cx - 0.19, 1.6 - i * 0.07, -half + 0.61), COLOR_STEEL.darkened(0.35), 0.0, wall)
+		_part(Vector3(0.26, 0.025, 0.02), Vector3(cx + 0.19, 1.6 - i * 0.07, -half + 0.61), COLOR_STEEL.darkened(0.35), 0.0, wall)
+	_part(Vector3(0.04, 0.16, 0.04), Vector3(cx + 0.06, 1.0, -half + 0.63), COLOR_METAL, 0.0, wall)
 
 
 ## もう1つの横: ドアと掲示板(貼り紙つき)
@@ -481,10 +645,31 @@ func _build_door_wall(wall: Node3D, half: float) -> void:
 	_part(Vector3(1.3, 2.3, 0.08), Vector3(-4.5, 1.15, z), COLOR_WOOD, 0.03, wall)
 	_part(Vector3(0.5, 0.6, 0.06), Vector3(-4.5, 1.65, z + 0.04), COLOR_GLASS, 0.015, wall)
 	_part(Vector3(3.2, 1.3, 0.08), Vector3(1.5, 2.0, z), COLOR_CORK, 0.03, wall)
-	var papers := [GameConfig.COLOR_PAPER, Color("FCE7A5"), Color("F7C4CF"), Color("CDEBFF")]
-	for i in 5:
-		_part(Vector3(0.5, 0.65, 0.03), Vector3(0.3 + i * 0.6, 2.0 + (0.12 if i % 2 == 0 else -0.1), z + 0.06),
-				papers[i % papers.size()], 0.012, wall, Vector3(0, 0, 0.06 if i % 2 == 0 else -0.05))
+	# 習字(白い紙に黒い筆の字)と、絵(色画用紙に、お日さまと家)
+	var words := ["友", "夢", "花"]
+	for i in 3:
+		var px := 0.35 + i * 0.5
+		_part(Vector3(0.4, 0.95, 0.02), Vector3(px, 2.05, z + 0.055), COLOR_PAPER_SOFT, 0.01, wall, Vector3(0, 0, (i - 1) * 0.03))
+		var brush := Label3D.new()
+		brush.text = words[i]
+		brush.font = HudFont.get_font()
+		brush.font_size = 96
+		brush.pixel_size = 0.0028
+		brush.outline_size = 0
+		brush.modulate = GameConfig.COLOR_INK
+		brush.shaded = false
+		brush.position = Vector3(px, 2.12, z + 0.07)
+		wall.add_child(brush)
+	var art_bg := [Color("CFE6F7"), Color("F9E0C7")]
+	for i in 2:
+		var ax := 2.05 + i * 0.62
+		_part(Vector3(0.55, 0.42, 0.02), Vector3(ax, 2.25, z + 0.055), art_bg[i], 0.01, wall, Vector3(0, 0, 0.04 - i * 0.07))
+		_part(Vector3(0.12, 0.12, 0.01), Vector3(ax + 0.14, 2.36, z + 0.07), Color("F2B544"), 0.0, wall)
+		_part(Vector3(0.18, 0.13, 0.01), Vector3(ax - 0.08, 2.18, z + 0.07), Color("D96B5B"), 0.0, wall)
+		_part(Vector3(0.6, 0.04, 0.01), Vector3(ax, 2.08, z + 0.07), Color("7DB86B"), 0.0, wall)
+		_part(Vector3(0.55, 0.42, 0.02), Vector3(ax, 1.75, z + 0.055), [Color("FDEBA0"), Color("E1D2F2")][i], 0.01, wall, Vector3(0, 0, -0.03 + i * 0.05))
+		_part(Vector3(0.3, 0.05, 0.01), Vector3(ax, 1.8, z + 0.07), Color("6D8FC9"), 0.0, wall)
+		_part(Vector3(0.2, 0.05, 0.01), Vector3(ax - 0.04, 1.7, z + 0.07), Color("6D8FC9"), 0.0, wall)
 
 
 ## 箱の部品を1つ置く(outline: 輪郭線の太さ。0 なら線なし/rot: 向き(ラジアン))。
