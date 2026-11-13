@@ -82,16 +82,22 @@ func _draw_symbol(c: Vector2, s: float, sym: String, w: float) -> void:
 ## 落とし物アイコン(s: 大きさの目安)
 func _draw_item(c: Vector2, s: float, line: float) -> void:
 	match item:
-		0: # ハンカチ: 水色の四角に白い線(少し傾ける)
-			var pts := _pts(c, s, [Vector2(-0.95, -0.75), Vector2(0.8, -0.95), Vector2(0.95, 0.75), Vector2(-0.8, 0.95)])
-			_poly(pts, Color("8FD3E8"), line)
-			draw_line(c + Vector2(-0.85, 0.0) * s, c + Vector2(0.9, -0.15) * s, Color.WHITE, line, true)
-			draw_line(c + Vector2(-0.05, -0.85) * s, c + Vector2(0.1, 0.85) * s, Color.WHITE, line, true)
-		1: # 上履き: 白いくつ(横から)、つま先のゴムは青、底は赤
-			_poly(_pts(c, s, [Vector2(-1.0, 0.4), Vector2(-1.0, -0.15), Vector2(-0.5, -0.45), Vector2(0.15, -0.35),
-					Vector2(0.95, 0.0), Vector2(1.05, 0.4)]), Color.WHITE, line)
-			_poly(_pts(c, s, [Vector2(0.35, -0.24), Vector2(0.95, 0.0), Vector2(1.05, 0.4), Vector2(0.4, 0.4)]), Color("4D96FF"), line)
-			_poly(_pts(c, s, [Vector2(-1.05, 0.4), Vector2(1.1, 0.4), Vector2(1.1, 0.62), Vector2(-1.05, 0.62)]), Color("D9483B"), line)
+		0: # ハンカチ: 白いふち+赤い地+白いチェック、右下の角が折れている(3D の落とし物と同じ色)
+			var outer := _pts(c, s, [Vector2(-1.0, -1.0), Vector2(1.0, -1.0), Vector2(1.0, 0.45), Vector2(0.45, 1.0), Vector2(-1.0, 1.0)])
+			_poly(outer, Color.WHITE, line)
+			draw_colored_polygon(_pts(c, s, [Vector2(-0.78, -0.78), Vector2(0.78, -0.78), Vector2(0.78, 0.4),
+					Vector2(0.4, 0.78), Vector2(-0.78, 0.78)]), Color("EE5A4B"))
+			for k in [-0.3, 0.3]:
+				draw_line(c + Vector2(-0.78, k) * s, c + Vector2(0.78, k) * s, Color.WHITE, line * 0.9, true)
+				draw_line(c + Vector2(k, -0.78) * s, c + Vector2(k, 0.78) * s, Color.WHITE, line * 0.9, true)
+			# 折れた角
+			_poly(_pts(c, s, [Vector2(1.0, 0.45), Vector2(0.45, 0.45), Vector2(0.45, 1.0)]), Color("F7C4BE"), line)
+		1: # 上履き: 白いくつ(横から)。赤い底、青いつま先のゴムと甲のバンド
+			_poly(_pts(c, s, [Vector2(-1.05, 0.45), Vector2(1.1, 0.45), Vector2(1.1, 0.7), Vector2(-1.05, 0.7)]), Color("D9483B"), line)
+			_poly(_pts(c, s, [Vector2(-1.0, 0.45), Vector2(-1.0, -0.25), Vector2(-0.65, -0.5), Vector2(-0.1, -0.4),
+					Vector2(0.55, -0.15), Vector2(1.0, 0.1), Vector2(1.08, 0.45)]), Color.WHITE, line)
+			_poly(_pts(c, s, [Vector2(0.35, -0.22), Vector2(1.0, 0.1), Vector2(1.08, 0.45), Vector2(0.35, 0.45)]), Color("3F86F0"), line)
+			_poly(_pts(c, s, [Vector2(-0.35, -0.47), Vector2(-0.05, -0.4), Vector2(-0.05, 0.45), Vector2(-0.35, 0.45)]), Color("3F86F0"), line)
 		2: # ランドセル: 赤い箱に、かぶせと金具
 			_poly(_pts(c, s, [Vector2(-0.8, -0.85), Vector2(0.8, -0.85), Vector2(0.8, 0.95), Vector2(-0.8, 0.95)]), Color("D9483B"), line)
 			_poly(_pts(c, s, [Vector2(-0.8, -0.85), Vector2(0.8, -0.85), Vector2(0.8, 0.3), Vector2(-0.8, 0.3)]), Color("A9332A"), line)
