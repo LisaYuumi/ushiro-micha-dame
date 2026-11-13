@@ -28,8 +28,15 @@ const RIG_SCENE := preload("res://assets/characters/ual/AnimationLibrary_Godot_S
 const BODY_SCALE := 1.0
 ## 座っているとき、腰が椅子の上に来るように体全体を前へずらす量(メートル。体の向きで前)
 const SEAT_SHIFT := 0.33
-## 体育座り(床に座る): 座る動きのまま体を後ろへ傾け、腰を床まで下げて、ひざを立てる
-const FLOOR_LEAN := 0.55
+## 体育座り(床に座る): 座る動きから、ももを上げてひざを立て、すねを手前にたたみ、腕でひざをかかえる。
+## 腰は床まで下げ、体は少しだけ後ろへ傾ける。角度は度(+ で前へ曲げる/- で前へ上げる)
+const FLOOR_LEAN := 0.12
+const FLOOR_BEND := {
+	"DEF-thigh.L": -55.0, "DEF-thigh.R": -55.0,
+	"DEF-shin.L": 85.0, "DEF-shin.R": 85.0,
+	"DEF-spine.001": 14.0,
+	"DEF-upper_arm.L": -35.0, "DEF-upper_arm.R": -35.0,
+}
 ## いすに座ったときの腰の高さ/体育座りの腰の高さ(メートル)
 const SIT_HIP_HEIGHT := 0.5
 const FLOOR_HIP_HEIGHT := 0.14
@@ -92,6 +99,8 @@ var _pose := ""
 var _seat_shift := 0.0
 ## 体育座りの度合い(0 = いす、1 = 床)
 var _floor_w := 0.0
+## 体育座りで曲げる骨(骨の番号 -> 角度・ラジアン)
+var _bend_bones := {}
 var _look_target := 0.0
 var _look_head := 0.0
 var _look_body := 0.0
@@ -288,6 +297,10 @@ func _build_rig() -> void:
 		var i := _skel.find_bone(bone_name)
 		if i >= 0:
 			_twist_bones[i] = deg_to_rad(LOOK_TWIST[bone_name])
+	for bone_name in FLOOR_BEND:
+		var i := _skel.find_bone(bone_name)
+		if i >= 0:
+			_bend_bones[i] = deg_to_rad(FLOOR_BEND[bone_name])
 
 
 ## 骨にくっつける体の部品: 丸い頭、カプセルの胴、短い手足(指なし)。全部同じ体の色
@@ -651,7 +664,15 @@ func _update_rig(delta: float) -> void:
 	# ひねる骨は、いったん元に戻してから動きを当てる(ひねりが積み重ならないように)
 	for i in _twist_bones:
 		_skel.set_bone_pose_rotation(i, _skel.get_bone_rest(i).basis.get_rotation_quaternion())
+	for i in _bend_bones:
+		_skel.set_bone_pose_rotation(i, _skel.get_bone_rest(i).basis.get_rotation_quaternion())
 	_anim.advance(delta)
+	# 体育座り: 骨組みの横の軸(素材の +X)のまわりに曲げる(素材は +Z が正面なので、+ の角度で前へ曲がる)
+	if _floor_w > 0.0:
+		for i in _bend_bones:
+			var g := _skel.get_bone_global_pose(i).basis.get_rotation_quaternion()
+			var axis := (g.inverse() * Vector3.RIGHT).normalized()
+			_skel.set_bone_pose_rotation(i, _skel.get_bone_pose_rotation(i) * Quaternion(axis, _bend_bones[i] * _ease(_floor_w)))
 	# 座る動きは腰が後ろに下がるので、体全体を前へずらして椅子の上に乗せる
 	_seat_shift = move_toward(_seat_shift, SEAT_SHIFT if _pose == "sit" or _pose == "floor" else 0.0, delta / 0.5 * SEAT_SHIFT)
 	_rig.position = Vector3(0, 0, -_seat_shift)
