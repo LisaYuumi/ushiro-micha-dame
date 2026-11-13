@@ -415,6 +415,8 @@ func _show_match_result() -> void:
 		rows.append(row)
 	var me_first: bool = state.scores.get(state.local_player_id, 0) == state.scores[ids[0]]
 	var title := "ゆうしょう!" if me_first else "試合おわり!"
+	if me_first:
+		hud.confetti()
 	var sub := "あなたがいちばん!" if me_first else "いちばんは %s!" % top_name
 	hud.hide_message()
 	if mode == Mode.GUEST:
@@ -653,6 +655,8 @@ func _show_result(r: Dictionary) -> void:
 	var last := state.round_index + 1 >= GameConfig.ROUNDS_PER_MATCH
 	var next_text := "さいごの結果へ" if last else "次のラウンド(%s)へ" % Items.name_of(state.round_index + 1)
 	hud.hide_message()
+	if r["winner"] == me:
+		hud.confetti()
 	if mode == Mode.GUEST:
 		hud.show_result_card(title, sub, notes, color, rows, "ホストが「次へ」を押すと" + next_text, "", reveal)
 	else:

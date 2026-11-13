@@ -28,6 +28,11 @@ var _overlay: HeadOverlay
 var _batch: StaticBatch
 ## 教室を作るときに見る状態(ラウンドで変わる黒板の落書き・時計・日直)
 var _room_state: GameState
+## 足もとのぼんやりした丸い影(id -> MeshInstance3D)と、その材質
+var _blobs := {}
+static var _blob_mat: StandardMaterial3D
+## 走る人の土ぼこりを出すまでの時間(id -> 秒)
+var _dust_left := {}
 
 ## 教室の大きさと色
 const ROOM_HALF := 8.0
@@ -95,6 +100,8 @@ func build(state: GameState) -> void:
 	_surprise_until.clear()
 	_was_looking.clear()
 	_dazed.clear()
+	_blobs.clear()
+	_dust_left.clear()
 	_last_pos.clear()
 	_still_time.clear()
 	_banana_nodes.clear()
@@ -108,6 +115,9 @@ func build(state: GameState) -> void:
 		var node := _build_character(a, a.id == state.local_player_id)
 		add_child(node)
 		_actor_nodes[a.id] = node
+		var blob := _make_blob(Vector2(0.95, 0.95))
+		add_child(blob)
+		_blobs[a.id] = blob
 	_build_handkerchief(state)
 	_build_oni_shadow()
 	_build_sounds(state)
@@ -129,6 +139,10 @@ func sync(state: GameState, delta: float) -> void:
 		if node:
 			node.position = a.position
 			node.rotation.y = a.yaw
+			var blob: MeshInstance3D = _blobs.get(a.id)
+			if blob:
+				blob.position = Vector3(a.position.x, 0.03, a.position.z)
+			_update_dust(a, delta)
 			var model := node as CharacterModel
 			if model:
 				# 振り向いた姿は全員に見える(頭→上半身の順に後ろを向く)
@@ -211,11 +225,100 @@ func _item_part(size: Vector3, pos: Vector3, color: Color, outline: float) -> vo
 	_handkerchief.add_child(mi)
 
 
+## 足もとのぼんやりした丸い影(まん中が濃く、外にいくほど薄い)
+func _make_blob(size: Vector2) -> MeshInstance3D:
+	if _blob_mat == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(0, 0, 0, 1))
+		g.set_color(1, Color(0, 0, 0, 0))
+		var tex := GradientTexture2D.new()
+		tex.gradient = g
+		tex.fill = GradientTexture2D.FILL_RADIAL
+		tex.fill_from = Vector2(0.5, 0.5)
+		tex.fill_to = Vector2(0.5, 0.0)
+		tex.width = 64
+		tex.height = 64
+		_blob_mat = StandardMaterial3D.new()
+		_blob_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_blob_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_blob_mat.albedo_texture = tex
+		_blob_mat.albedo_color = Color(1, 1, 1, 0.3)
+	var plane := PlaneMesh.new()
+	plane.size = size
+	var mi := MeshInstance3D.new()
+	mi.mesh = plane
+	mi.material_override = _blob_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+
+
+## 走っている人の足もとに、ときどき土ぼこり(ふくらんで、しぼんで消える)
+func _update_dust(a: GameState.Actor, delta: float) -> void:
+	var running: bool = a.role == GameState.Role.CHASER or (a.role == GameState.Role.ONI and _room_state != null \
+			and _room_state.phase == GameState.Phase.CHASE)
+	if not running or a.slip_left > 0.0:
+		return
+	_dust_left[a.id] = _dust_left.get(a.id, 0.0) - delta
+	if _dust_left[a.id] > 0.0:
+		return
+	_dust_left[a.id] = 0.12
+	var puff := Toon.mesh(_dust_mesh(), Color("EFE5D0"), 0.0)
+	puff.position = a.position + Vector3(randf_range(-0.15, 0.15), 0.08, randf_range(-0.15, 0.15))
+	puff.scale = Vector3.ONE * 0.4
+	add_child(puff)
+	var tw := puff.create_tween()
+	tw.tween_property(puff, "scale", Vector3.ONE * 1.2, 0.18)
+	tw.parallel().tween_property(puff, "position:y", puff.position.y + 0.12, 0.4)
+	tw.tween_property(puff, "scale", Vector3.ZERO, 0.22)
+	tw.tween_callback(puff.queue_free)
+
+
+static var _dust_sphere: SphereMesh
+
+
+static func _dust_mesh() -> SphereMesh:
+	if _dust_sphere == null:
+		_dust_sphere = SphereMesh.new()
+		_dust_sphere.radius = 0.08
+		_dust_sphere.height = 0.16
+		_dust_sphere.radial_segments = 8
+		_dust_sphere.rings = 4
+	return _dust_sphere
+
+
+## 頭の上に「!」「?」「★」がポンと出て、上に上がって消える
+func _pop(actor_id: int, text: String, color: Color) -> void:
+	var m := _actor_nodes.get(actor_id) as CharacterModel
+	if m == null:
+		return
+	var l := Label3D.new()
+	l.text = text
+	l.font = HudFont.get_font()
+	l.font_size = 140
+	l.pixel_size = 0.006
+	l.outline_size = 24
+	l.outline_modulate = GameConfig.COLOR_INK
+	l.modulate = color
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.no_depth_test = true
+	l.render_priority = 2
+	l.position = m.tag_anchor() + Vector3(0, 0.35, 0)
+	l.scale = Vector3.ONE * 0.2
+	add_child(l)
+	var tw := l.create_tween()
+	tw.tween_property(l, "scale", Vector3.ONE * 1.25, 0.12)
+	tw.tween_property(l, "scale", Vector3.ONE, 0.08)
+	tw.tween_property(l, "position:y", l.position.y + 0.25, 0.55)
+	tw.tween_property(l, "scale", Vector3.ZERO, 0.15)
+	tw.tween_callback(l.queue_free)
+
+
 ## GameState からのお知らせに合わせて音などを出す。
 func on_event(e: Dictionary) -> void:
 	match e.get("type"):
 		"otetsuki":
 			_oops_until[e["actor"]] = _clock + 1.5
+			_pop(e["actor"], "?", Color("6EA8F0"))
 		"stamp":
 			# スタンプが届いた人は、びっくり顔になる
 			_surprise_until[e["target"]] = _clock + 1.0
@@ -223,10 +326,12 @@ func on_event(e: Dictionary) -> void:
 			var m := _actor_nodes.get(e["actor"]) as CharacterModel
 			if m:
 				m.hop()
+			_pop(e["actor"], "!", GameConfig.COLOR_ACCENT)
 		"slip":
 			var m := _actor_nodes.get(e["actor"]) as CharacterModel
 			if m:
 				m.slip()
+			_pop(e["actor"], "★", Color("F2C14E"))
 			_oops_until[e["actor"]] = _clock + GameConfig.SLIP_TIME
 		"voice":
 			_voice_player.stream = Sfx.voice(e["kind"])
@@ -331,6 +436,10 @@ func _build_floor() -> void:
 			3:
 				_build_door_wall(wall, half)
 	_build_stacked_desks()
+	for side in [-1.0, 1.0]:
+		var db := _make_blob(Vector2(3.4, 2.0))
+		db.position = Vector3(side * 6.17, 0.026, 7.05)
+		add_child(db)
 	# 色ごとにまとめた背景を置く
 	_batch.build(self)
 	_batch = null
@@ -400,6 +509,9 @@ func _build_stacked_desks() -> void:
 				var z := 7.55 - row * 0.5
 				var tilt := deg_to_rad(((col * 7 + row * 3) % 5 - 2) * 1.5)
 				_school_desk(Vector3(x, 0, z), tilt)
+
+
+## (下げた机の下のぼんやりした影は _build_floor の最後で置く)
 
 
 ## 学校の机(天板・物入れ・脚)と、その上に逆さに乗せた椅子
@@ -693,28 +805,19 @@ func _build_chair(pos: Vector3, yaw: float) -> void:
 	chair.position = pos
 	chair.rotation.y = yaw
 	var wood := Color(0.55, 0.35, 0.2)
-
-	var seat_mesh := BoxMesh.new()
-	seat_mesh.size = Vector3(0.5, 0.05, 0.5)
-	var seat := _mesh(seat_mesh, wood)
-	seat.position = Vector3(0, 0.45, 0)
-	chair.add_child(seat)
-
-	# 背もたれは後ろ側(+Z)
-	var back_mesh := BoxMesh.new()
-	back_mesh.size = Vector3(0.5, 0.5, 0.05)
-	var back := _mesh(back_mesh, wood)
-	back.position = Vector3(0, 0.72, 0.28)
-	chair.add_child(back)
-
 	var metal := Color(0.4, 0.4, 0.42)
+	# 座面と背もたれ(背もたれは後ろ側 +Z)は角を丸く
+	var parts := [
+		[Vector3(0.5, 0.05, 0.5), Vector3(0, 0.45, 0), wood, 0.02],
+		[Vector3(0.5, 0.5, 0.05), Vector3(0, 0.72, 0.28), wood, 0.02],
+	]
 	for x in [-0.22, 0.22]:
 		for z in [-0.22, 0.22]:
-			var leg_mesh := BoxMesh.new()
-			leg_mesh.size = Vector3(0.04, 0.45, 0.04)
-			var leg := _mesh(leg_mesh, metal)
-			leg.position = Vector3(x, 0.225, z)
-			chair.add_child(leg)
+			parts.append([Vector3(0.04, 0.45, 0.04), Vector3(x, 0.225, z), metal, 0.01])
+	for p2 in parts:
+		var mi := Toon.mesh(StaticBatch.chamfer_mesh(p2[0], p2[3]), p2[2])
+		mi.position = p2[1]
+		chair.add_child(mi)
 	add_child(chair)
 
 

@@ -114,6 +114,9 @@ var _lean := 0.0
 var _slump := 0.0
 var _time := 0.0
 var _slip := 0.0
+## まばたき: 次のまばたきまでの時間と、目を閉じている残り時間
+var _blink_wait := randf_range(1.5, 4.0)
+var _blink_left := 0.0
 
 
 func build(color: Color, display_name: String, font: Font) -> void:
@@ -570,6 +573,7 @@ func _update_ragdoll(delta: float) -> void:
 ## 毎フレームの動き。running: 走っている(大げさに揺れる)
 func animate(delta: float, running: bool) -> void:
 	_time += delta
+	_update_blink(delta)
 	_update_rig(delta)
 	_update_ragdoll(delta)
 	_follow_bones()
@@ -604,6 +608,24 @@ func animate(delta: float, running: bool) -> void:
 		_sweat.position.y = HEAD_Y + 0.1 + sin(_time * 10.0) * 0.015
 	if _sweat2.visible:
 		_sweat2.position.y = HEAD_Y + 0.02 + sin(_time * 12.0 + 1.0) * 0.015
+
+
+## まばたき: ときどき一瞬だけ目を細くする(点の目のときだけ)
+func _update_blink(delta: float) -> void:
+	if _blink_left > 0.0:
+		_blink_left -= delta
+		if _blink_left <= 0.0:
+			_apply_face()
+		return
+	_blink_wait -= delta
+	if _blink_wait > 0.0:
+		return
+	_blink_wait = randf_range(2.0, 5.0)
+	if _expression == NORMAL or _expression == OOPS:
+		_blink_left = 0.12
+		for e in _eyes:
+			if e.visible:
+				e.scale = Vector3(e.scale.x, 0.15, e.scale.z)
 
 
 ## 骨の動きを進め、座っているときの位置と、振り向きのひねりを足す

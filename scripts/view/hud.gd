@@ -311,6 +311,36 @@ func _flip_minion_card() -> void:
 	tw.tween_callback(func() -> void: _flipping = false)
 
 
+## 紙吹雪(自分が勝ったとき)。画面の上から、色とりどりの紙がひらひら落ちる
+func confetti() -> void:
+	var p := CPUParticles2D.new()
+	p.one_shot = true
+	p.amount = 110
+	p.lifetime = 2.6
+	p.explosiveness = 0.85
+	var vp := get_viewport().get_visible_rect().size
+	p.position = Vector2(vp.x / 2.0, -20)
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	p.emission_rect_extents = Vector2(vp.x / 2.0, 10)
+	p.direction = Vector2(0, 1)
+	p.spread = 35.0
+	p.gravity = Vector2(0, 420)
+	p.initial_velocity_min = 120.0
+	p.initial_velocity_max = 320.0
+	p.angular_velocity_min = -360.0
+	p.angular_velocity_max = 360.0
+	p.scale_amount_min = 8.0
+	p.scale_amount_max = 14.0
+	var g := Gradient.new()
+	g.colors = PackedColorArray([Color("EE6A4D"), Color("F2C14E"), Color("6DB58A"), Color("5B8FD9"), Color("B07CF0"), Color("EF8FB0")])
+	g.offsets = PackedFloat32Array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
+	g.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CONSTANT
+	p.color_initial_ramp = g
+	add_child(p)
+	p.emitting = true
+	get_tree().create_timer(p.lifetime + 0.5).timeout.connect(p.queue_free)
+
+
 ## 結果カードの大きさが変わったら、まん中に置き直す
 func _recenter_result() -> void:
 	if _result_card:
