@@ -47,13 +47,13 @@ func _ready() -> void:
 	var gray := UiStyle.box(Color("B9B4AC"))
 	_look_button.add_theme_stylebox_override("disabled", gray)
 	_build_look_face(_look_button)
-	# 鬼のとき: 同じ場所に「止まる」(押している間)、その左に「落とす」、さらに左に「牛乳」と「フェイク」
-	_oni_buttons.append(_add_button("止まる", "oni_stop", Vector2(1, 1), Rect2(-UiStyle.SAFE - 220, -250, 220, 220), 40))
-	var drop := _add_button("", "oni_drop", Vector2(1, 1), Rect2(-UiStyle.SAFE - 410, -250, 175, 220), 32)
+	# 鬼のとき: 右下に「落とす」、その左に「牛乳」と「フェイク」
+	# (「止まる」ボタンはない。スティックを歩く向きと反対に倒すと止まり、倒し続けると戻る)
+	var drop := _add_button("", "oni_drop", Vector2(1, 1), Rect2(-UiStyle.SAFE - 220, -250, 220, 220), 36)
 	_icon_face(drop, "drop", "落とす", Vector2(96, 80), 32, GameConfig.COLOR_PAPER)
 	_oni_buttons.append(drop)
 	# 牛乳(押す→「えいっ」になる→座っている人をタップしてかける。もう一度押すとやめる。1ラウンド1回)
-	_milk_button = _add_button("", "oni_milk", Vector2(1, 1), Rect2(-UiStyle.SAFE - 575, -250, 150, 118), 24)
+	_milk_button = _add_button("", "oni_milk", Vector2(1, 1), Rect2(-UiStyle.SAFE - 385, -250, 150, 118), 24)
 	# 白地に青の内枠
 	_milk_inner = Panel.new()
 	_milk_inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -73,7 +73,7 @@ func _ready() -> void:
 	_milk_icon = _milk_button.get_child(_milk_button.get_child_count() - 1).get_child(0) as ButtonIcon
 	_milk_badge = _corner_badge(_milk_button, Vector2(150 - 40, -18))
 	_oni_buttons.append(_milk_button)
-	var fake := _add_button("", "oni_feint", Vector2(1, 1), Rect2(-UiStyle.SAFE - 575, -122, 150, 92), 22)
+	var fake := _add_button("", "oni_feint", Vector2(1, 1), Rect2(-UiStyle.SAFE - 385, -122, 150, 92), 22)
 	_icon_face(fake, "fake", "フェイク", Vector2(84, 46), 22, GameConfig.COLOR_INK)
 	_oni_buttons.append(fake)
 	# 追いかけっこ中のバナナの皮(下のまん中)
@@ -270,7 +270,7 @@ func set_oni_mode(is_oni: bool, seated_in_chase: bool = false, out: bool = false
 
 
 ## A案の見た目でオレンジ地にするボタン(いちばん大事な操作)
-const ACCENT_ACTIONS := ["look_back", "oni_stop", "oni_drop"]
+const ACCENT_ACTIONS := ["look_back", "oni_drop"]
 
 
 ## ⚙の絵(歯車)
@@ -322,9 +322,9 @@ func _build_menu() -> void:
 const HOW_TO_PLAY := """・振り向く(長押し): 押している間だけ後ろを見る。落ちていたら、そのまま拾って走る
 ・お手つき(なにもないのに振り向く): 輪から抜けて真ん中で休む。そのラウンドは0点。全員の後ろが見えて、だれにでもスタンプを送れる
 ・人をタップ: その人の頭の上にスタンプが出るので、選んで送る(同じ人には1ラウンド1回)
-・鬼: スティックで歩く速さ。止まる・落とす・フェイク(落とす音だけ)・牛乳(牛乳ボタン→「えいっ」になったら、座っている人をタップしてかける。もう一度押すとやめる。画面が半周のあいだ白くなる。1ラウンド1回)
+・鬼: 自動で前に歩く。スティックを歩く向きに倒すと速く、反対に倒すと止まり、倒し続けると少し戻れる(3歩分まで)。落とす・フェイク(落とす音だけ)・牛乳(牛乳ボタン→「えいっ」になったら、座っている人をタップしてかける。もう一度押すとやめる。画面が半周のあいだ白くなる。1ラウンド1回)
 ・追いかけっこ: 自動で走る。スティックの上で内側(近道)、下で外側。座っている人はバナナを投げられる
-キーボード: スペース=振り向く/止まる 1〜4=スタンプ M=牛乳 Z X C V=鬼のスタンプ W/S=内側/外側 A/D=鬼の速さ
+キーボード: スペース=振り向く 1〜4=スタンプ M=牛乳 Z X C V=鬼のスタンプ W/S=内側/外側 A/D=鬼の速さ
  E=落とす F=フェイク B/N=バナナ R=やり直し O=役を変える F1=上から見る K=転ぶ L=牛乳をかぶる(確認用) Tab=メニュー"""
 
 

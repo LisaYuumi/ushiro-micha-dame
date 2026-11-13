@@ -16,10 +16,6 @@ func set_looking_back(_id: int, value: bool) -> void:
 	_send_if_changed("set_looking_back", [value])
 
 
-func set_oni_stop(_id: int, value: bool) -> void:
-	_send_if_changed("set_oni_stop", [value])
-
-
 func set_move(_id: int, dir: Vector3) -> void:
 	# 細かすぎる変化は送らない
 	var q := Vector3(snappedf(dir.x, 0.1), 0.0, snappedf(dir.z, 0.1))

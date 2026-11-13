@@ -449,7 +449,7 @@ func _test_custom_stamp_words() -> void:
 	for bad in ["しね", "シネ", "し ね", "バカ", "ばーか", "きもい", "死ね", "ﾌﾞｽ" if false else "ブス", "FUCK"]:
 		_check(WordFilter.check(bad) == "bad", "使えない言葉: %s" % bad)
 	# 個人情報(電話番号・メール・住所)
-	for pi in ["09012345", "０９０１２", "a@b.jp", "3丁目", "www"]:
+	for pi in ["090123", "０９０１２", "a@b.jp", "3丁目", "www"]:
 		_check(WordFilter.check(pi) == "personal", "個人情報は使えない: %s" % pi)
 	# 保存するときは、使えない言葉を消す
 	var cleaned := Profile.clean_words({Stamps.DROPPED: "みて!", Stamps.SAFE: "しね", Stamps.TRUST: "090123", "other": "x"})
@@ -583,31 +583,31 @@ func _test_player_oni_walk_speed_and_stop() -> void:
 	for i in 60:
 		s.tick(STEP)
 	var normal := s.oni_angle - a0
-	_check(absf(normal * GameConfig.ONI_WALK_RADIUS - GameConfig.ONI_WALK_SPEED) < 0.05, "何もしなければふつうの速さで歩く")
+	var carry := lerpf(1.0, GameConfig.ONI_CARRY_SPEED_HEAVY, s.item_weight())
+	_check(absf(normal * GameConfig.ONI_WALK_RADIUS - GameConfig.ONI_WALK_SPEED * carry) < 0.05, "スティックを倒さなければ自動で前に歩く")
 
-	var fwd := Vector3(cos(s.oni_angle), 0, -sin(s.oni_angle))
 	a0 = s.oni_angle
 	for i in 60:
 		s.set_move(oni.id, Vector3(cos(s.oni_angle), 0, -sin(s.oni_angle)))
 		s.tick(STEP)
-	_check((s.oni_angle - a0) > normal * 1.3, "スティック右で速く歩く")
+	_check((s.oni_angle - a0) > normal * 1.3, "歩く向きに倒すと速く歩く")
 
-	a0 = s.oni_angle
-	for i in 60:
+	# 反対に倒す: すぐ止まり、倒し続けると後ろに戻る。戻れるのは、いちばん進んだ地点から ONI_BACK_LIMIT まで
+	var far := s.oni_angle
+	for i in int(GameConfig.ONI_BACK_HOLD * 0.5 / STEP):
 		s.set_move(oni.id, -Vector3(cos(s.oni_angle), 0, -sin(s.oni_angle)))
 		s.tick(STEP)
-	_check((s.oni_angle - a0) < normal * 0.7 and (s.oni_angle - a0) > 0.0, "スティック左でゆっくり歩く(止まりはしない)")
-
-	s.set_move(oni.id, Vector3.ZERO)
-	s.set_oni_stop(oni.id, true)
-	a0 = s.oni_angle
-	for i in 60:
+	_check(absf(s.oni_angle - far) < 0.0001, "反対に倒すと止まる")
+	for i in int(10.0 / STEP):
+		s.set_move(oni.id, -Vector3(cos(s.oni_angle), 0, -sin(s.oni_angle)))
 		s.tick(STEP)
-	_check(absf(s.oni_angle - a0) < 0.0001, "「止まる」を押している間は止まる")
-	s.set_oni_stop(oni.id, false)
+	var back := (far - s.oni_angle) * GameConfig.ONI_WALK_RADIUS
+	_check(back > GameConfig.ONI_BACK_LIMIT - 0.05 and back < GameConfig.ONI_BACK_LIMIT + 0.05,
+			"倒し続けると戻れるのは %.1f m まで(%.2f m)" % [GameConfig.ONI_BACK_LIMIT, back])
+	s.set_move(oni.id, Vector3.ZERO)
+	a0 = s.oni_angle
 	s.tick(STEP)
-	_check(s.oni_angle > a0, "離すとまた歩く")
-	_check(fwd != Vector3.ZERO, "(確認用)")
+	_check(s.oni_angle > a0, "スティックを離すと、また前に歩く")
 
 
 func _test_player_oni_drop_and_feint() -> void:

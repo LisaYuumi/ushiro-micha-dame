@@ -201,8 +201,6 @@ func _on_remote_command(peer_id: int, cmd: String, args: Array) -> void:
 	match cmd:
 		"set_looking_back":
 			state.set_looking_back(id, bool(args[0]))
-		"set_oni_stop":
-			state.set_oni_stop(id, bool(args[0]))
 		"set_move":
 			state.set_move(id, args[0])
 		"pick_up":

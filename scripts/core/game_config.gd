@@ -189,6 +189,16 @@ const ONI_SHADOW_RANGE := 3.0
 ## 影のいちばん濃いときの濃さ(0〜1)
 const ONI_SHADOW_ALPHA := 0.55
 
+# --- 人の鬼の歩き方 ---
+## スティックを歩く向きと反対に、この割合より倒したら止まる
+const ONI_BACK_DEADZONE := 0.4
+## 反対に倒し続けて、この秒数たったら後ろに戻りはじめる
+const ONI_BACK_HOLD := 0.35
+## 後ろに戻る速さ(メートル/秒)
+const ONI_BACK_SPEED := 1.0
+## いちばん進んだ地点から、後ろに戻れる距離(メートル。3歩分)
+const ONI_BACK_LIMIT := 2.0
+
 # --- 鬼の牛乳 ---
 ## 鬼が1ラウンドにかけられる回数
 const MILK_PER_ROUND := 1

@@ -13,7 +13,6 @@ const KEYS := {
 	"restart": [KEY_R],
 	"sound_test": [KEY_T],
 	"toggle_role": [KEY_O],
-	"oni_stop": [KEY_SPACE],
 	"oni_drop": [KEY_E],
 	"oni_feint": [KEY_F],
 	"oni_milk": [KEY_M],

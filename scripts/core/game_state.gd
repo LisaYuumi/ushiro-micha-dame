@@ -69,7 +69,10 @@ var oni_id: int = -1
 ## 鬼を人(この画面のプレイヤー)が操作しているか
 var oni_is_player: bool = false
 ## 人が鬼のとき: 立ち止まっているか(「止まる」を押している間)
-var oni_holding_stop: bool = false
+## 人の鬼がいちばん進んだ角度(そこから ONI_BACK_LIMIT メートルまでしか後ろに戻れない)
+var oni_max_angle: float = 0.0
+## 人の鬼がスティックを後ろに倒している時間(ONI_BACK_HOLD 秒たったら後ろに戻りはじめる)
+var _oni_back_hold: float = 0.0
 ## 鬼が歩きはじめた角度(何周したかを数える)
 var oni_start_angle: float = 0.0
 ## 鬼の、輪の中心からの距離(人が鬼で追いかけっこ中は、内側/外側に曲がれる)
@@ -344,7 +347,8 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	oni_angle = seat_angle(0) + TAU / (seat_count * 2)
 	oni_start_angle = oni_angle
 	oni_radius = GameConfig.ONI_WALK_RADIUS
-	oni_holding_stop = false
+	oni_max_angle = oni_angle
+	_oni_back_hold = 0.0
 	_place_on_walk_ring(oni_actor, oni_angle)
 
 	phase = Phase.WALKING
@@ -394,7 +398,10 @@ func _tick_walking(delta: float) -> void:
 		return
 
 	var oni := get_actor(oni_id)
-	oni_angle += _oni_walk_speed(oni) / GameConfig.ONI_WALK_RADIUS * delta
+	oni_angle += _oni_walk_speed(oni, delta) / GameConfig.ONI_WALK_RADIUS * delta
+	# 後ろに戻れるのは、いちばん進んだ地点から ONI_BACK_LIMIT メートル(3歩分)まで
+	oni_angle = maxf(oni_angle, oni_max_angle - GameConfig.ONI_BACK_LIMIT / GameConfig.ONI_WALK_RADIUS)
+	oni_max_angle = maxf(oni_max_angle, oni_angle)
 	if oni_is_player and phase == Phase.WALKING and drop_angle == INF \
 			and oni_angle - oni_start_angle >= GameConfig.ONI_MAX_LAPS_BEFORE_DROP * TAU \
 			and get_actor_at_seat(_seat_at_angle(next_seat_crossing)) != null:
@@ -692,13 +699,6 @@ func throw_banana(sender_id: int, target_id: int) -> bool:
 	return true
 
 
-## 「止まる」を押している/離した
-func set_oni_stop(actor_id: int, value: bool) -> void:
-	if _is_player_oni(actor_id):
-		oni_holding_stop = value
-
-
-## いちばん近い席の後ろにハンカチを落とす。席の後ろから離れすぎていたら落とせない。
 func oni_drop(actor_id: int) -> bool:
 	if not _is_player_oni(actor_id) or phase != Phase.WALKING:
 		return false
@@ -747,24 +747,24 @@ func _nearest_seat_crossing() -> float:
 	return roundf(oni_angle / step) * step
 
 
-## 鬼が歩く速さ。ボットの鬼はいつも同じ。人の鬼はスティックで変えられ、止まることもできる
-func _oni_walk_speed(oni: Actor) -> float:
+## 鬼が歩く速さ(マイナスなら後ろに戻る)。ボットの鬼はいつも同じ。
+## 人の鬼: スティックを倒さなければ自動で前へ歩く。歩く向きに倒すと速く、反対に倒すと止まり、
+## 倒し続けると(ONI_BACK_HOLD 秒たつと)後ろに戻る
+func _oni_walk_speed(oni: Actor, delta: float = 0.0) -> float:
 	# 落とすまでは重い落とし物を持っているので遅い
 	var carry := lerpf(1.0, GameConfig.ONI_CARRY_SPEED_HEAVY, item_weight()) if phase == Phase.WALKING else 1.0
-	return _oni_walk_speed_base(oni) * carry
-
-
-func _oni_walk_speed_base(oni: Actor) -> float:
 	if not oni_is_player:
-		return GameConfig.ONI_WALK_SPEED
-	if oni_holding_stop:
-		return 0.0
+		return GameConfig.ONI_WALK_SPEED * carry
 	var ang := oni_angle
 	var forward := Vector3(cos(ang), 0.0, -sin(ang))
 	var f := clampf(oni.move_dir.dot(forward), -1.0, 1.0)
-	if f >= 0.0:
-		return lerpf(GameConfig.ONI_WALK_SPEED, GameConfig.ONI_WALK_SPEED_MAX, f)
-	return lerpf(GameConfig.ONI_WALK_SPEED, GameConfig.ONI_WALK_SPEED_MIN, -f)
+	if f <= -GameConfig.ONI_BACK_DEADZONE:
+		_oni_back_hold += delta
+		if _oni_back_hold < GameConfig.ONI_BACK_HOLD:
+			return 0.0
+		return -GameConfig.ONI_BACK_SPEED
+	_oni_back_hold = 0.0
+	return lerpf(GameConfig.ONI_WALK_SPEED, GameConfig.ONI_WALK_SPEED_MAX, maxf(f, 0.0)) * carry
 
 
 ## この人の後ろにハンカチが落ちているか
