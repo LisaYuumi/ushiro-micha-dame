@@ -47,7 +47,7 @@ func _ready() -> void:
 	_oni_buttons.append(_add_button("止まる", "oni_stop", Vector2(1, 1), Rect2(-UiStyle.SAFE - 220, -250, 220, 220), 40))
 	_oni_buttons.append(_add_button("落とす", "oni_drop", Vector2(1, 1), Rect2(-UiStyle.SAFE - 400, -170, 160, 140), 36))
 	_oni_buttons.append(_add_button("落とす音", "oni_feint", Vector2(1, 1), Rect2(-UiStyle.SAFE - 400, -330, 160, 140), 30))
-	# 鬼の牛乳(いちばん近い席の人に後ろからかける。1ラウンド1回。使ったら灰色)
+	# 鬼の牛乳(真後ろの席の人にかける。1ラウンド1回。人の真後ろにいないときと、使ったあとは灰色)
 	_milk_button = _add_button("牛乳をかける", "oni_milk", Vector2(1, 1), Rect2(-UiStyle.SAFE - 400, -490, 160, 140), 26)
 	_milk_button.add_theme_stylebox_override("disabled", UiStyle.box(Color("B9B4AC")))
 	_oni_buttons.append(_milk_button)
@@ -146,14 +146,15 @@ func set_looks_left(n: int) -> void:
 		_release_action("look_back")
 
 
-## 鬼の牛乳の残り回数。0 回なら灰色で押せない
-func set_milk_left(n: int) -> void:
-	if n == _milk_shown:
+## 鬼の牛乳の残り回数と、いまかけられるか(人の真後ろにいるか)。かけられないときは灰色で押せない
+func set_milk_left(n: int, can_pour: bool = true) -> void:
+	var key := n * 2 + (1 if can_pour else 0)
+	if key == _milk_shown:
 		return
-	_milk_shown = n
-	_milk_button.disabled = n <= 0
+	_milk_shown = key
+	_milk_button.disabled = n <= 0 or not can_pour
 	_milk_button.text = "牛乳をかける" if n > 0 else "牛乳\n(使った)"
-	if n <= 0:
+	if _milk_button.disabled:
 		_release_action("oni_milk")
 
 
@@ -230,7 +231,7 @@ func _build_menu() -> void:
 const HOW_TO_PLAY := """・振り向く(長押し): 押している間だけ後ろを見る。落ちていたら、そのまま拾って走る
 ・お手つき(なにもないのに振り向く): 輪から抜けて真ん中で休む。そのラウンドは0点。全員の後ろが見えて、だれにでもスタンプを送れる
 ・人をタップ: その人の頭の上にスタンプが出るので、選んで送る(同じ人には1ラウンド1回)
-・鬼: スティックで歩く速さ。止まる・落とす・落とす音・牛乳(近くの人の画面が半周のあいだ白くなる。1ラウンド1回)
+・鬼: スティックで歩く速さ。止まる・落とす・落とす音・牛乳(真後ろの人の画面が半周のあいだ白くなる。人の真後ろでだけ押せる。1ラウンド1回)
 ・追いかけっこ: 自動で走る。スティックの上で内側(近道)、下で外側。座っている人はバナナを投げられる
 キーボード: スペース=振り向く/止まる 1〜4=スタンプ M=牛乳 Z X C V=鬼のスタンプ W/S=内側/外側 A/D=鬼の速さ
  E=落とす F=落とす音 B/N=バナナ R=やり直し O=役を変える F1=上から見る K=転ぶ(確認用) Tab=メニュー"""

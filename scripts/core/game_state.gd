@@ -624,13 +624,25 @@ func set_move(actor_id: int, dir: Vector3) -> void:
 func oni_milk(actor_id: int) -> bool:
 	if not _is_player_oni(actor_id):
 		return false
-	var crossing := _nearest_seat_crossing()
-	var target := get_actor_at_seat(_seat_at_angle(crossing))
-	if target == null or absf(oni_angle - crossing) * GameConfig.ONI_WALK_RADIUS > GameConfig.MILK_REACH:
+	var target := milk_target()
+	if target == null:
 		if phase == Phase.WALKING or phase == Phase.DROPPED:
 			events.append({"type": "milk_failed", "actor": actor_id, "private_to": actor_id})
 		return false
 	return _milk(target)
+
+
+## いま牛乳をかけられる相手: 鬼が真後ろにいる席の人(人と人の間を歩いているときは null)
+func milk_target() -> Actor:
+	if milk_left <= 0 or (phase != Phase.WALKING and phase != Phase.DROPPED):
+		return null
+	var crossing := _nearest_seat_crossing()
+	if absf(oni_angle - crossing) * GameConfig.ONI_WALK_RADIUS > GameConfig.MILK_REACH:
+		return null
+	var target := get_actor_at_seat(_seat_at_angle(crossing))
+	if target == null or target.role != Role.SEATED:
+		return null
+	return target
 
 
 func _milk(target: Actor) -> bool:

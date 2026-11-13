@@ -194,8 +194,8 @@ const ONI_SHADOW_ALPHA := 0.55
 const MILK_PER_ROUND := 1
 ## かかった人の画面が白い長さ(鬼が歩く周の割合。0.5 = 半周)
 const MILK_LAPS := 0.5
-## 席の真後ろからこの距離(メートル)以内なら、その席の人にかけられる
-const MILK_REACH := 1.4
+## 席の真後ろからこの距離(メートル)以内なら、その席の人にかけられる(人と人の間ではかけられない)
+const MILK_REACH := 0.6
 ## ボットの鬼が、そのラウンドで牛乳を使う確率/使うとき、落とす相手に落とす瞬間かける確率
 const BOT_ONI_MILK_CHANCE := 0.8
 const BOT_ONI_MILK_AT_DROP := 0.5

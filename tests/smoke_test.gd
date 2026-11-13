@@ -938,9 +938,14 @@ func _test_milk() -> void:
 	_check(not s.oni_milk(0), "座っている人は牛乳をかけられない")
 	# 席と席のまん中からは、かけられない
 	_check(not s.oni_milk(oni), "席の後ろから離れているとかけられない")
+	# 真後ろの少し手前(人と人の間)でも、かけられない
+	while s.oni_angle < s.next_seat_crossing - (GameConfig.MILK_REACH + 0.3) / GameConfig.ONI_WALK_RADIUS:
+		s.tick(STEP)
+	_check(s.milk_target() == null and not s.oni_milk(oni), "人の真後ろに来るまでは、かけられない")
 	while s.oni_angle < s.next_seat_crossing - 0.01:
 		s.tick(STEP)
 	var victim := s.get_actor_at_seat(s._seat_at_angle(s.next_seat_crossing))
+	_check(s.milk_target() == victim, "真後ろの人が、かける相手")
 	s.take_events()
 	_check(s.oni_milk(oni), "席の後ろならかけられる")
 	_check(_has(s.take_events(), "milk"), "牛乳のお知らせが出る")

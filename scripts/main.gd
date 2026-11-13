@@ -279,7 +279,8 @@ func _physics_process(delta: float) -> void:
 				and state.phase != GameState.Phase.RESULT else "", Color(0.55, 0.2, 0.7))
 	# 牛乳がかかっている間は、画面が白い
 	hud.set_milk(state.is_milked(me) and state.phase != GameState.Phase.RESULT)
-	touch.set_milk_left(state.milk_left)
+	# 牛乳は、人の真後ろにいるときだけ押せる(人と人の間では灰色)
+	touch.set_milk_left(state.milk_left, state.milk_target() != null)
 	var judged := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
 	touch.set_looks_left(me.looks_left if judged else -1)
 	# 勝敗が出ている間は、名札とゲーム用のボタンを隠して結果カードだけにする(⚙は残す)
