@@ -20,6 +20,9 @@ var _beep_player: AudioStreamPlayer
 var _stamp_player: AudioStreamPlayer
 ## 牛乳がかかった人の頭の上の白い牛乳(id -> Node3D)
 var _milk_nodes := {}
+## 鬼が牛乳をかける相手の足もとの、青い点線の丸(と、うすい丸)
+var _milk_ring: Node3D
+var _milk_ring_target := -1
 ## 床のバナナの皮の見た目(状態の bananas と同じ数だけ出す)
 var _banana_nodes: Array[MeshInstance3D] = []
 ## 鬼が自分の後ろに来たとき、自分の前の床に映る影
@@ -131,6 +134,7 @@ func build(state: GameState) -> void:
 		_milk_nodes[a.id] = milk
 	_build_handkerchief(state)
 	_build_oni_shadow()
+	_build_milk_ring()
 	_build_sounds(state)
 	_build_cameras(state)
 	# 名札(送れない相手は薄く出る)
@@ -168,6 +172,7 @@ func sync(state: GameState, delta: float) -> void:
 		_overlay.update(state, get_viewport().get_camera_3d())
 	_update_bananas(state)
 	_update_oni_shadow(state)
+	_update_milk_ring(state, delta)
 	_clock += delta
 
 	var holder := state.get_actor(state.chaser_id)
@@ -920,6 +925,56 @@ func _build_milk_splash() -> Node3D:
 		root.add_child(d)
 	root.visible = false
 	return root
+
+
+## 牛乳をかける相手の目印: 足もとに青い点線の丸と、うすい青の丸(ゆっくり回る)
+func _build_milk_ring() -> void:
+	_milk_ring = Node3D.new()
+	var blue := StandardMaterial3D.new()
+	blue.albedo_color = ButtonIcon.MILK_BLUE
+	blue.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var dash := BoxMesh.new()
+	dash.size = Vector3(0.16, 0.01, 0.045)
+	var n := 18
+	var r := 0.62
+	for i in n:
+		var mi := MeshInstance3D.new()
+		mi.mesh = dash
+		mi.material_override = blue
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var a := TAU * float(i) / float(n)
+		mi.position = Vector3(sin(a) * r, 0.0, cos(a) * r)
+		mi.rotation.y = a + PI / 2.0
+		_milk_ring.add_child(mi)
+	var fill := CylinderMesh.new()
+	fill.top_radius = r
+	fill.bottom_radius = r
+	fill.height = 0.004
+	fill.radial_segments = 32
+	var fill_mat := StandardMaterial3D.new()
+	fill_mat.albedo_color = Color(ButtonIcon.MILK_BLUE, 0.18)
+	fill_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	fill_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var fmi := MeshInstance3D.new()
+	fmi.mesh = fill
+	fmi.material_override = fill_mat
+	fmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_milk_ring.add_child(fmi)
+	_milk_ring.visible = false
+	add_child(_milk_ring)
+
+
+## 鬼が牛乳をかける相手を選んだ(-1 で消す)
+func set_milk_target(id: int) -> void:
+	_milk_ring_target = id
+
+
+func _update_milk_ring(state: GameState, delta: float) -> void:
+	var a := state.get_actor(_milk_ring_target)
+	_milk_ring.visible = a != null
+	if a:
+		_milk_ring.position = Vector3(a.position.x, 0.04, a.position.z)
+		_milk_ring.rotation.y += delta * 0.6
 
 
 ## 牛乳がかかっている人は、頭の上に牛乳が乗っている(全員から見える)

@@ -38,8 +38,8 @@ func oni_feint(_id: int) -> void:
 	_net.send_command("oni_feint", [])
 
 
-func oni_milk(_id: int) -> void:
-	_net.send_command("oni_milk", [])
+func oni_milk(_id: int, target_id: int) -> void:
+	_net.send_command("oni_milk", [target_id])
 
 
 func throw_banana(_id: int, target_id: int) -> void:

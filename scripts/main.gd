@@ -17,6 +17,8 @@ var cmds: Object
 var _last_sound := ""
 ## スタンプを送る相手(画面でタップして選ぶ。-1 は未選択)
 var _stamp_target := -1
+## 鬼が牛乳をかける相手(タップで選ぶ。-1 = 選んでいない)
+var _milk_target := -1
 ## ひとりで遊ぶとき、この画面のプレイヤーが鬼をやるか
 var _player_is_oni := false
 ## この試合の席の数(遊ぶ人数 - 鬼1人)
@@ -210,7 +212,7 @@ func _on_remote_command(peer_id: int, cmd: String, args: Array) -> void:
 		"oni_feint":
 			state.oni_feint(id)
 		"oni_milk":
-			state.oni_milk(id)
+			state.oni_milk(id, int(args[0]))
 		"throw_banana":
 			state.throw_banana(id, int(args[0]))
 		"send_stamp":
@@ -239,6 +241,7 @@ func _refresh_round() -> void:
 	touch.set_oni_mode(_i_am_oni())
 	_last_sound = ""
 	_stamp_target = -1
+	_milk_target = -1
 	hud.show_my_stamps([])
 	hud.hide_message()
 	view.build(state)
@@ -251,6 +254,7 @@ func _physics_process(delta: float) -> void:
 	if mode == Mode.GUEST and _built_serial < 0:
 		return # まだ最初の状態が届いていない
 	PlayerInput.apply(state, cmds, view.get_camera_basis())
+	_update_milk_target()
 	if mode != Mode.GUEST:
 		# ルールを動かすのは、ひとりのときとホストだけ
 		bots.update(state, delta)
@@ -278,9 +282,9 @@ func _physics_process(delta: float) -> void:
 		hud.set_role_badge("あなたは鬼の手下" if state.minion_id == me.id \
 				and state.phase != GameState.Phase.RESULT else "", Color(0.55, 0.2, 0.7))
 	# 牛乳がかかっている間は、画面が白い
-	hud.set_milk(state.is_milked(me) and state.phase != GameState.Phase.RESULT)
-	# 牛乳は、人の真後ろにいるときだけ押せる(人と人の間では灰色)
-	touch.set_milk_left(state.milk_left, state.milk_target() != null)
+	hud.set_milk(state.is_milked(me) and state.phase != GameState.Phase.RESULT, state.milk_left_ratio(me))
+	# 牛乳は、相手をタップで選んでいるときだけ押せる
+	touch.set_milk_left(state.milk_left, _milk_target >= 0)
 	var judged := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
 	touch.set_looks_left(me.looks_left if judged else -1)
 	# 勝敗が出ている間は、名札とゲーム用のボタンを隠して結果カードだけにする(⚙は残す)
@@ -489,6 +493,9 @@ func _on_tap(pos: Vector2) -> void:
 	var id := ov.tag_hit(pos)
 	if id < 0:
 		id = view.pick_actor_at(state, pos)
+	# 鬼: タップした人が、牛乳をかける相手になる(「ここにかける?」が出る)
+	if _i_am_oni() and id >= 0 and state.can_milk(id):
+		_milk_target = id
 	if ov.picker_target() >= 0:
 		# 開いているときは、同じ人か外をタップしたら閉じる。ほかの人なら、その人の選択肢を開く
 		var was := ov.picker_target()
@@ -503,6 +510,23 @@ func _on_tap(pos: Vector2) -> void:
 		return
 	_stamp_target = id
 	ov.open_picker(id)
+
+
+## 鬼の牛乳: 選んだ相手がかけられなくなったら選び直し。牛乳ボタンで、選んだ相手にかける
+func _update_milk_target() -> void:
+	if _milk_target >= 0 and (not _i_am_oni() or not state.can_milk(_milk_target)):
+		_milk_target = -1
+	if _i_am_oni() and Input.is_action_just_pressed("oni_milk"):
+		if _milk_target < 0:
+			if state.milk_left > 0:
+				hud.show_message("かける人をタップしてね", Color(0.3, 0.3, 0.3), 1.2)
+		else:
+			cmds.oni_milk(state.local_player_id, _milk_target)
+			_milk_target = -1
+	view.set_milk_target(_milk_target)
+	var ov := view.get_overlay()
+	if ov:
+		ov.set_milk_target(_milk_target)
 
 
 func _close_picker() -> void:
@@ -574,7 +598,7 @@ func _show_event(e: Dictionary) -> void:
 				hud.show_message("空いた席には落とせない" if empty else "席の後ろで押してね", Color(0.3, 0.3, 0.3), 1.0)
 		"milk_failed":
 			if e["actor"] == me:
-				hud.show_message("人の後ろで押してね", Color(0.3, 0.3, 0.3), 1.0)
+				hud.show_message("かける人をタップしてね", Color(0.3, 0.3, 0.3), 1.0)
 		"milk":
 			if e["target"] == me:
 				hud.show_message("牛乳かけられた!", Color(0.3, 0.45, 0.7), 1.2)

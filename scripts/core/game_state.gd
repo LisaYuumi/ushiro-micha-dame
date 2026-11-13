@@ -493,6 +493,13 @@ func _occupied_seats() -> Array:
 	return out
 
 
+## 牛乳が晴れるまでの残り(1 = かかったばかり、0 = 晴れた)
+func milk_left_ratio(a: Actor) -> float:
+	if not is_milked(a):
+		return 0.0
+	return 1.0 - (oni_angle - a.milk_angle) / (GameConfig.MILK_LAPS * TAU)
+
+
 ## 牛乳がかかっていて、画面が白いか(鬼が半周歩くまで)
 func is_milked(a: Actor) -> bool:
 	return a != null and a.milk_angle != INF and oni_angle - a.milk_angle < GameConfig.MILK_LAPS * TAU
@@ -619,30 +626,24 @@ func set_move(actor_id: int, dir: Vector3) -> void:
 
 # --- 人が鬼のときの命令 ---
 
-## 牛乳をかける(人の鬼の命令)。いちばん近い席の人に、後ろからかける(1ラウンド MILK_PER_ROUND 回)。
+## 牛乳をかける(人の鬼の命令)。タップで選んだ座っている人にかける(1ラウンド MILK_PER_ROUND 回。どこからでも)。
 ## かかった人は、鬼が半周歩くまで画面が白くなる(見た目だけ。音は聞こえる)。かけられたら true
-func oni_milk(actor_id: int) -> bool:
+func oni_milk(actor_id: int, target_id: int) -> bool:
 	if not _is_player_oni(actor_id):
 		return false
-	var target := milk_target()
-	if target == null:
-		if phase == Phase.WALKING or phase == Phase.DROPPED:
+	var target := get_actor(target_id)
+	if not can_milk(target_id):
+		if target == null and (phase == Phase.WALKING or phase == Phase.DROPPED):
 			events.append({"type": "milk_failed", "actor": actor_id, "private_to": actor_id})
 		return false
 	return _milk(target)
 
 
-## いま牛乳をかけられる相手: 鬼が真後ろにいる席の人(人と人の間を歩いているときは null)
-func milk_target() -> Actor:
-	if milk_left <= 0 or (phase != Phase.WALKING and phase != Phase.DROPPED):
-		return null
-	var crossing := _nearest_seat_crossing()
-	if absf(oni_angle - crossing) * GameConfig.ONI_WALK_RADIUS > GameConfig.MILK_REACH:
-		return null
-	var target := get_actor_at_seat(_seat_at_angle(crossing))
-	if target == null or target.role != Role.SEATED:
-		return null
-	return target
+## この人に、いま牛乳をかけられるか(座っている人だけ。残りがあり、追いかけっこの前)
+func can_milk(target_id: int) -> bool:
+	var t := get_actor(target_id)
+	return t != null and t.role == Role.SEATED and milk_left > 0 \
+			and (phase == Phase.WALKING or phase == Phase.DROPPED)
 
 
 func _milk(target: Actor) -> bool:

@@ -11,10 +11,8 @@ static func apply(state: GameState, cmds: Object, cam_basis: Basis) -> void:
 	if state.get_actor(id) == null:
 		return
 	if state.oni_id == id:
-		# 鬼のとき: 止まる・落とす・落とす音・牛乳
+		# 鬼のとき: 止まる・落とす・フェイク(牛乳は、選んだ相手を知っている main が送る)
 		cmds.set_oni_stop(id, Input.is_action_pressed("oni_stop"))
-		if Input.is_action_just_pressed("oni_milk"):
-			cmds.oni_milk(id)
 		if Input.is_action_just_pressed("oni_drop"):
 			cmds.oni_drop(id)
 		if Input.is_action_just_pressed("oni_feint"):

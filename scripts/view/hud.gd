@@ -43,6 +43,12 @@ var _popup: PanelContainer
 var _milk: Control
 var _milk_on := false
 var _milk_a := 0.0
+## かかってからの時間(しずくがのびる動き)と、晴れるまでの残り(1 → 0)
+var _milk_t := 0.0
+var _milk_left := 1.0
+## 上のまん中の「(牛乳びん) 見えるまで ▭▭▭」の札と、その棒
+var _milk_pill: PanelContainer
+var _milk_bar: Control
 
 
 func _ready() -> void:
@@ -52,6 +58,7 @@ func _ready() -> void:
 	_milk.draw.connect(_draw_milk)
 	_milk.visible = false
 	add_child(_milk)
+	_build_milk_pill()
 	# 説明文は出さない(A案: 文字は札とボタンだけ)。古い呼び出しのために部品だけ残す
 	_help = _make_label(22, GameConfig.COLOR_INK)
 	_help.visible = false
@@ -75,9 +82,12 @@ func _process(delta: float) -> void:
 	var want := 1.0 if _milk_on else 0.0
 	if _milk_a != want or (_milk_on and _milk.visible):
 		_milk_a = move_toward(_milk_a, want, delta / (0.15 if _milk_on else 0.8))
+		_milk_t = _milk_t + delta if _milk_on else _milk_t
 		_milk.visible = _milk_a > 0.0
 		_milk.modulate.a = _milk_a
 		_milk.queue_redraw()
+		_milk_pill.visible = _milk_on
+		_milk_bar.queue_redraw()
 	if _message_left > 0.0:
 		_message_left -= delta
 		if _message_left <= 0.0:
@@ -555,32 +565,117 @@ func flash_stamp(color: Color) -> void:
 	_frame_tween.tween_callback(_set_frame_alpha.bind(0.5))
 
 
-## 牛乳がかかっている間は、画面を白くする(鬼の影や向かいの人の後ろが見えにくい)
-func set_milk(on: bool) -> void:
+## 牛乳がかかっている間は、上から白い牛乳がたれてくる(鬼の影や向かいの人の後ろが見えにくい)。
+## left: 晴れるまでの残り(1 → 0)。上のまん中の「見えるまで」の棒に出す
+func set_milk(on: bool, left: float = 1.0) -> void:
+	if on and not _milk_on:
+		_milk_t = 0.0
 	_milk_on = on
+	_milk_left = clampf(left, 0.0, 1.0)
 
 
 func is_milk_shown() -> bool:
 	return _milk.visible
 
 
-## 白い膜と、上からたれる牛乳のしずく、ゆっくり動くむら
+## 「(牛乳びん) 見えるまで [青い棒]」の札
+func _build_milk_pill() -> void:
+	_milk_pill = PanelContainer.new()
+	_milk_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_milk_pill.add_theme_stylebox_override("panel", UiStyle.box(GameConfig.COLOR_PAPER, true, 22, 4))
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 8)
+	_milk_pill.add_child(row)
+	row.add_child(ButtonIcon.make("milk", Vector2(28, 34)))
+	var l := UiStyle.label("見えるまで", 20, GameConfig.COLOR_INK)
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(l)
+	_milk_bar = Control.new()
+	_milk_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_milk_bar.custom_minimum_size = Vector2(150, 34)
+	_milk_bar.draw.connect(func() -> void:
+		var r := Rect2(Vector2(0, 8), Vector2(_milk_bar.size.x, 18))
+		var bg := StyleBoxFlat.new()
+		bg.bg_color = GameConfig.COLOR_PAPER
+		bg.border_color = GameConfig.COLOR_INK
+		bg.set_border_width_all(3)
+		bg.set_corner_radius_all(9)
+		_milk_bar.draw_style_box(bg, r)
+		if _milk_left > 0.01:
+			var fill := StyleBoxFlat.new()
+			fill.bg_color = ButtonIcon.MILK_BLUE
+			fill.set_corner_radius_all(6)
+			_milk_bar.draw_style_box(fill, Rect2(r.position + Vector2(4, 4), Vector2((r.size.x - 8) * _milk_left, r.size.y - 8))))
+	row.add_child(_milk_bar)
+	_milk_pill.visible = false
+	add_child(_milk_pill)
+	_milk_pill.anchor_left = 0.5
+	_milk_pill.anchor_right = 0.5
+	# 左上の札(ラウンド・落とし物・点数)の下の段のまん中
+	_milk_pill.offset_top = 66
+	_milk_pill.offset_left = -170
+	_milk_pill.offset_right = 170
+	_milk_pill.grow_horizontal = Control.GROW_DIRECTION_BOTH
+
+
+## 上から白い牛乳がたれる: 上の帯(下のふちはぽこぽこ)と、長さのちがうしずく、落ちていく粒。
+## 黒い輪郭、下のふちに水色のかげ(A案の見本どおり)
 func _draw_milk() -> void:
 	var sz := _milk.size
 	var t := Time.get_ticks_msec() / 1000.0
-	var white := Color(1.0, 0.99, 0.96)
-	_milk.draw_rect(Rect2(Vector2.ZERO, sz), Color(white, 0.9))
-	# 上のふちから、しずくがたれる
-	for i in 9:
-		var x := sz.x * (float(i) + 0.5) / 9.0 + sin(float(i) * 7.3) * 30.0
-		var drip := sz.y * (0.18 + 0.12 * absf(sin(float(i) * 3.1))) + sin(t * 0.8 + float(i)) * 12.0
-		var w := 34.0 + 18.0 * absf(sin(float(i) * 5.7))
-		_milk.draw_rect(Rect2(x - w / 2.0, 0.0, w, drip), white)
-		_milk.draw_circle(Vector2(x, drip), w * 0.62, white)
-	# 牛乳のむら(少し青みがかった、ゆっくり動くしみ)
+	var white := Color(1.0, 1.0, 0.99)
+	var shade := Color("CFE6F7")
+	var ink := GameConfig.COLOR_INK
+	# かかった直後は、しずくが上からのびてくる
+	var grow := clampf(_milk_t / 0.7, 0.0, 1.0)
+	grow = 1.0 - pow(1.0 - grow, 3.0)
+	var band := sz.y * 0.2
+	var shapes := []  # [中心x, 幅, 下の端y]
+	# 帯の下のふちのぽこぽこ
+	var bumps := 12
+	for i in bumps + 1:
+		var w := sz.x / float(bumps)
+		shapes.append([w * float(i), w * 0.62, band])
+	# たれるしずく(場所・幅・長さは毎回同じ。少しだけゆれる)
+	var drips := 11
+	for i in drips:
+		var x := sz.x * (float(i) + 0.5) / float(drips) + sin(float(i) * 7.3) * sz.x * 0.02
+		var w := sz.x * (0.035 + 0.035 * absf(sin(float(i) * 5.7)))
+		var len_k := 0.18 + 0.42 * absf(sin(float(i) * 3.1 + 0.4))
+		var bottom := band + sz.y * len_k * grow + sin(t * 0.9 + float(i)) * 4.0
+		shapes.append([x, w, bottom])
+	# 1) 黒い輪郭(少し大きく) 2) 水色のかげ 3) 白(少し上・少し細く)
+	for pass_i in 3:
+		var col := ink if pass_i == 0 else (shade if pass_i == 1 else white)
+		var grow_px := 4.0 if pass_i == 0 else (0.0 if pass_i == 1 else -3.0)
+		var up := 7.0 if pass_i == 2 else 0.0
+		_milk.draw_rect(Rect2(0, 0, sz.x, band - up + grow_px), col)
+		for sh in shapes:
+			var cx: float = sh[0]
+			var w: float = sh[1] + grow_px * 2.0
+			var bottom: float = sh[2] - up + grow_px
+			var r := w / 2.0
+			if bottom - r > 0.0:
+				_milk.draw_rect(Rect2(cx - r, 0, w, bottom - r), col)
+			_milk.draw_circle(Vector2(cx, maxf(bottom - r, r)), r, col)
+	# 帯の中の水色のむら(うすい楕円)
 	for i in 4:
-		var c := Vector2(sz.x * (0.2 + 0.2 * float(i)), sz.y * (0.55 + 0.15 * sin(float(i) * 2.0 + t * 0.3)))
-		_milk.draw_circle(c, sz.y * 0.09, Color(0.92, 0.94, 0.97, 0.35))
+		var c := Vector2(sz.x * (0.15 + 0.23 * float(i)), band * (0.35 + 0.2 * sin(float(i) * 2.3)))
+		_milk.draw_set_transform(c, 0.0, Vector2(2.6, 0.7))
+		_milk.draw_circle(Vector2.ZERO, band * 0.18, Color(shade, 0.8))
+	_milk.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	# 落ちていく粒(しずくの下から、ゆっくり落ちてくり返す)
+	for i in 7:
+		var x := sz.x * (0.08 + 0.135 * float(i)) + sin(float(i) * 4.1) * 20.0
+		var start := band + sz.y * 0.25
+		var fall := fmod(t * (40.0 + 12.0 * float(i % 3)) + float(i) * 97.0, sz.y * 0.6)
+		var y := start + fall
+		var rr := 7.0 + 3.0 * float(i % 2)
+		_milk.draw_set_transform(Vector2(x, y), 0.0, Vector2(1.0, 1.35))
+		_milk.draw_circle(Vector2.ZERO, rr + 3.0, ink)
+		_milk.draw_circle(Vector2.ZERO, rr, white)
+		_milk.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## 画面の上のまん中に、役を出す(空文字で消す)。color の地に白い文字

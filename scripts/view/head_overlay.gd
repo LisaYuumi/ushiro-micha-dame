@@ -27,6 +27,9 @@ var _picker_target := -1
 var _picker_icons: Array[StampIcon] = []
 ## 名札の画面の位置(選択肢を出す場所に使う)
 var _tag_rects := {}
+## 鬼が牛乳をかける相手(-1 = なし)と、その名札の上の「ここにかける?」の吹き出し
+var _milk_target := -1
+var _milk_bubble: PanelContainer
 
 
 func build(state: GameState, models: Dictionary, show_personality: bool) -> void:
@@ -55,6 +58,39 @@ func build(state: GameState, models: Dictionary, show_personality: bool) -> void
 		add_child(ic)
 		_picker_icons.append(ic)
 	_picker_target = -1
+	_milk_target = -1
+	_milk_bubble = _make_milk_bubble()
+	add_child(_milk_bubble)
+
+
+## 「(牛乳びん) ここにかける?」の吹き出し(下に小さな三角)
+func _make_milk_bubble() -> PanelContainer:
+	var p := PanelContainer.new()
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_theme_stylebox_override("panel", UiStyle.box(GameConfig.COLOR_PAPER, true, 16, 3))
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 4)
+	p.add_child(row)
+	row.add_child(ButtonIcon.make("milk", Vector2(26, 30)))
+	row.add_child(UiStyle.label("ここにかける?", 20, GameConfig.COLOR_INK))
+	var tail := Control.new()
+	tail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tail.draw.connect(func() -> void:
+		# (この絵は吹き出しの中身の場所にあるので、下のふちは中身の下 + 下の余白)
+		var w := tail.size.x
+		var h := tail.size.y + 6.0
+		var pts := PackedVector2Array([Vector2(w / 2.0 - 9.0, h - 3.0), Vector2(w / 2.0 + 9.0, h - 3.0), Vector2(w / 2.0, h + 9.0)])
+		tail.draw_colored_polygon(pts, GameConfig.COLOR_PAPER)
+		tail.draw_polyline(PackedVector2Array([pts[0], pts[2], pts[1]]), GameConfig.COLOR_INK, 3.0, true))
+	p.add_child(tail)
+	p.visible = false
+	return p
+
+
+## 牛乳をかける相手を出す(-1 で消す)
+func set_milk_target(id: int) -> void:
+	_milk_target = id
 
 
 ## スタンプの選択肢を、この人の頭の上に丸く並べて出す
@@ -158,6 +194,23 @@ func update(state: GameState, cam: Camera3D) -> void:
 			var row_w := list.size() * (SHOWN_ICON + 2.0)
 			ic.position = (Vector2(r.get_center().x - row_w / 2.0 + i * (SHOWN_ICON + 2.0), r.position.y - SHOWN_ICON - 2.0)).floor()
 	_update_picker(state, vp)
+	_update_milk_bubble(state)
+
+
+## 「ここにかける?」: 相手の名札(とスタンプ)の上に出す。スタンプの選択肢を開いている間は出さない
+func _update_milk_bubble(state: GameState) -> void:
+	var shown := _milk_target >= 0 and _milk_target != _picker_target and _tag_rects.has(_milk_target) \
+			and _tags.has(_milk_target) and (_tags[_milk_target]["panel"] as PanelContainer).visible
+	_milk_bubble.visible = shown
+	if not shown:
+		return
+	var r: Rect2 = _tag_rects[_milk_target]
+	var sz := _milk_bubble.get_combined_minimum_size()
+	var lift := 0.0
+	if not state.active_stamps.get(_milk_target, []).is_empty():
+		lift = SHOWN_ICON + 4.0
+	var pos := Vector2(r.get_center().x - sz.x / 2.0, r.position.y - lift - sz.y - 12.0)
+	_milk_bubble.position = pos.floor()
 
 
 ## スタンプの選択肢: 相手の名札の上に半円で4つ並べる(画面からはみ出さないように)

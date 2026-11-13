@@ -935,22 +935,18 @@ func _test_milk() -> void:
 	s.start_round(61, true)
 	var oni := s.oni_id
 	_check(s.milk_left == GameConfig.MILK_PER_ROUND, "鬼は牛乳を %d 回かけられる" % GameConfig.MILK_PER_ROUND)
-	_check(not s.oni_milk(0), "座っている人は牛乳をかけられない")
-	# 席と席のまん中からは、かけられない
-	_check(not s.oni_milk(oni), "席の後ろから離れているとかけられない")
-	# 真後ろの少し手前(人と人の間)でも、かけられない
-	while s.oni_angle < s.next_seat_crossing - (GameConfig.MILK_REACH + 0.3) / GameConfig.ONI_WALK_RADIUS:
-		s.tick(STEP)
-	_check(s.milk_target() == null and not s.oni_milk(oni), "人の真後ろに来るまでは、かけられない")
-	while s.oni_angle < s.next_seat_crossing - 0.01:
-		s.tick(STEP)
-	var victim := s.get_actor_at_seat(s._seat_at_angle(s.next_seat_crossing))
-	_check(s.milk_target() == victim, "真後ろの人が、かける相手")
+	var victim := s.get_actor_at_seat(3)
+	_check(not s.oni_milk(0, victim.id), "座っている人は牛乳をかけられない")
+	_check(not s.oni_milk(oni, oni), "鬼は自分にはかけられない")
+	_check(not s.oni_milk(oni, -1), "相手を選ばないとかけられない")
 	s.take_events()
-	_check(s.oni_milk(oni), "席の後ろならかけられる")
+	# 選んだ人に、どこからでもかけられる
+	_check(s.can_milk(victim.id), "座っている人は、かける相手に選べる")
+	_check(s.oni_milk(oni, victim.id), "選んだ人にかけられる")
 	_check(_has(s.take_events(), "milk"), "牛乳のお知らせが出る")
 	_check(s.is_milked(victim), "かけられた人は画面が白い")
-	_check(not s.oni_milk(oni), "1ラウンド %d 回まで" % GameConfig.MILK_PER_ROUND)
+	_check(not s.oni_milk(oni, s.get_actor_at_seat(4).id), "1ラウンド %d 回まで" % GameConfig.MILK_PER_ROUND)
+	_check(s.milk_left_ratio(victim) > 0.9, "かかったばかりは、晴れるまでの残りがいっぱい")
 	# 鬼が半周歩くと晴れる
 	var start := s.oni_angle
 	while s.oni_angle - start < GameConfig.MILK_LAPS * TAU - 0.05:
