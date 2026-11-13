@@ -17,6 +17,10 @@ static var player_name := DEFAULT_NAME
 static var color: Color = COLORS[4]
 ## ボットの性格(「(せっかち)」など)を名前の横に出すか(⚙メニューで切りかえ。はじめはオフ)
 static var show_personality := false
+## 自分で決めたスタンプの言葉(Stamps の種類 -> 言葉。"" なら初期の言葉)。絵文字と意味は変わらない
+static var stamp_words := {}
+## ほかの人の自作の言葉を表示せず、初期の言葉で表示する
+static var hide_custom_words := false
 static var _loaded := false
 
 
@@ -30,6 +34,8 @@ static func load_saved() -> void:
 	player_name = clean_name(str(cfg.get_value("profile", "name", DEFAULT_NAME)))
 	color = parse_color(str(cfg.get_value("profile", "color", "")), color)
 	show_personality = bool(cfg.get_value("profile", "show_personality", false))
+	hide_custom_words = bool(cfg.get_value("profile", "hide_custom_words", false))
+	stamp_words = clean_words(cfg.get_value("profile", "stamp_words", {}))
 
 
 static func save() -> void:
@@ -37,6 +43,8 @@ static func save() -> void:
 	cfg.set_value("profile", "name", player_name)
 	cfg.set_value("profile", "color", "#" + color.to_html(false))
 	cfg.set_value("profile", "show_personality", show_personality)
+	cfg.set_value("profile", "hide_custom_words", hide_custom_words)
+	cfg.set_value("profile", "stamp_words", stamp_words)
 	cfg.save(PATH)
 
 
@@ -62,6 +70,18 @@ static func parse_color(text: String, fallback: Color) -> Color:
 	return c
 
 
+## スタンプの言葉を整える: 3つの種類だけ、使えない言葉(WordFilter)は消す(初期の言葉になる)
+static func clean_words(v: Variant) -> Dictionary:
+	var out := {}
+	if typeof(v) != TYPE_DICTIONARY:
+		return out
+	for k in Stamps.ALL:
+		var w := WordFilter.clean(str((v as Dictionary).get(k, "")))
+		if w != "":
+			out[k] = w
+	return out
+
+
 ## 通信で送れる形
 static func to_dict() -> Dictionary:
-	return {"name": player_name, "color": "#" + color.to_html(false)}
+	return {"name": player_name, "color": "#" + color.to_html(false), "words": stamp_words}

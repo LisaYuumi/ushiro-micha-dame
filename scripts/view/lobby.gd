@@ -28,6 +28,11 @@ var _name_button: Button
 var _name_edit: LineEdit
 var _code_edit: LineEdit
 var _color_buttons: Array[Button] = []
+## スタンプの言葉を変える画面(言葉のボタン/入力欄と、「ほかの人の自作の言葉」の切りかえ)
+var _words_box: VBoxContainer
+var _word_buttons := {}
+var _word_edits := {}
+var _hide_words_button: Button
 var _preview: Panel
 
 
@@ -61,6 +66,7 @@ func _ready() -> void:
 	_menu.add_theme_constant_override("separation", 12)
 	root.add_child(_menu)
 	_build_profile_rows(_menu)
+	_menu.add_child(_button("スタンプの言葉を変える  😨 👍 🥺", func() -> void: _show_words(), Vector2(0, 58)))
 	# 大きいボタンを2列に(押しやすいように)
 	var menu_grid := GridContainer.new()
 	menu_grid.columns = 2
@@ -93,6 +99,8 @@ func _ready() -> void:
 		var digit: String = d
 		grid.add_child(_button(digit, func() -> void: _on_key(digit), Vector2(270, 76)))
 	_join_box.add_child(_button("もどる", func() -> void: show_menu(), Vector2(0, 70)))
+
+	_build_words_box(root)
 
 	_host_box = VBoxContainer.new()
 	_host_box.add_theme_constant_override("separation", 12)
@@ -157,6 +165,113 @@ func _build_profile_rows(parent: VBoxContainer) -> void:
 	_update_profile()
 
 
+## スタンプの言葉を変える画面: 絵文字は決まっていて、言葉だけ変えられる(6文字まで・使えない言葉はチェック)
+func _build_words_box(root: VBoxContainer) -> void:
+	_words_box = VBoxContainer.new()
+	_words_box.add_theme_constant_override("separation", 10)
+	root.add_child(_words_box)
+	_words_box.add_child(_label("スタンプの言葉(%d文字まで。絵文字は変わりません)" % WordFilter.MAX_LEN, 24))
+	for k in Stamps.ALL:
+		var kind: String = k
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		_words_box.add_child(row)
+		var emoji := _label(Texts.STAMP_EMOJI[kind], 44)
+		emoji.custom_minimum_size = Vector2(70, 0)
+		row.add_child(emoji)
+		if OS.has_feature("web"):
+			# スマホのブラウザ: ブラウザの入力ダイアログで聞く(名前と同じ)
+			var b := _button("", func() -> void: _ask_word(kind), Vector2(0, 64))
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(b)
+			_word_buttons[kind] = b
+		else:
+			var e := LineEdit.new()
+			e.max_length = WordFilter.MAX_LEN
+			e.placeholder_text = Texts.stamp_word(kind)
+			e.custom_minimum_size = Vector2(0, 64)
+			e.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			e.add_theme_font_override("font", HudFont.get_font())
+			e.add_theme_font_size_override("font_size", 30)
+			e.add_theme_stylebox_override("normal", UiStyle.box(GameConfig.COLOR_PAPER))
+			e.add_theme_stylebox_override("focus", UiStyle.box(GameConfig.COLOR_PAPER))
+			e.add_theme_color_override("font_color", GameConfig.COLOR_INK)
+			e.text_submitted.connect(func(t: String) -> void: _set_word(kind, t))
+			e.focus_exited.connect(func() -> void: _set_word(kind, e.text))
+			row.add_child(e)
+			_word_edits[kind] = e
+	_hide_words_button = _button("", func() -> void: _toggle_hide_words(), Vector2(0, 60))
+	_words_box.add_child(_hide_words_button)
+	var bottom := HBoxContainer.new()
+	bottom.add_theme_constant_override("separation", 12)
+	_words_box.add_child(bottom)
+	var reset := _button("初期の言葉に戻す", func() -> void: _reset_words(), Vector2(0, 64))
+	reset.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom.add_child(reset)
+	var back := _button("もどる", func() -> void: show_menu(), Vector2(0, 64), true)
+	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom.add_child(back)
+	_update_words()
+
+
+func _show_words() -> void:
+	_menu.visible = false
+	_words_box.visible = true
+	_join_box.visible = false
+	_host_box.visible = false
+	set_status("")
+	_update_words()
+
+
+func _ask_word(kind: String) -> void:
+	var now: String = Profile.stamp_words.get(kind, Texts.stamp_word(kind))
+	var t := _prompt("%s の言葉(%d文字まで)" % [Texts.STAMP_EMOJI[kind], WordFilter.MAX_LEN], now)
+	if t != "":
+		_set_word(kind, t)
+
+
+## 言葉を決める: チェックを通ったら保存。だめなら理由を出して、前の言葉のまま
+func _set_word(kind: String, text: String) -> void:
+	var w := text.strip_edges()
+	if w == "" or w == Texts.stamp_word(kind):
+		Profile.stamp_words.erase(kind)
+	else:
+		var why := WordFilter.check(w)
+		if why != "":
+			set_status(WordFilter.reason_text(why))
+			_update_words()
+			return
+		Profile.stamp_words[kind] = w
+	Profile.save()
+	set_status("")
+	_update_words()
+
+
+func _reset_words() -> void:
+	Profile.stamp_words = {}
+	Profile.save()
+	set_status("初期の言葉に戻しました")
+	_update_words()
+
+
+func _toggle_hide_words() -> void:
+	Profile.hide_custom_words = not Profile.hide_custom_words
+	Profile.save()
+	_update_words()
+
+
+func _update_words() -> void:
+	for k in Stamps.ALL:
+		var word: String = Profile.stamp_words.get(k, "")
+		if _word_buttons.has(k):
+			(_word_buttons[k] as Button).text = "%s(タップで変える)" % (word if word != "" else Texts.stamp_word(k))
+		if _word_edits.has(k):
+			var e: LineEdit = _word_edits[k]
+			if not e.has_focus():
+				e.text = word
+	_hide_words_button.text = "ほかの人の自作の言葉: %s" % ("表示しない(初期の言葉で表示)" if Profile.hide_custom_words else "表示する")
+
+
 func _ask_name() -> void:
 	var t := _prompt("名前(%d文字まで)" % Profile.NAME_MAX, Profile.player_name)
 	if t != "":
@@ -217,6 +332,7 @@ func _update_players_button() -> void:
 
 func show_menu() -> void:
 	_menu.visible = true
+	_words_box.visible = false
 	_join_box.visible = false
 	_host_box.visible = false
 	set_status("")
@@ -225,6 +341,7 @@ func show_menu() -> void:
 ## ホスト: 合言葉と、入っている人数を出す
 func show_host(code: String, joined: int) -> void:
 	_menu.visible = false
+	_words_box.visible = false
 	_join_box.visible = false
 	_host_box.visible = true
 	_players_label.text = "合言葉: %s\n入っている人: %d人(あなたをふくむ) / %d人で遊ぶ\n足りない席はボットが座ります" % [code, joined, players]
@@ -233,6 +350,7 @@ func show_host(code: String, joined: int) -> void:
 ## 参加者: ホストがスタートするのを待つ
 func show_waiting(text: String) -> void:
 	_menu.visible = false
+	_words_box.visible = false
 	_join_box.visible = false
 	_host_box.visible = false
 	set_status(text)
@@ -244,6 +362,7 @@ func set_status(text: String) -> void:
 
 func _show_join() -> void:
 	_menu.visible = false
+	_words_box.visible = false
 	_join_box.visible = true
 	_host_box.visible = false
 	_code = ""

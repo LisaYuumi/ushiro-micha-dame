@@ -38,6 +38,7 @@ func _initialize() -> void:
 	_test_stamp_truthfulness()
 	_test_stamp_words()
 	_test_milk_art()
+	_test_custom_stamp_words()
 	_test_bots_send_and_trust_stamps()
 	_test_player_oni_setup()
 	_test_player_oni_walk_speed_and_stop()
@@ -435,6 +436,35 @@ func _test_stamp_rules() -> void:
 	var s5 := GameState.new()
 	s5.start_match(41, false, 4)
 	_check(s5.send_stamp(1, 2, Stamps.SAFE) and s5.send_stamp(1, 0, Stamps.SAFE), "5人のときは両どなりにも送れる")
+
+
+func _test_custom_stamp_words() -> void:
+	# 使える言葉
+	for ok in ["だいじょぶ", "みてみて", "うしろ!", "ゆるして", "Help"]:
+		_check(WordFilter.check(ok) == "", "使える言葉: %s" % ok)
+	# 長すぎる・空
+	_check(WordFilter.check("ながいながいことば") == "long", "%d文字より長いと使えない" % WordFilter.MAX_LEN)
+	_check(WordFilter.check("  ") == "empty", "空は使えない")
+	# 悪口(ひらがな・カタカナ・空白入りでも見つける)
+	for bad in ["しね", "シネ", "し ね", "バカ", "ばーか", "きもい", "死ね", "ﾌﾞｽ" if false else "ブス", "FUCK"]:
+		_check(WordFilter.check(bad) == "bad", "使えない言葉: %s" % bad)
+	# 個人情報(電話番号・メール・住所)
+	for pi in ["09012345", "０９０１２", "a@b.jp", "3丁目", "www"]:
+		_check(WordFilter.check(pi) == "personal", "個人情報は使えない: %s" % pi)
+	# 保存するときは、使えない言葉を消す
+	var cleaned := Profile.clean_words({Stamps.DROPPED: "みて!", Stamps.SAFE: "しね", Stamps.TRUST: "090123", "other": "x"})
+	_check(cleaned.size() == 1 and cleaned[Stamps.DROPPED] == "みて!", "使えない言葉と、ない種類は消える")
+	# 状態にのせて、ほかの人にも届く
+	var s := GameState.new()
+	s.start_match(5)
+	s.stamp_words[2] = {Stamps.SAFE: "だいじょぶ"}
+	var g := GameState.new()
+	g.apply_snapshot(s.snapshot())
+	_check(str(g.stamp_words.get(2, {}).get(Stamps.SAFE, "")) == "だいじょぶ", "自作の言葉が通信で届く")
+	_check(HeadOverlay.stamp_text(g, 2, Stamps.SAFE) == "だいじょぶ👍", "自作の言葉に絵文字がつく")
+	Profile.hide_custom_words = true
+	_check(HeadOverlay.stamp_text(g, 2, Stamps.SAFE) == "平気👍", "「表示しない」なら初期の言葉")
+	Profile.hide_custom_words = false
 
 
 func _test_milk_art() -> void:

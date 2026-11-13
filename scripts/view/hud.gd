@@ -535,7 +535,7 @@ func show_my_stamps(list: Array) -> void:
 		keys.append(key)
 		var col: Color = st["sender_color"]
 		_slot_styles[i].bg_color = col
-		_slot_labels[i].text = "%s:%s" % [st["sender"], Texts.stamp(st["kind"])]
+		_slot_labels[i].text = "%s:%s" % [st["sender"], st.get("text", Texts.stamp(st["kind"]))]
 		_slot_labels[i].add_theme_color_override("font_color", text_color_on(col))
 		box.visible = true
 		if not (key in _shown_keys):
@@ -612,6 +612,13 @@ func open_send_panel(target_name: String, above_buttons: bool) -> void:
 	_send_panel.offset_right = shift
 	_send_panel.offset_top = bottom
 	_send_panel.offset_bottom = bottom
+
+
+## 言葉のボタンに、自分で決めた言葉を出す(絵文字はそのまま)
+func set_send_words(words: Dictionary) -> void:
+	for i in _send_buttons.size():
+		var k: String = Stamps.ALL[i]
+		_send_buttons[i].text = Texts.stamp(k, str(words.get(k, "")))
 
 
 func close_send_panel() -> void:

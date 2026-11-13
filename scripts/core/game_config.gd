@@ -204,8 +204,8 @@ const BOT_MILK_NOTICE_MULT := 1.6
 ## 輪の真ん中で体育座りする位置(中心からの距離・メートル)
 const OUT_SIT_RADIUS := 0.75
 ## 抜けた人のカメラ: 輪の上の高いところから全員を見下ろす(位置・見る点・縦の見える角度)
-const OUT_CAM_POS := Vector3(0, 7.0, 4.6)
-const OUT_CAM_LOOK := Vector3(0, 0, 0.6)
+const OUT_CAM_POS := Vector3(0, 7.4, 4.4)
+const OUT_CAM_LOOK := Vector3(0, 0, -0.3)
 const OUT_CAM_FOV := 60.0
 
 # --- バナナの皮 ---

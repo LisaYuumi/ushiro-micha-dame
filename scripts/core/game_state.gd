@@ -138,6 +138,8 @@ var active_stamps: Dictionary = {}
 ## 鬼の手下(このラウンド。いなければ -1)。本人以外には勝敗が出るまで知らせない
 ## (ホストは snapshot(見る人) で、ほかの人の分からは消して送る)
 var minion_id: int = -1
+## 人ごとの、自分で決めたスタンプの言葉(id -> {種類: 言葉})。ない人・ない種類は初期の言葉
+var stamp_words: Dictionary = {}
 ## 前のラウンドの手下(発表ずみなので、全員が知っている。ボットの信用に使う)
 var last_minion_id: int = -1
 
@@ -872,6 +874,7 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"match_over": match_over,
 		"bananas": bananas,
 		"milk_left": milk_left,
+		"stamp_words": stamp_words,
 		"round_serial": round_serial,
 		"seat_count": seat_count,
 		"minion_id": minion_shown,
@@ -928,6 +931,7 @@ func apply_snapshot(s: Dictionary) -> void:
 	match_over = s["match_over"]
 	bananas = s["bananas"]
 	milk_left = s.get("milk_left", 0)
+	stamp_words = s.get("stamp_words", {})
 	round_serial = s["round_serial"]
 	minion_id = s.get("minion_id", -1)
 	last_minion_id = s.get("last_minion_id", -1)

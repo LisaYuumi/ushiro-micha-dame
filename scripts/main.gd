@@ -242,6 +242,7 @@ func _refresh_round() -> void:
 	_last_sound = ""
 	_stamp_target = -1
 	_milk_aiming = false
+	_apply_stamp_words()
 	hud.show_my_stamps([])
 	hud.hide_message()
 	view.build(state)
@@ -329,6 +330,7 @@ func _update_my_stamps() -> void:
 		var sender := state.get_actor(st["sender"])
 		list.append({
 			"kind": st["kind"],
+			"text": HeadOverlay.stamp_text(state, st["sender"], st["kind"]),
 			"sender": HeadOverlay.sender_name(state, st["sender"]),
 			"sender_color": sender.color if sender else Color.WHITE,
 		})
@@ -522,6 +524,17 @@ func _on_tap(pos: Vector2) -> void:
 	_stamp_target = id
 	ov.set_send_target(id)
 	hud.open_send_panel(_short_name(id), _i_am_oni())
+
+
+## 自作のスタンプの言葉を状態に入れる(ひとり・ホストだけ。参加者の分はロビーで届いた言葉を、もう一度チェックして使う)
+func _apply_stamp_words() -> void:
+	hud.set_send_words(Profile.stamp_words)
+	if mode == Mode.GUEST:
+		return
+	state.stamp_words[state.local_player_id] = Profile.stamp_words.duplicate()
+	for pid in _peer_actor:
+		var prof: Dictionary = _peer_profile.get(pid, {})
+		state.stamp_words[_peer_actor[pid]] = Profile.clean_words(prof.get("words", {}))
 
 
 ## 鬼の牛乳: ボタンを押すと「えいっ」(相手を選ぶ)になり、もう一度押すとやめる。

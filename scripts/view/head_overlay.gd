@@ -156,7 +156,7 @@ func update(state: GameState, cam: Camera3D) -> void:
 			var col: Color = sender.color if sender else Color.WHITE
 			(t["styles"][i] as StyleBoxFlat).bg_color = col
 			var l: Label = t["labels"][i]
-			l.text = "%s:%s" % [sender_name(state, st["sender"]), Texts.stamp(st["kind"])]
+			l.text = "%s:%s" % [sender_name(state, st["sender"]), stamp_text(state, st["sender"], st["kind"])]
 			l.add_theme_color_override("font_color", Hud.text_color_on(col))
 			var bs := b.get_combined_minimum_size()
 			var r: Rect2 = _tag_rects[id]
@@ -174,6 +174,14 @@ func update(state: GameState, cam: Camera3D) -> void:
 		var ms := _marker.get_combined_minimum_size()
 		var mx := clampf(r.get_center().x - ms.x / 2.0, 4.0, vp.x - ms.x - 4.0)
 		_marker.position = Vector2(mx, maxf(top - ms.y - 4.0, 4.0)).floor()
+
+
+## スタンプの文字: 送った人の自作の言葉+絵文字。「ほかの人の自作の言葉を表示しない」なら初期の言葉
+static func stamp_text(state: GameState, sender: int, kind: String) -> String:
+	var word := ""
+	if sender == state.local_player_id or not Profile.hide_custom_words:
+		word = str((state.stamp_words.get(sender, {}) as Dictionary).get(kind, ""))
+	return Texts.stamp(kind, word)
 
 
 ## 吹き出しに出す、送った人の名前(自分は「あなた」、鬼は「鬼」、ボットの性格は出さない)
