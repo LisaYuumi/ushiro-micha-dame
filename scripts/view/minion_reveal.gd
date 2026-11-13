@@ -6,7 +6,7 @@ extends Control
 signal flipped
 
 const W := 300.0
-const H := 230.0
+const H := 270.0
 const INK := Color("1E1B18")
 const PURPLE := Color(0.55, 0.2, 0.7)
 

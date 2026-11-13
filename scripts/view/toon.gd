@@ -43,8 +43,28 @@ void fragment() {
 }
 """
 
+## まとめた背景用の輪郭線: 箱ごとの中心(CUSTOM0)からふくらませる
+const _OUTLINE_BATCHED_CODE := """
+shader_type spatial;
+render_mode unshaded, cull_front, shadows_disabled;
+
+uniform vec4 ink : source_color = vec4(0.118, 0.106, 0.094, 1.0);
+uniform float width = 0.03;
+
+void vertex() {
+	vec3 d = VERTEX - CUSTOM0.xyz;
+	vec3 dir = length(d) > 0.0001 ? normalize(d) : NORMAL;
+	VERTEX += normalize(mix(NORMAL, dir, 0.5)) * width;
+}
+
+void fragment() {
+	ALBEDO = ink.rgb;
+}
+"""
+
 static var _toon_shader: Shader
 static var _outline_shader: Shader
+static var _outline_batched_shader: Shader
 ## 同じ色・同じ太さの材質は使い回す(色ごとに1つ)
 static var _cache := {}
 
@@ -70,6 +90,25 @@ static func material(color: Color, outline: float = GameConfig.OUTLINE_WIDTH) ->
 		mat.next_pass = line
 	_cache[key] = mat
 	return mat
+
+
+## まとめた背景(StaticBatch)用の材質。塗りは同じ、輪郭線は箱ごとの中心からふくらませる
+static func material_batched(color: Color, outline: float) -> Material:
+	var key := "B|%s|%.3f" % [color.to_html(), outline]
+	if _cache.has(key):
+		return _cache[key]
+	var base: ShaderMaterial = (material(color, 0.0) as ShaderMaterial).duplicate()
+	if outline > 0.0:
+		if _outline_batched_shader == null:
+			_outline_batched_shader = Shader.new()
+			_outline_batched_shader.code = _OUTLINE_BATCHED_CODE
+		var line := ShaderMaterial.new()
+		line.shader = _outline_batched_shader
+		line.set_shader_parameter("ink", GameConfig.COLOR_INK)
+		line.set_shader_parameter("width", outline)
+		base.next_pass = line
+	_cache[key] = base
+	return base
 
 
 ## メッシュに材質をつけた MeshInstance3D を作る(影は落とさない: アニメ塗りなので)

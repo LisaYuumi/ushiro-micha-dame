@@ -24,6 +24,8 @@ var _oni_shadow: MeshInstance3D
 var _oni_shadow_mat: StandardMaterial3D
 ## 頭の上の名札(2D で重ねる)
 var _overlay: HeadOverlay
+## 教室を作っている間だけ使う、背景の箱のまとめ役
+var _batch: StaticBatch
 
 ## 教室の大きさと色
 const ROOM_HALF := 8.0
@@ -32,8 +34,13 @@ const COLOR_WAINSCOT := Color("FFF4DC")
 const COLOR_WOOD := Color("B67A45")
 const COLOR_BOARD := Color("2F6B55")
 const COLOR_GLASS := Color("CFF0FA")
-const COLOR_CURTAIN := Color("F7A8B8")
+const COLOR_CURTAIN := Color("E9B3BE")
 const COLOR_CORK := Color("D4A06A")
+## 下げた机と椅子(背景なので、キャラより落ち着いた色)
+const COLOR_DESK_TOP := Color("E2CDA6")
+const COLOR_DESK_BOX := Color("9AA3AD")
+const COLOR_METAL := Color("8E8E94")
+const COLOR_CHAIR := Color("C9A16E")
 
 ## スタンプの色(仮)
 const STAMP_COLORS := {
@@ -267,6 +274,7 @@ func _build_environment() -> void:
 ## 全部アニメ塗り+黒い輪郭線(A案)
 func _build_floor() -> void:
 	var half := ROOM_HALF
+	_batch = StaticBatch.new()
 	# 床(床板の継ぎ目つき)
 	_part(Vector3(half * 2.0, 0.04, half * 2.0), Vector3(0, -0.02, 0), GameConfig.COLOR_FLOOR, 0.0)
 	# 転んだ体が乗る床(物理演算用。見た目はない)
@@ -296,6 +304,40 @@ func _build_floor() -> void:
 				_build_back_wall(wall, half)
 			3:
 				_build_door_wall(wall, half)
+	_build_stacked_desks()
+	# 色ごとにまとめた背景を置く
+	_batch.build(self)
+	_batch = null
+
+
+## 後ろの壁際に寄せて積んだ机と椅子(ハンカチ落としの場所を作るために机を下げた様子)。
+## ロッカーの左右に、机をくっつけて並べ、椅子は机の上に逆さに乗せる
+func _build_stacked_desks() -> void:
+	for side in [-1.0, 1.0]:
+		for col in 5:
+			for row in 3:
+				var x: float = side * (4.4 + col * 0.66)
+				var z := 7.55 - row * 0.5
+				var tilt := deg_to_rad(((col * 7 + row * 3) % 5 - 2) * 1.5)
+				_school_desk(Vector3(x, 0, z), tilt)
+
+
+## 学校の机(天板・物入れ・脚)と、その上に逆さに乗せた椅子
+func _school_desk(at: Vector3, yaw: float) -> void:
+	var b := Basis(Vector3.UP, yaw)
+	var put := func(size: Vector3, local: Vector3, color: Color, outline: float) -> void:
+		_batch.add_box(size, Transform3D(b, at + b * local), color, outline)
+	put.call(Vector3(0.62, 0.035, 0.46), Vector3(0, 0.7, 0), COLOR_DESK_TOP, 0.022)
+	put.call(Vector3(0.56, 0.12, 0.36), Vector3(0, 0.61, 0.02), COLOR_DESK_BOX, 0.016)
+	for lx in [-0.27, 0.27]:
+		for lz in [-0.19, 0.19]:
+			put.call(Vector3(0.03, 0.68, 0.03), Vector3(lx, 0.34, lz), COLOR_METAL, 0.0)
+	# 逆さの椅子: 座面が机の上、脚は上向き、背もたれは机の奥へ垂れる
+	put.call(Vector3(0.4, 0.03, 0.38), Vector3(0, 0.735, -0.02), COLOR_CHAIR, 0.018)
+	put.call(Vector3(0.4, 0.28, 0.03), Vector3(0, 0.6, 0.2), COLOR_CHAIR, 0.016)
+	for lx in [-0.17, 0.17]:
+		for lz in [-0.17, 0.13]:
+			put.call(Vector3(0.025, 0.4, 0.025), Vector3(lx, 0.95, lz - 0.02), COLOR_METAL, 0.0)
 
 
 ## 前: 黒板(チョークの文字つき)と時計
@@ -321,12 +363,10 @@ func _build_front_wall(wall: Node3D, half: float) -> void:
 	wall.add_child(chalk)
 	# チョークの落書き: 文字の下の波線と、すみの星
 	for i in 9:
-		var seg := _part(Vector3(0.52, 0.035, 0.01), Vector3(-2.1 + i * 0.5, 2.35 + (0.04 if i % 2 == 0 else -0.04), z + 0.1),
-				Color(0.98, 0.97, 0.88), 0.0, wall)
-		seg.rotation.z = 0.18 if i % 2 == 0 else -0.18
+		_part(Vector3(0.52, 0.035, 0.01), Vector3(-2.1 + i * 0.5, 2.35 + (0.04 if i % 2 == 0 else -0.04), z + 0.1),
+				Color(0.98, 0.97, 0.88), 0.0, wall, Vector3(0, 0, 0.18 if i % 2 == 0 else -0.18))
 	for k in 3:
-		var ray := _part(Vector3(0.42, 0.035, 0.01), Vector3(2.85, 3.25, z + 0.1), Color(0.98, 0.97, 0.88), 0.0, wall)
-		ray.rotation.z = k * PI / 3.0
+		_part(Vector3(0.42, 0.035, 0.01), Vector3(2.85, 3.25, z + 0.1), Color(0.98, 0.97, 0.88), 0.0, wall, Vector3(0, 0, k * PI / 3.0))
 	# 時計
 	var face := CylinderMesh.new()
 	face.top_radius = 0.38
@@ -337,8 +377,7 @@ func _build_front_wall(wall: Node3D, half: float) -> void:
 	clock.position = Vector3(4.6, 3.35, z + 0.02)
 	wall.add_child(clock)
 	_part(Vector3(0.04, 0.26, 0.02), Vector3(4.6, 3.45, z + 0.07), GameConfig.COLOR_INK, 0.0, wall)
-	var minute := _part(Vector3(0.03, 0.32, 0.02), Vector3(4.7, 3.4, z + 0.08), GameConfig.COLOR_INK, 0.0, wall)
-	minute.rotation.z = -1.0
+	_part(Vector3(0.03, 0.32, 0.02), Vector3(4.7, 3.4, z + 0.08), GameConfig.COLOR_INK, 0.0, wall, Vector3(0, 0, -1.0))
 
 
 ## 横: 窓が3つ(水色のガラス、白い枠、ピンクのカーテン)
@@ -357,7 +396,8 @@ func _build_window_wall(wall: Node3D, half: float) -> void:
 func _build_back_wall(wall: Node3D, half: float) -> void:
 	var z := -half + 0.35
 	_part(Vector3(7.2, 1.3, 0.5), Vector3(0, 0.65, z), COLOR_WOOD, 0.03, wall)
-	var bags := [Color("D9483B"), Color("2E2B28"), Color("EF8FB0"), Color("4D96FF"), Color("7CC576")]
+	# ランドセル(背景なので、少し落ち着いた色)
+	var bags := [Color("C45A4E"), Color("3A3633"), Color("D99AAE"), Color("6A92D0"), Color("86B07E")]
 	for row in 2:
 		for col in 8:
 			var x := -3.15 + col * 0.9
@@ -376,19 +416,24 @@ func _build_door_wall(wall: Node3D, half: float) -> void:
 	_part(Vector3(3.2, 1.3, 0.08), Vector3(1.5, 2.0, z), COLOR_CORK, 0.03, wall)
 	var papers := [GameConfig.COLOR_PAPER, Color("FCE7A5"), Color("F7C4CF"), Color("CDEBFF")]
 	for i in 5:
-		var p := _part(Vector3(0.5, 0.65, 0.03), Vector3(0.3 + i * 0.6, 2.0 + (0.12 if i % 2 == 0 else -0.1), z + 0.06),
-				papers[i % papers.size()], 0.012, wall)
-		p.rotation.z = 0.06 if i % 2 == 0 else -0.05
+		_part(Vector3(0.5, 0.65, 0.03), Vector3(0.3 + i * 0.6, 2.0 + (0.12 if i % 2 == 0 else -0.1), z + 0.06),
+				papers[i % papers.size()], 0.012, wall, Vector3(0, 0, 0.06 if i % 2 == 0 else -0.05))
 
 
-## 箱の部品を1つ置く(outline: 輪郭線の太さ。0 なら線なし)
-func _part(size: Vector3, pos: Vector3, color: Color, outline: float = GameConfig.OUTLINE_WIDTH, parent: Node3D = null) -> MeshInstance3D:
+## 箱の部品を1つ置く(outline: 輪郭線の太さ。0 なら線なし/rot: 向き(ラジアン))。
+## 教室を作っている間は、色ごとにまとめて描く(StaticBatch。スマホで軽くするため)
+func _part(size: Vector3, pos: Vector3, color: Color, outline: float = GameConfig.OUTLINE_WIDTH, parent: Node3D = null,
+		rot: Vector3 = Vector3.ZERO) -> void:
+	var local := Transform3D(Basis.from_euler(rot), pos)
+	if _batch:
+		var base := parent.transform if parent else Transform3D.IDENTITY
+		_batch.add_box(size, base * local, color, outline)
+		return
 	var box := BoxMesh.new()
 	box.size = size
 	var mi := Toon.mesh(box, color, outline)
-	mi.position = pos
+	mi.transform = local
 	(parent if parent else self).add_child(mi)
-	return mi
 
 
 func _build_chair(pos: Vector3, yaw: float) -> void:

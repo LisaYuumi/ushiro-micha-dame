@@ -675,7 +675,10 @@ func _name(id: int) -> String:
 	if id == state.local_player_id:
 		return "あなた"
 	var a := state.get_actor(id)
-	return a.display_name if a else "?"
+	if a == null:
+		return "?"
+	# ボットの性格は、⚙メニューでオンにしたときだけ出す
+	return a.display_name if Profile.show_personality else a.display_name.get_slice("(", 0)
 
 
 ## 画面の札(左上: ラウンド・落とし物・鬼の周回、右上: 全員の点数)を更新する。説明文は出さない
