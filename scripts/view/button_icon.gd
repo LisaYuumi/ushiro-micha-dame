@@ -32,8 +32,8 @@ func _draw() -> void:
 		"milk_pour":
 			# パックをかたむけて、口から青いしずくが飛ぶ(白い線で描く: 青い地の上に乗せるため)
 			_draw_carton(c + Vector2(s * 0.06, s * 0.08), s * 0.85, line, deg_to_rad(-35.0), Color.WHITE, MILK_BLUE)
-			for d in [Vector2(-0.3, -0.4), Vector2(-0.18, -0.5)]:
-				_drop_shape(c + (d as Vector2) * s, s * 0.07, line * 0.7)
+			for d in [Vector2(-0.36, -0.36), Vector2(-0.2, -0.46)]:
+				_drop_shape(c + (d as Vector2) * s, s * 0.08, line * 0.7)
 		"milk_empty":
 			# 倒れた空っぽのパック(灰色っぽく)
 			_draw_carton(c + Vector2(0, s * 0.1), s * 0.8, line, deg_to_rad(-80.0), Color("F2EFEA"), Color("B9B4AC"), Color("8A847C"))
@@ -71,8 +71,8 @@ static func draw_milk_bottle(ci: CanvasItem, c: Vector2, s: float, line: float) 
 ## 牛乳パック(屋根の形の口)。rot で回す。outline の色は ink(ふつうは黒)
 func _draw_carton(c: Vector2, s: float, line: float, rot: float, body: Color, band: Color, ink: Color = INK) -> void:
 	draw_set_transform(c, rot, Vector2.ONE)
-	var w := s * 0.36
-	var h := s * 0.42
+	var w := s * 0.5
+	var h := s * 0.62
 	var box := PackedVector2Array([Vector2(-w / 2, -h * 0.25), Vector2(w / 2, -h * 0.25), Vector2(w / 2, h * 0.6), Vector2(-w / 2, h * 0.6)])
 	draw_colored_polygon(box, body)
 	draw_rect(Rect2(Vector2(-w / 2, h * 0.08), Vector2(w, h * 0.22)), band)
