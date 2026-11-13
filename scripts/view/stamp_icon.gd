@@ -82,16 +82,30 @@ func _draw_symbol(c: Vector2, s: float, sym: String, w: float) -> void:
 ## 落とし物アイコン(s: 大きさの目安)
 func _draw_item(c: Vector2, s: float, line: float) -> void:
 	match item:
-		0: # ハンカチ: 白いふち+赤い地+白いチェック、右下の角が折れている(3D の落とし物と同じ色)
-			var outer := _pts(c, s, [Vector2(-1.0, -1.0), Vector2(1.0, -1.0), Vector2(1.0, 0.45), Vector2(0.45, 1.0), Vector2(-1.0, 1.0)])
-			_poly(outer, Color.WHITE, line)
-			draw_colored_polygon(_pts(c, s, [Vector2(-0.78, -0.78), Vector2(0.78, -0.78), Vector2(0.78, 0.4),
-					Vector2(0.4, 0.78), Vector2(-0.78, 0.78)]), Color("EE5A4B"))
-			for k in [-0.3, 0.3]:
-				draw_line(c + Vector2(-0.78, k) * s, c + Vector2(0.78, k) * s, Color.WHITE, line * 0.9, true)
-				draw_line(c + Vector2(k, -0.78) * s, c + Vector2(k, 0.78) * s, Color.WHITE, line * 0.9, true)
-			# 折れた角
-			_poly(_pts(c, s, [Vector2(1.0, 0.45), Vector2(0.45, 0.45), Vector2(0.45, 1.0)]), Color("F7C4BE"), line)
+		0: # ハンカチ: 少し傾いた赤い布。ふちはフリル(白い波)、白い水玉、右下の角が折れている
+			var rot := deg_to_rad(-12.0)
+			var k := 0.82
+			var corners := [Vector2(-k, -k), Vector2(k, -k), Vector2(k, k), Vector2(-k, k)]
+			# ふちのフリル: 辺にそって白い丸を並べる(あとから布を上に重ねる)
+			for e in 4:
+				var p0: Vector2 = corners[e]
+				var p1: Vector2 = corners[(e + 1) % 4]
+				for j in 5:
+					var q := p0.lerp(p1, (j + 0.5) / 5.0)
+					var qc := c + q.rotated(rot) * s
+					draw_circle(qc, s * 0.24, INK)
+					draw_circle(qc, s * 0.24 - line * 0.6, Color.WHITE)
+			var cloth := PackedVector2Array()
+			for q in [Vector2(-k, -k), Vector2(k, -k), Vector2(k, 0.2), Vector2(0.2, k), Vector2(-k, k)]:
+				cloth.append(c + (q as Vector2).rotated(rot) * s)
+			_poly(cloth, Color("EE5A4B"), line)
+			for d in [Vector2(-0.45, -0.45), Vector2(0.3, -0.5), Vector2(-0.5, 0.3), Vector2(0.05, 0.0), Vector2(-0.1, 0.5), Vector2(0.5, -0.05)]:
+				draw_circle(c + (d as Vector2).rotated(rot) * s, s * 0.11, Color.WHITE)
+			# 折れた角(裏の白っぽい色)
+			var fold := PackedVector2Array()
+			for q in [Vector2(k, 0.2), Vector2(0.2, 0.2), Vector2(0.2, k)]:
+				fold.append(c + (q as Vector2).rotated(rot) * s)
+			_poly(fold, Color("FBD5CF"), line)
 		1: # 上履き: 白いくつ(横から)。赤い底、青いつま先のゴムと甲のバンド
 			_poly(_pts(c, s, [Vector2(-1.05, 0.45), Vector2(1.1, 0.45), Vector2(1.1, 0.7), Vector2(-1.05, 0.7)]), Color("D9483B"), line)
 			_poly(_pts(c, s, [Vector2(-1.0, 0.45), Vector2(-1.0, -0.25), Vector2(-0.65, -0.5), Vector2(-0.1, -0.4),
