@@ -47,8 +47,8 @@ func _ready() -> void:
 	root.alignment = BoxContainer.ALIGNMENT_CENTER
 	root.add_theme_constant_override("separation", 12)
 	add_child(root)
-	root.offset_left = -340
-	root.offset_right = 340
+	root.offset_left = -430
+	root.offset_right = 430
 	root.offset_top = -350
 	root.offset_bottom = 350
 
@@ -61,12 +61,23 @@ func _ready() -> void:
 	_menu.add_theme_constant_override("separation", 12)
 	root.add_child(_menu)
 	_build_profile_rows(_menu)
-	_players_button = _button("", func() -> void: _toggle_players())
-	_menu.add_child(_players_button)
+	# 大きいボタンを2列に(押しやすいように)
+	var menu_grid := GridContainer.new()
+	menu_grid.columns = 2
+	menu_grid.add_theme_constant_override("h_separation", 16)
+	menu_grid.add_theme_constant_override("v_separation", 16)
+	_menu.add_child(menu_grid)
+	var big := Vector2(0, 110)
+	var solo := _button("ひとりで遊ぶ", func() -> void: solo_pressed.emit(), big, true)
+	solo.add_theme_font_size_override("font_size", 36)
+	menu_grid.add_child(solo)
+	_players_button = _button("", func() -> void: _toggle_players(), big)
+	menu_grid.add_child(_players_button)
 	_update_players_button()
-	_menu.add_child(_button("ひとりで遊ぶ(ボット相手)", func() -> void: solo_pressed.emit(), Vector2(0, 66), true))
-	_menu.add_child(_button("部屋を作る(ホスト)", func() -> void: host_pressed.emit()))
-	_menu.add_child(_button("部屋に入る(合言葉)", func() -> void: _show_join()))
+	menu_grid.add_child(_button("部屋を作る\n(ホスト)", func() -> void: host_pressed.emit(), big))
+	menu_grid.add_child(_button("部屋に入る\n(合言葉)", func() -> void: _show_join(), big))
+	for b in menu_grid.get_children():
+		(b as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	_join_box = VBoxContainer.new()
 	_join_box.add_theme_constant_override("separation", 10)
@@ -80,15 +91,15 @@ func _ready() -> void:
 	_join_box.add_child(grid)
 	for d in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "けす", "0", "入る"]:
 		var digit: String = d
-		grid.add_child(_button(digit, func() -> void: _on_key(digit), Vector2(200, 70)))
-	_join_box.add_child(_button("もどる", func() -> void: show_menu(), Vector2(0, 60)))
+		grid.add_child(_button(digit, func() -> void: _on_key(digit), Vector2(270, 76)))
+	_join_box.add_child(_button("もどる", func() -> void: show_menu(), Vector2(0, 70)))
 
 	_host_box = VBoxContainer.new()
 	_host_box.add_theme_constant_override("separation", 12)
 	root.add_child(_host_box)
 	_players_label = _label("", 26)
 	_host_box.add_child(_players_label)
-	_host_box.add_child(_button("スタート", func() -> void: start_pressed.emit(), Vector2(0, 66), true))
+	_host_box.add_child(_button("スタート", func() -> void: start_pressed.emit(), Vector2(0, 100), true))
 
 	show_menu()
 
@@ -201,7 +212,7 @@ func _toggle_players() -> void:
 
 
 func _update_players_button() -> void:
-	_players_button.text = "人数: %d人(タップで変える)" % players
+	_players_button.text = "人数: %d人\n(タップで変える)" % players
 
 
 func show_menu() -> void:

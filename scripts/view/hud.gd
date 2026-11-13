@@ -32,6 +32,8 @@ var _extra_pill: PanelContainer
 ## ラウンドが終わったときの結果カード(全員の点数もここに出す。手下がばれないように、ふだんは出さない)
 var _result_card: PanelContainer
 var _next_button: Button
+## 役のお知らせカード(手下になったときなど)。しばらくすると消える
+var _popup: PanelContainer
 
 
 func _ready() -> void:
@@ -141,6 +143,56 @@ func show_result_card(title: String, sub: String, notes: Array, color: Color, ro
 	var tw := create_tween()
 	tw.tween_property(_result_card, "scale", Vector2(1.06, 1.06), 0.14)
 	tw.tween_property(_result_card, "scale", Vector2.ONE, 0.1)
+
+
+## 役のお知らせカード: 色のふちの白いカードに、大きい見出し・小さい札・ひとこと。seconds 秒で消える
+func show_popup_card(title: String, tags: Array, color: Color, hint: String, seconds: float) -> void:
+	if _popup:
+		_popup.queue_free()
+	_popup = PanelContainer.new()
+	_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 30, 6)
+	st.border_color = color
+	st.shadow_offset = Vector2(6, 8)
+	st.set_content_margin_all(24)
+	_popup.add_theme_stylebox_override("panel", st)
+	add_child(_popup)
+	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_theme_constant_override("separation", 12)
+	_popup.add_child(col)
+	var t := UiStyle.label(title, 50, color)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_color_override("font_outline_color", GameConfig.COLOR_INK)
+	t.add_theme_constant_override("outline_size", 10)
+	col.add_child(t)
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
+	col.add_child(row)
+	for tag in tags:
+		var p := UiStyle.pill(str(tag), 26)
+		(p.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = color.lightened(0.75)
+		row.add_child(p)
+	if hint != "":
+		var h := UiStyle.label(hint, 22, GameConfig.COLOR_INK.lightened(0.3))
+		h.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(h)
+	UiStyle.center(_popup)
+	_popup.position.y -= 60.0
+	# ポンと出て、しばらくしたら小さくなって消える
+	var card := _popup
+	card.pivot_offset = card.size / 2.0
+	card.scale = Vector2(0.5, 0.5)
+	var tw := create_tween()
+	tw.tween_property(card, "scale", Vector2(1.08, 1.08), 0.15)
+	tw.tween_property(card, "scale", Vector2.ONE, 0.1)
+	tw.tween_interval(seconds)
+	tw.tween_property(card, "scale", Vector2(0.0, 0.0), 0.18)
+	tw.tween_callback(func() -> void:
+		if is_instance_valid(card):
+			card.queue_free())
 
 
 func hide_result_card() -> void:
