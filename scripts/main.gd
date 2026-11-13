@@ -17,8 +17,8 @@ var cmds: Object
 var _last_sound := ""
 ## スタンプを送る相手(画面でタップして選ぶ。-1 は未選択)
 var _stamp_target := -1
-## 鬼が牛乳をかける相手(タップで選ぶ。-1 = 選んでいない)
-var _milk_target := -1
+## 鬼が牛乳ボタンを押して、かける相手を選んでいるところか(「えいっ」の状態)
+var _milk_aiming := false
 ## ひとりで遊ぶとき、この画面のプレイヤーが鬼をやるか
 var _player_is_oni := false
 ## この試合の席の数(遊ぶ人数 - 鬼1人)
@@ -241,7 +241,7 @@ func _refresh_round() -> void:
 	touch.set_oni_mode(_i_am_oni())
 	_last_sound = ""
 	_stamp_target = -1
-	_milk_target = -1
+	_milk_aiming = false
 	hud.show_my_stamps([])
 	hud.hide_message()
 	view.build(state)
@@ -254,7 +254,7 @@ func _physics_process(delta: float) -> void:
 	if mode == Mode.GUEST and _built_serial < 0:
 		return # まだ最初の状態が届いていない
 	PlayerInput.apply(state, cmds, view.get_camera_basis())
-	_update_milk_target()
+	_update_milk()
 	if mode != Mode.GUEST:
 		# ルールを動かすのは、ひとりのときとホストだけ
 		bots.update(state, delta)
@@ -283,8 +283,7 @@ func _physics_process(delta: float) -> void:
 				and state.phase != GameState.Phase.RESULT else "", Color(0.55, 0.2, 0.7))
 	# 牛乳がかかっている間は、画面が白い
 	hud.set_milk(state.is_milked(me) and state.phase != GameState.Phase.RESULT, state.milk_left_ratio(me))
-	# 牛乳は、相手をタップで選んでいるときだけ押せる
-	touch.set_milk_left(state.milk_left, _milk_target >= 0)
+	touch.set_milk_state(state.milk_left, _milk_aiming)
 	var judged := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
 	touch.set_looks_left(me.looks_left if judged else -1)
 	# 勝敗が出ている間は、名札とゲーム用のボタンを隠して結果カードだけにする(⚙は残す)
@@ -498,9 +497,12 @@ func _on_tap(pos: Vector2) -> void:
 	var id := ov.tag_hit(pos)
 	if id < 0:
 		id = view.pick_actor_at(state, pos)
-	# 鬼: タップした人が、牛乳をかける相手になる(「ここにかける?」が出る)
-	if _i_am_oni() and id >= 0 and state.can_milk(id):
-		_milk_target = id
+	# 鬼が牛乳ボタンを押したあと(「えいっ」): タップした座っている人にかける(スタンプは出さない)
+	if _milk_aiming:
+		if id >= 0 and state.can_milk(id):
+			cmds.oni_milk(state.local_player_id, id)
+			_milk_aiming = false
+		return
 	if ov.picker_target() >= 0:
 		# 開いているときは、同じ人か外をタップしたら閉じる。ほかの人なら、その人の選択肢を開く
 		var was := ov.picker_target()
@@ -517,21 +519,19 @@ func _on_tap(pos: Vector2) -> void:
 	ov.open_picker(id)
 
 
-## 鬼の牛乳: 選んだ相手がかけられなくなったら選び直し。牛乳ボタンで、選んだ相手にかける
-func _update_milk_target() -> void:
-	if _milk_target >= 0 and (not _i_am_oni() or not state.can_milk(_milk_target)):
-		_milk_target = -1
-	if _i_am_oni() and Input.is_action_just_pressed("oni_milk"):
-		if _milk_target < 0:
-			if state.milk_left > 0:
-				hud.show_message("かける人をタップしてね", Color(0.3, 0.3, 0.3), 1.2)
-		else:
-			cmds.oni_milk(state.local_player_id, _milk_target)
-			_milk_target = -1
-	view.set_milk_target(_milk_target)
-	var ov := view.get_overlay()
-	if ov:
-		ov.set_milk_target(_milk_target)
+## 鬼の牛乳: ボタンを押すと「えいっ」(相手を選ぶ)になり、もう一度押すとやめる。
+## 牛乳がなくなった・追いかけっこになったなどで、選ぶのをやめる
+func _update_milk() -> void:
+	var usable := _i_am_oni() and state.milk_left > 0 \
+			and (state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED)
+	if _milk_aiming and not usable:
+		_milk_aiming = false
+	if usable and Input.is_action_just_pressed("oni_milk"):
+		_milk_aiming = not _milk_aiming
+		if _milk_aiming:
+			_close_picker()
+			hud.show_message("かける人をタップ!", Color(0.3, 0.45, 0.7), 1.0)
+	view.set_milk_aim(_milk_aiming)
 
 
 func _close_picker() -> void:

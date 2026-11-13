@@ -15,6 +15,8 @@ var _look_button: Button
 var _milk_button: Button
 var _milk_label: Label
 var _milk_badge: Label
+var _milk_icon: ButtonIcon
+var _milk_inner: Panel
 var _milk_shown := -1
 ## お手つきで抜けて、真ん中で見ているか(振り向くボタンを隠す)
 var _out := false
@@ -50,15 +52,25 @@ func _ready() -> void:
 	var drop := _add_button("", "oni_drop", Vector2(1, 1), Rect2(-UiStyle.SAFE - 410, -250, 175, 220), 32)
 	_icon_face(drop, "drop", "落とす", Vector2(96, 80), 32, GameConfig.COLOR_PAPER)
 	_oni_buttons.append(drop)
-	# 牛乳(タップで選んだ人にかける。1ラウンド1回。相手を選んでいないときと、使ったあとは灰色)
+	# 牛乳(押す→「えいっ」になる→座っている人をタップしてかける。もう一度押すとやめる。1ラウンド1回)
 	_milk_button = _add_button("", "oni_milk", Vector2(1, 1), Rect2(-UiStyle.SAFE - 575, -250, 150, 118), 24)
-	var blue := UiStyle.box(GameConfig.COLOR_PAPER)
-	blue.border_color = ButtonIcon.MILK_BLUE
-	blue.set_border_width_all(6)
-	_milk_button.add_theme_stylebox_override("normal", blue)
-	_milk_button.add_theme_stylebox_override("hover", blue)
-	_milk_button.add_theme_stylebox_override("disabled", UiStyle.box(Color("B9B4AC")))
+	# 白地に青の内枠
+	_milk_inner = Panel.new()
+	_milk_inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var inner := StyleBoxFlat.new()
+	inner.draw_center = false
+	inner.border_color = ButtonIcon.MILK_BLUE
+	inner.set_border_width_all(5)
+	inner.set_corner_radius_all(12)
+	_milk_inner.add_theme_stylebox_override("panel", inner)
+	_milk_inner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_milk_inner.offset_left = 7
+	_milk_inner.offset_top = 7
+	_milk_inner.offset_right = -7
+	_milk_inner.offset_bottom = -7
+	_milk_button.add_child(_milk_inner)
 	_milk_label = _icon_face(_milk_button, "milk", "牛乳", Vector2(60, 62), 24, GameConfig.COLOR_INK)
+	_milk_icon = _milk_button.get_child(_milk_button.get_child_count() - 1).get_child(0) as ButtonIcon
 	_milk_badge = _corner_badge(_milk_button, Vector2(150 - 40, -18))
 	_oni_buttons.append(_milk_button)
 	var fake := _add_button("", "oni_feint", Vector2(1, 1), Rect2(-UiStyle.SAFE - 575, -122, 150, 92), 22)
@@ -159,17 +171,44 @@ func set_looks_left(n: int) -> void:
 		_release_action("look_back")
 
 
-## 鬼の牛乳の残り回数と、いまかけられるか(相手を選んでいるか)。かけられないときは灰色で押せない。
-## 右上の角に残りの回数のバッジ
-func set_milk_left(n: int, can_pour: bool = true) -> void:
-	var key := n * 2 + (1 if can_pour else 0)
+## 牛乳ボタンの見た目: 使える(白地に青の内枠・牛乳びん)/相手を選んでいる(青く光る・かたむけたパック・「えいっ」)/
+## 使ったあと(灰色・倒れた空っぽのパック・「からっぽ」・押せない)。右上の角に残りの回数
+func set_milk_state(n: int, aiming: bool) -> void:
+	var key := n * 2 + (1 if aiming else 0)
 	if key == _milk_shown:
 		return
 	_milk_shown = key
-	_milk_button.disabled = n <= 0 or not can_pour
-	_milk_label.text = "牛乳" if n > 0 else "使った"
+	var empty := n <= 0
+	_milk_button.disabled = empty
 	_milk_badge.text = str(maxi(n, 0))
-	if _milk_button.disabled:
+	var normal: StyleBoxFlat
+	if empty:
+		normal = UiStyle.box(Color("E6E1D8"), false)
+		normal.border_color = Color("9A948C")
+		_milk_icon.kind = "milk_empty"
+		_milk_label.text = "からっぽ"
+		_milk_label.add_theme_color_override("font_color", Color("8A847C"))
+	elif aiming:
+		normal = UiStyle.box(ButtonIcon.MILK_BLUE, false)
+		# 青く光る(まわりにうすい青のふち)
+		normal.shadow_color = Color(ButtonIcon.MILK_BLUE, 0.45)
+		normal.shadow_size = 10
+		normal.shadow_offset = Vector2.ZERO
+		_milk_icon.kind = "milk_pour"
+		_milk_label.text = "えいっ"
+		_milk_label.add_theme_color_override("font_color", GameConfig.COLOR_PAPER)
+	else:
+		normal = UiStyle.box(GameConfig.COLOR_PAPER)
+		_milk_icon.kind = "milk"
+		_milk_label.text = "牛乳"
+		_milk_label.add_theme_color_override("font_color", GameConfig.COLOR_INK)
+	_milk_inner.visible = not empty and not aiming
+	for st in ["normal", "hover", "disabled"]:
+		_milk_button.add_theme_stylebox_override(st, normal)
+	var badge_style := _milk_badge.get_parent().get_theme_stylebox("panel") as StyleBoxFlat
+	badge_style.border_color = Color("9A948C") if empty else GameConfig.COLOR_INK
+	_milk_badge.add_theme_color_override("font_color", Color("8A847C") if empty else GameConfig.COLOR_INK)
+	if empty:
 		_release_action("oni_milk")
 
 
@@ -282,7 +321,7 @@ func _build_menu() -> void:
 const HOW_TO_PLAY := """・振り向く(長押し): 押している間だけ後ろを見る。落ちていたら、そのまま拾って走る
 ・お手つき(なにもないのに振り向く): 輪から抜けて真ん中で休む。そのラウンドは0点。全員の後ろが見えて、だれにでもスタンプを送れる
 ・人をタップ: その人の頭の上にスタンプが出るので、選んで送る(同じ人には1ラウンド1回)
-・鬼: スティックで歩く速さ。止まる・落とす・フェイク(落とす音だけ)・牛乳(人をタップして選び、牛乳ボタンでかける。画面が半周のあいだ白くなる。1ラウンド1回)
+・鬼: スティックで歩く速さ。止まる・落とす・フェイク(落とす音だけ)・牛乳(牛乳ボタン→「えいっ」になったら、座っている人をタップしてかける。もう一度押すとやめる。画面が半周のあいだ白くなる。1ラウンド1回)
 ・追いかけっこ: 自動で走る。スティックの上で内側(近道)、下で外側。座っている人はバナナを投げられる
 キーボード: スペース=振り向く/止まる 1〜4=スタンプ M=牛乳 Z X C V=鬼のスタンプ W/S=内側/外側 A/D=鬼の速さ
  E=落とす F=フェイク B/N=バナナ R=やり直し O=役を変える F1=上から見る K=転ぶ L=牛乳をかぶる(確認用) Tab=メニュー"""
