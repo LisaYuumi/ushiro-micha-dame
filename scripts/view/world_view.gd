@@ -217,10 +217,15 @@ func _update_expression(state: GameState, a: GameState.Actor, model: CharacterMo
 
 
 ## 落とし物の部品(箱)を1つ足す。見え方のルールで隠すため、部品は _handkerchief のすぐ下に置く
-func _item_part(size: Vector3, pos: Vector3, color: Color, outline: float) -> void:
-	var box := BoxMesh.new()
-	box.size = size
-	var mi := Toon.mesh(box, color, outline)
+func _item_part(size: Vector3, pos: Vector3, color: Color, outline: float, bevel: float = 0.0) -> void:
+	var mesh: Mesh
+	if bevel > 0.0:
+		mesh = StaticBatch.chamfer_mesh(size, bevel)
+	else:
+		var box := BoxMesh.new()
+		box.size = size
+		mesh = box
+	var mi := Toon.mesh(mesh, color, outline)
 	mi.position = pos
 	_handkerchief.add_child(mi)
 
@@ -911,7 +916,7 @@ func _hide_item_if_not_visible_to_me(state: GameState) -> void:
 ## 落とし物の仮の形(大きさ・色)。ラウンドごとに重くなる
 const ITEM_SHAPES := [
 	[Vector3(0.55, 0.04, 0.55), Color("EE5A4B")],       # ハンカチ(赤いチェックに白いふち。_build_item_parts)
-	[Vector3(0.2, 0.16, 0.42), Color(1, 1, 1)],         # 上履き(白に青いつま先とバンド)
+	[Vector3(0.24, 0.18, 0.5), Color(1, 1, 1)],         # 上履き(白に青いつま先とバンド)
 	[Vector3(0.36, 0.4, 0.22), Color(0.8, 0.15, 0.15)],  # ランドセル
 	[Vector3(0.6, 0.7, 0.45), Color(0.65, 0.45, 0.25)],  # 机
 	[Vector3(0.9, 1.0, 0.5), Color(0.4, 0.25, 0.15)],    # 教卓
@@ -959,18 +964,24 @@ func _build_handkerchief(state: GameState) -> void:
 	# 床に置いたとき、底が床につくように。ハンカチと上履きは小さいので、色と形で目立たせる
 	match index:
 		0:
-			# ハンカチ: 白いふち+赤い地+白いチェックの線(スタンプの絵と同じ)
-			_item_part(Vector3(0.55, 0.03, 0.55), Vector3(0, 0.015, 0), Color.WHITE, ITEM_OUTLINE)
-			_item_part(Vector3(0.44, 0.01, 0.44), Vector3(0, 0.033, 0), COLOR_HANKIE, 0.0)
-			for k in [-0.11, 0.11]:
-				_item_part(Vector3(0.44, 0.006, 0.05), Vector3(0, 0.04, k), Color.WHITE, 0.0)
-				_item_part(Vector3(0.05, 0.006, 0.44), Vector3(k, 0.041, 0), Color.WHITE, 0.0)
+			# ハンカチ: 白いふち+赤い地+白いチェックの線(スタンプの絵と同じ)。
+			# 手に持つと縦になって裏も見えるので、表と裏の両方に赤い地を貼る
+			_item_part(Vector3(0.55, 0.03, 0.55), Vector3(0, 0.025, 0), Color.WHITE, ITEM_OUTLINE)
+			for face in [1.0, -1.0]:
+				var fy := 0.025 + face * 0.018
+				_item_part(Vector3(0.44, 0.008, 0.44), Vector3(0, fy, 0), COLOR_HANKIE, 0.0)
+				for k in [-0.11, 0.11]:
+					_item_part(Vector3(0.44, 0.006, 0.05), Vector3(0, fy + face * 0.006, k), Color.WHITE, 0.0)
+					_item_part(Vector3(0.05, 0.006, 0.44), Vector3(k, fy + face * 0.007, 0), Color.WHITE, 0.0)
 		1:
-			# 上履き: 白い本体、赤い底、青いつま先のゴムと甲のバンド(スタンプの絵と同じ)
-			_item_part(Vector3(0.21, 0.03, 0.43), Vector3(0, 0.015, 0), Color("D9483B"), ITEM_OUTLINE)
-			_item_part(Vector3(0.2, 0.13, 0.42), Vector3(0, 0.095, 0), Color.WHITE, ITEM_OUTLINE)
-			_item_part(Vector3(0.215, 0.11, 0.14), Vector3(0, 0.085, -0.15), COLOR_SHOE_RUBBER, 0.0)
-			_item_part(Vector3(0.215, 0.04, 0.07), Vector3(0, 0.15, 0.02), COLOR_SHOE_RUBBER, 0.0)
+			# 上履き: 赤い底、丸い白い本体、青いゴムのつま先、甲のゴムバンド、足を入れる口、かかとのつまみ
+			# (スタンプの絵と同じ色。つま先は -Z)
+			_item_part(Vector3(0.24, 0.035, 0.5), Vector3(0, 0.018, 0), Color("D9483B"), ITEM_OUTLINE, 0.03)
+			_item_part(Vector3(0.23, 0.12, 0.48), Vector3(0, 0.09, 0.0), Color.WHITE, ITEM_OUTLINE, 0.055)
+			_item_part(Vector3(0.24, 0.115, 0.17), Vector3(0, 0.085, -0.165), COLOR_SHOE_RUBBER, ITEM_OUTLINE, 0.055)
+			_item_part(Vector3(0.245, 0.045, 0.07), Vector3(0, 0.13, -0.02), COLOR_SHOE_RUBBER, 0.02, 0.015)
+			_item_part(Vector3(0.15, 0.012, 0.2), Vector3(0, 0.152, 0.11), Color("4A4A52"), 0.0, 0.004)
+			_item_part(Vector3(0.08, 0.06, 0.03), Vector3(0, 0.16, 0.235), COLOR_SHOE_RUBBER, 0.015, 0.01)
 		_:
 			_item_part(size, Vector3(0, size.y / 2.0, 0), shape[1], ITEM_OUTLINE)
 	_handkerchief.visible = false
