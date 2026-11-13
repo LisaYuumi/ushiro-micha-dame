@@ -235,7 +235,7 @@ func _press_next() -> void:
 
 ## スマホの指(と PC のクリック): 「手下はだれ?」をめくる/結果カードの「次へ」を押す
 func _input(event: InputEvent) -> void:
-	var tap := (event is InputEventScreenTouch and event.pressed) \
+	var tap: bool = (event is InputEventScreenTouch and event.pressed) \
 			or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT)
 	if not tap:
 		return
