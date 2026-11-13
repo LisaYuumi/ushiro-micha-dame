@@ -591,20 +591,30 @@ func _test_player_oni_drop_and_feint() -> void:
 	s2.start_round(55, false)
 	_check(not s2.oni_drop(0), "座る側は落とせない")
 
-	# ボットが「ふり」にだまされることがある
+	# ボットが「ふり」にだまされることがある(鬼が後ろを通って、しばらくたってから)。
+	# 鬼が一度も後ろを通っていないうちは、だまされない
 	var fooled := 0
+	var fooled_early := 0
 	for seed_value in 40:
-		var s3 := GameState.new()
-		s3.start_round(seed_value, true)
-		var b := BotBrain.new()
-		b.reset(seed_value)
-		s3.oni_feint(s3.oni_id)
-		for e in s3.take_events():
-			b.on_event(s3, e)
-		for e in s3.take_events():
-			if e["type"] == "otetsuki":
-				fooled += 1
+		for passed in [false, true]:
+			var s3 := GameState.new()
+			s3.start_round(seed_value, true)
+			if passed:
+				for i in s3.seat_pass_age.size():
+					s3.seat_pass_age[i] = GameConfig.BOT_TURN_MIN_AFTER_PASS + 1.0
+			var b := BotBrain.new()
+			b.reset(seed_value)
+			s3.oni_feint(s3.oni_id)
+			for e in s3.take_events():
+				b.on_event(s3, e)
+			for e in s3.take_events():
+				if e["type"] == "otetsuki":
+					if passed:
+						fooled += 1
+					else:
+						fooled_early += 1
 	_check(fooled > 0 and fooled < 40, "ボットは「ふり」にときどきだまされる")
+	_check(fooled_early == 0, "鬼が後ろを通っていないうちは、ボットは「ふり」にだまされない")
 
 
 func _test_player_oni_auto_drop_after_laps() -> void:

@@ -36,6 +36,8 @@ var _bg := 0
 var _zoom := 1
 var _ring := false
 var _ui_hidden := false
+## 「転ぶ」: 少し走らせてから倒す(残り秒。-1 = なし)
+var _fall_delay := -1.0
 
 
 func _ready() -> void:
@@ -65,6 +67,11 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if _fall_delay >= 0.0:
+		_fall_delay -= delta
+		if _fall_delay < 0.0:
+			for m in _models:
+				m.slip(true)
 	for m in _models:
 		m.animate(delta, _pose == "走る" and not _ring)
 
@@ -141,10 +148,8 @@ func _apply_pose(m: CharacterModel, pose: String) -> void:
 			m.set_pose("run")
 		"転ぶ":
 			m.set_pose("run")
-			# 少し走らせてから、倒れたまま止める
-			get_tree().create_timer(0.25).timeout.connect(func() -> void:
-				if is_instance_valid(m) and m.is_inside_tree():
-					m.slip(true))
+			# 少し走らせてから、倒れたまま止める(_process で)
+			_fall_delay = 0.25
 		_:
 			m.set_pose("idle")
 
