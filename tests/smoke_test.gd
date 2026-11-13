@@ -36,6 +36,7 @@ func _initialize() -> void:
 	_test_stamp_rules()
 	_test_stamp_truthfulness()
 	_test_stamp_words()
+	_test_milk_art()
 	_test_bots_send_and_trust_stamps()
 	_test_player_oni_setup()
 	_test_player_oni_walk_speed_and_stop()
@@ -431,6 +432,13 @@ func _test_stamp_rules() -> void:
 	var s5 := GameState.new()
 	s5.start_match(41, false, 4)
 	_check(s5.send_stamp(1, 2, Stamps.SAFE) and s5.send_stamp(1, 0, Stamps.SAFE), "5人のときは両どなりにも送れる")
+
+
+func _test_milk_art() -> void:
+	var tex := MilkArt.texture(Vector2(1280, 720), 1.0)
+	_check(tex != null and tex.get_width() == 1280 and tex.get_height() == 720, "牛乳の絵(SVG)が画面の大きさで作れる")
+	var tex2 := MilkArt.texture(Vector2(1560, 720), 1.0)
+	_check(tex2 != null and tex2.get_width() == 1560, "横長の画面でも作れる")
 
 
 func _test_stamp_words() -> void:

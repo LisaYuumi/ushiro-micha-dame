@@ -19,3 +19,6 @@
   - 出どころ: Google Fonts(https://github.com/google/fonts/tree/main/ofl/yuseimagic)
   - ライセンス: SIL Open Font License 1.1(商用利用・同梱できる。フォントだけを売るのは不可)
   - ファイル: `assets/fonts/YuseiMagic-Regular.ttf`、ライセンス全文: `assets/fonts/OFL-YuseiMagic.txt`
+- **牛乳の絵**(牛乳をかけられたときの白い画面)
+  - 作者: このプロジェクト(見本の画像をまねて、コードで SVG を作った自作の絵。外の素材は使っていない)
+  - ファイル: `scripts/view/milk_art.gd`(SVG を作るコード)

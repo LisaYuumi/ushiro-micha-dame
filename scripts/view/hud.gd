@@ -706,57 +706,26 @@ func _build_milk_pill() -> void:
 	_milk_pill.grow_horizontal = Control.GROW_DIRECTION_BOTH
 
 
-## 上から白い牛乳がたれる: 上の帯(下のふちはぽこぽこ)と、長さのちがうしずく、落ちていく粒。
-## 黒い輪郭、下のふちに水色のかげ(A案の見本どおり)
+## 上から白い牛乳がたれる: 見本をまねた絵(MilkArt の SVG)を上からすべり下ろして出し、
+## その下で白い粒がゆっくり落ちる(黒い輪郭)
 func _draw_milk() -> void:
 	var sz := _milk.size
 	var t := Time.get_ticks_msec() / 1000.0
-	var white := Color(1.0, 1.0, 0.99)
-	var shade := Color("CFE6F7")
 	var ink := GameConfig.COLOR_INK
-	# かかった直後は、しずくが上からのびてくる
-	var grow := clampf(_milk_t / 0.7, 0.0, 1.0)
+	var white := Color(1.0, 1.0, 0.99)
+	# かかった直後は、上からすべり下りてくる
+	var grow := clampf(_milk_t / 0.6, 0.0, 1.0)
 	grow = 1.0 - pow(1.0 - grow, 3.0)
-	var band := sz.y * 0.2
-	var shapes := []  # [中心x, 幅, 下の端y]
-	# 帯の下のふちのぽこぽこ
-	var bumps := 12
-	for i in bumps + 1:
-		var w := sz.x / float(bumps)
-		shapes.append([w * float(i), w * 0.62, band])
-	# たれるしずく(場所・幅・長さは毎回同じ。少しだけゆれる)
-	var drips := 11
-	for i in drips:
-		var x := sz.x * (float(i) + 0.5) / float(drips) + sin(float(i) * 7.3) * sz.x * 0.02
-		var w := sz.x * (0.035 + 0.035 * absf(sin(float(i) * 5.7)))
-		var len_k := 0.18 + 0.42 * absf(sin(float(i) * 3.1 + 0.4))
-		var bottom := band + sz.y * len_k * grow + sin(t * 0.9 + float(i)) * 4.0
-		shapes.append([x, w, bottom])
-	# 1) 黒い輪郭(少し大きく) 2) 水色のかげ 3) 白(少し上・少し細く)
-	for pass_i in 3:
-		var col := ink if pass_i == 0 else (shade if pass_i == 1 else white)
-		var grow_px := 4.0 if pass_i == 0 else (0.0 if pass_i == 1 else -3.0)
-		var up := 7.0 if pass_i == 2 else 0.0
-		_milk.draw_rect(Rect2(0, 0, sz.x, band - up + grow_px), col)
-		for sh in shapes:
-			var cx: float = sh[0]
-			var w: float = sh[1] + grow_px * 2.0
-			var bottom: float = sh[2] - up + grow_px
-			var r := w / 2.0
-			if bottom - r > 0.0:
-				_milk.draw_rect(Rect2(cx - r, 0, w, bottom - r), col)
-			_milk.draw_circle(Vector2(cx, maxf(bottom - r, r)), r, col)
-	# 帯の中の水色のむら(うすい楕円)
-	for i in 4:
-		var c := Vector2(sz.x * (0.15 + 0.23 * float(i)), band * (0.35 + 0.2 * sin(float(i) * 2.3)))
-		_milk.draw_set_transform(c, 0.0, Vector2(2.6, 0.7))
-		_milk.draw_circle(Vector2.ZERO, band * 0.18, Color(shade, 0.8))
-	_milk.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var tex := MilkArt.texture(sz)
+	if tex:
+		var drop := -(1.0 - grow) * sz.y * 0.6 + sin(t * 1.3) * 3.0
+		_milk.draw_texture_rect(tex, Rect2(Vector2(0, drop), sz), false)
 	# 落ちていく粒(しずくの下から、ゆっくり落ちてくり返す)
+	var band := sz.y * MilkArt.BAND
 	for i in 7:
 		var x := sz.x * (0.08 + 0.135 * float(i)) + sin(float(i) * 4.1) * 20.0
-		var start := band + sz.y * 0.25
-		var fall := fmod(t * (40.0 + 12.0 * float(i % 3)) + float(i) * 97.0, sz.y * 0.6)
+		var start := band + sz.y * 0.3
+		var fall := fmod(t * (40.0 + 12.0 * float(i % 3)) + float(i) * 97.0, sz.y * 0.55)
 		var y := start + fall
 		var rr := 7.0 + 3.0 * float(i % 2)
 		_milk.draw_set_transform(Vector2(x, y), 0.0, Vector2(1.0, 1.35))
