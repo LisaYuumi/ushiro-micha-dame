@@ -348,6 +348,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		Profile.show_personality = not Profile.show_personality
 		Profile.save()
 		view.build(state)
+	elif event.is_action_pressed("debug_finish"):
+		# 確認用(ひとりのときだけ): いまのラウンドをすぐ「見逃し」で終わらせて、結果カードを見る
+		if mode == Mode.SOLO and state.phase != GameState.Phase.RESULT and state.phase != GameState.Phase.CHASE:
+			var loser := state.get_actor_at_seat(maxi(state.drop_target_seat, 0))
+			if loser:
+				state._finish(state.oni_id, loser.id, "missed")
 	elif event.is_action_pressed("debug_slip"):
 		view.debug_slip_all()
 	elif event.is_action_pressed("sound_test"):

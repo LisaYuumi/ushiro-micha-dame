@@ -33,6 +33,7 @@ const KEYS := {
 	"debug_slip": [KEY_K],
 	"menu": [KEY_TAB],
 	"photo_mode": [KEY_P],
+	"debug_finish": [KEY_J],
 	"toggle_personality": [],
 	"quit": [KEY_ESCAPE],
 }
