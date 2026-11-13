@@ -163,7 +163,8 @@ func set_looks_left(n: int) -> void:
 	if n == _looks_shown:
 		return
 	_looks_shown = n
-	_look_badge.visible = n >= 0
+	# 右上の数字のバッジは出さない(試遊の結果。回数は0回で灰色になることだけで伝える)
+	_look_badge.visible = false
 	_look_badge_label.text = str(maxi(n, 0))
 	var empty := n == 0
 	_look_button.disabled = empty

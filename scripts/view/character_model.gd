@@ -228,6 +228,9 @@ func bone_world(bone: String) -> Transform3D:
 	for a in _attachments:
 		if a["bone"] == i:
 			return (a["node"] as Node3D).global_transform
+	# 部品がついていない骨(背骨の上など)は、骨組みから直接位置を求める
+	if i >= 0:
+		return _skel.global_transform * _skel.get_bone_global_pose(i)
 	return global_transform
 
 

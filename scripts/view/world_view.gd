@@ -1059,10 +1059,16 @@ func _carry_item(m: CharacterModel) -> void:
 			# 上履き: 手に持つ
 			var hand := m.bone_world("DEF-hand.R").origin
 			_handkerchief.transform = Transform3D(body.scaled(Vector3.ONE * 0.85), hand + Vector3(0, -0.08, 0))
-		_:
-			# ランドセル・机・教卓: 背中に背負う(背中の上のほうに、はみ出して乗せる)
+		2:
+			# ランドセル: 背中に背負う(胸の高さの、背中のすぐ後ろ)
 			var chest := m.bone_world("DEF-spine.003").origin
-			var pos := chest + back * (0.2 + _item_size.z / 2.0) + Vector3(0, -_item_size.y * 0.6, 0)
+			var pos := chest + back * (0.16 + _item_size.z / 2.0) + Vector3(0, -_item_size.y * 0.75, 0)
+			_handkerchief.transform = Transform3D(body, pos)
+		_:
+			# 机・教卓: 頭の上に担ぐ(形の下の端を、頭のてっぺんの少し上に)
+			var head := m.bone_world("DEF-head").origin
+			# (頭の部品の位置 = 頭の球のまん中)
+			var pos := head + Vector3(0, CharacterModel.HEAD_RADIUS + 0.04, 0)
 			_handkerchief.transform = Transform3D(body, pos)
 
 

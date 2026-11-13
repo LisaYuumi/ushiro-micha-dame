@@ -1313,6 +1313,20 @@ func _test_character_model() -> void:
 			m.animate(STEP, pose == "run")
 	_check(m._pose == "sit", "姿勢が切りかわる")
 	m.free()
+	# 落とし物を持つ位置: 走っているとき、背中(背骨の上)と頭は床よりずっと上(引きずらない)
+	var r := CharacterModel.new()
+	root.add_child(r)
+	r.build(Color(0.9, 0.5, 0.3), "テスト", HudFont.get_font())
+	r.set_pose("run")
+	for i in 30:
+		r.animate(STEP, true)
+	var chest := r.bone_world("DEF-spine.003").origin.y
+	var head := r.bone_world("DEF-head").origin.y
+	print("carry heights: chest %.2f / head %.2f" % [chest, head])
+	_check(chest > 0.9, "走っているとき、背負う位置(胸)は床より高い(%.2f m)" % chest)
+	_check(head > chest, "頭は胸より高い")
+	root.remove_child(r)
+	r.free()
 
 
 func _test_profile_names_and_colors() -> void:
