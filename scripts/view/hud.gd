@@ -369,7 +369,8 @@ func _score_chip(r: Dictionary) -> PanelContainer:
 	top.add_child(UiStyle.dot(r["color"], 16))
 	var n := UiStyle.label(r["name"], 17, GameConfig.COLOR_INK)
 	n.clip_text = true
-	n.custom_minimum_size = Vector2(0, 0)
+	n.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	n.custom_minimum_size = Vector2(88, 0)
 	top.add_child(n)
 	var mark: String = r.get("mark", "")
 	if mark != "":
