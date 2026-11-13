@@ -32,6 +32,8 @@ var _extra_pill: PanelContainer
 ## ラウンドが終わったときの結果カード(全員の点数もここに出す。手下がばれないように、ふだんは出さない)
 var _result_card: PanelContainer
 var _next_button: Button
+## 結果カードの「手下はだれ?」(タップでめくる)
+var _reveal: MinionReveal
 ## 役のお知らせカード(手下になったときなど)。しばらくすると消える
 var _popup: PanelContainer
 
@@ -81,8 +83,10 @@ func set_round_info(round_text: String, item_text: String, extra_text: String, s
 ## title: 大きい見出し / sub: その下の一言 / notes: 小さい札(がまん・手下の発表など)/ color: 見出しの色 /
 ## rows: [{"name", "color", "score", "delta", "me", "mark"}](この順に並べる)/ footer: いちばん下の案内
 ## next_label: 「次へ」ボタンの文字("" なら出さない。ホストとひとりのときだけ出す)
+## minion: {"name", "color", "is_me", "bonus"}。あれば「手下はだれ?」のカードを出し、
+## めくるまで点数の表は隠す(手下のボーナスで手下がわかってしまうので)
 func show_result_card(title: String, sub: String, notes: Array, color: Color, rows: Array, footer: String,
-		next_label: String = "") -> void:
+		next_label: String = "", minion: Dictionary = {}) -> void:
 	hide_result_card()
 	_result_card = PanelContainer.new()
 	_result_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -115,6 +119,10 @@ func show_result_card(title: String, sub: String, notes: Array, color: Color, ro
 		col.add_child(nrow)
 		for n in notes:
 			nrow.add_child(UiStyle.pill(str(n), 20))
+	if not minion.is_empty():
+		_reveal = MinionReveal.new()
+		_reveal.setup(minion["name"], minion["color"], minion["is_me"], minion["bonus"])
+		col.add_child(_reveal)
 	# 全員の点数(2列)
 	var grid := GridContainer.new()
 	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -124,6 +132,11 @@ func show_result_card(title: String, sub: String, notes: Array, color: Color, ro
 	col.add_child(grid)
 	for r in rows:
 		grid.add_child(_score_row(r))
+	if _reveal:
+		grid.visible = false
+		_reveal.flipped.connect(func() -> void:
+			grid.visible = true
+			_recenter_result.call_deferred())
 	if footer != "":
 		var f := UiStyle.label(footer, 20, GameConfig.COLOR_INK.lightened(0.35))
 		f.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -200,6 +213,15 @@ func hide_result_card() -> void:
 		_result_card.queue_free()
 		_result_card = null
 		_next_button = null
+		_reveal = null
+
+
+## 結果カードの大きさが変わったら、まん中に置き直す
+func _recenter_result() -> void:
+	if _result_card:
+		var keep := _result_card.scale
+		UiStyle.center(_result_card)
+		_result_card.scale = keep
 
 
 ## 結果カードの「次へ」: キーボードの R と同じ操作を送る
@@ -211,11 +233,20 @@ func _press_next() -> void:
 		Input.parse_input_event(ev)
 
 
-## スマホの指: 結果カードの「次へ」をタップしたら押す
+## スマホの指(と PC のクリック): 「手下はだれ?」をめくる/結果カードの「次へ」を押す
 func _input(event: InputEvent) -> void:
-	if _next_button == null or not event is InputEventScreenTouch or not event.pressed:
+	var tap := (event is InputEventScreenTouch and event.pressed) \
+			or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT)
+	if not tap:
 		return
-	if _next_button.is_visible_in_tree() and _next_button.get_global_rect().has_point(event.position):
+	var pos: Vector2 = event.position
+	if _reveal and not _reveal.is_open() and _reveal.get_global_rect().has_point(pos):
+		_reveal.flip()
+		get_viewport().set_input_as_handled()
+		return
+	if _next_button == null or not event is InputEventScreenTouch:
+		return
+	if _next_button.is_visible_in_tree() and _next_button.get_global_rect().has_point(pos):
 		_press_next()
 		get_viewport().set_input_as_handled()
 

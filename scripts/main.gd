@@ -278,6 +278,12 @@ func _physics_process(delta: float) -> void:
 	touch.set_oni_mode(_i_am_oni(),
 			me.role == GameState.Role.SEATED and state.phase == GameState.Phase.CHASE)
 	touch.set_stick_visible(me.role != GameState.Role.SEATED)
+	# 勝敗が出ている間は、名札とボタンを隠して結果カードだけにする
+	var showing_result := state.phase == GameState.Phase.RESULT
+	touch.visible = not showing_result
+	var ov := view.get_overlay()
+	if ov:
+		ov.visible = not showing_result
 	# 左上の札(鬼の周回・自分の点数)を毎回更新する(参加者の点数は状態といっしょに届く)
 	_update_help()
 
@@ -620,11 +626,17 @@ func _show_result(r: Dictionary) -> void:
 				title = "鬼のかち!"
 				sub = "%s が気づかなかった!" % loser
 	var notes := []
+	# 手下は「手下はだれ?」のカードをめくると見られる
 	var minion: int = r.get("minion", -1)
-	if minion == me:
-		notes.append("あなたは手下だったよ" + (" 鬼がかって +%d" % GameConfig.SCORE_MINION_ONI_WIN if r.get("minion_bonus", false) else ""))
-	elif minion >= 0:
-		notes.append("手下は %s だったよ!" % _name(minion))
+	var reveal := {}
+	if minion >= 0:
+		var ma := state.get_actor(minion)
+		reveal = {
+			"name": _short_name(minion),
+			"color": ma.color if ma else Color.WHITE,
+			"is_me": minion == me,
+			"bonus": r.get("minion_bonus", false),
+		}
 	# 全員の点数(この試合の合計。点の多い順、このラウンドで増えた分つき)
 	var scores: Dictionary = r.get("scores", state.scores)
 	var ids := scores.keys()
@@ -636,9 +648,9 @@ func _show_result(r: Dictionary) -> void:
 	var next_text := "さいごの結果へ" if last else "次のラウンド(%s)へ" % Items.name_of(state.round_index + 1)
 	hud.hide_message()
 	if mode == Mode.GUEST:
-		hud.show_result_card(title, sub, notes, color, rows, "ホストが「次へ」を押すと" + next_text)
+		hud.show_result_card(title, sub, notes, color, rows, "ホストが「次へ」を押すと" + next_text, "", reveal)
 	else:
-		hud.show_result_card(title, sub, notes, color, rows, "", "次へ ▶ " + next_text)
+		hud.show_result_card(title, sub, notes, color, rows, "", "次へ ▶ " + next_text, reveal)
 
 
 ## 札に出す短い名前(「ボット2(せっかち)」→「ボット2」、鬼は「鬼」)
