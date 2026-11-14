@@ -45,6 +45,8 @@ var _preview: Panel
 var _web_input: WebInput
 ## 小物の画面(見本のキャラと、小物ごとの形・色のボタン)
 var _acc_box: VBoxContainer
+## 題名・イヤホンの案内など(きせかえの画面では、場所をあけるために隠す)
+var _header: Array[Control] = []
 var _acc_preview: AccessoryPreview
 ## 小物の形のボタン(slot -> {kind("" = なし) -> Button})と色のボタン(slot -> [Button])
 var _acc_kind_buttons := {}
@@ -78,13 +80,17 @@ func _ready() -> void:
 
 	_title = _label("うしろ見ちゃダメ!", 56)
 	root.add_child(_title)
+	_header.append(_title)
 	# 音が手がかりになるゲームなので、イヤホンをすすめる
-	root.add_child(_label("🎧 イヤホン推奨", 22))
+	var phones := _label("🎧 イヤホン推奨", 22)
+	root.add_child(phones)
+	_header.append(phones)
 	# GPU を使えていないブラウザ: 重くなる理由と、直し方を出す
 	if Device.light_mode():
 		var note := _label("このブラウザは GPU を使っていないので重くなります(軽い動きにしています)。\nChrome の設定 → システム →「グラフィック アクセラレーションが使用可能な場合は使用する」をオンにすると軽くなります", 18)
 		note.add_theme_color_override("font_color", Color("B4372B"))
 		root.add_child(note)
+		_header.append(note)
 	_status = _label("", 22)
 	root.add_child(_status)
 
@@ -224,6 +230,7 @@ func _build_profile_rows(parent: VBoxContainer) -> void:
 		var col: Color = c
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(38, 38)
+		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		b.focus_mode = Control.FOCUS_NONE
 		b.pressed.connect(func() -> void: _set_color(col))
 		color_row.add_child(b)
@@ -300,12 +307,16 @@ func _show_acc() -> void:
 	show_menu()
 	_menu.visible = false
 	_acc_box.visible = true
+	for h in _header:
+		h.visible = false
 	_acc_preview.prepare(Profile.color, Profile.accessories)
 	_acc_preview.set_active(true)
 	_update_acc()
 
 
 func _hide_acc() -> void:
+	for h in _header:
+		h.visible = true
 	if _acc_box:
 		_acc_box.visible = false
 		_acc_preview.set_active(false)
