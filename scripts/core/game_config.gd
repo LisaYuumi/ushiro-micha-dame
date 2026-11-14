@@ -246,11 +246,11 @@ const BLACKOUT_ROUND_MAX := 3
 const BLACKOUT_START_LAPS_MIN := 0.25
 const BLACKOUT_START_LAPS_MAX := 0.8
 ## 停電中の明るさ(0 = 真っ黒、1 = ふだんどおり)
-const BLACKOUT_BRIGHTNESS := 0.12
+const BLACKOUT_BRIGHTNESS := 0.03
 ## 稲光の間かく(秒。この範囲でランダム)と、稲光で見える明るさ
 const BLACKOUT_LIGHTNING_MIN := 6.0
 const BLACKOUT_LIGHTNING_MAX := 12.0
-const BLACKOUT_LIGHTNING_BRIGHTNESS := 0.8
+const BLACKOUT_LIGHTNING_BRIGHTNESS := 0.45
 ## 鬼の懐中電灯で見える丸の大きさ(画面の高さに対する割合)と、その中の明るさ
 const BLACKOUT_FLASHLIGHT_RADIUS := 0.3
 const BLACKOUT_FLASHLIGHT_BRIGHTNESS := 0.6

@@ -210,7 +210,9 @@ func sync(state: GameState, delta: float) -> void:
 		_handkerchief.visible = true
 		_carry_item(_actor_nodes.get(holder.id) as CharacterModel)
 	else:
-		_handkerchief.visible = state.handkerchief_on_floor
+		# 停電中は、落とし物はだれにも見えない(誰の後ろに落ちたか、みんなわからなくなる)。落とした鬼だけは見える
+		var dark_hide := state.blackout and state.local_player_id != state.oni_id
+		_handkerchief.visible = state.handkerchief_on_floor and not dark_hide
 		_handkerchief.transform = Transform3D(Basis.IDENTITY, state.handkerchief_position)
 	_hide_item_if_not_visible_to_me(state)
 	_update_footsteps(state)
