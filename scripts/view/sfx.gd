@@ -65,7 +65,8 @@ static func player_2d(parent: Node, vol_db: float = 0.0) -> AudioStreamPlayer:
 	p.bus = BUS_SFX
 	p.volume_db = vol_db
 	# Godot が自分で混ぜる方式(STREAM)で鳴らす。ブラウザの「サンプル再生」は Android の Chrome で鳴らなかった。
-	# 震え(音のとぎれ)は、出力の余裕を大きくし(project.godot の output_latency.web)、効果音を WAV にして減らす
+	# 震え(音のとぎれ)は、効果音を WAV にして軽くして減らす。
+	# (project.godot で出力の余裕 output_latency.web を変えたら iPhone で鳴らなくなったので、設定は変えない)
 	p.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	parent.add_child(p)
 	return p
