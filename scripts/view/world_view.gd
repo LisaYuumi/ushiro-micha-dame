@@ -163,6 +163,9 @@ func build(state: GameState) -> void:
 	_room_state = state
 	if _beach:
 		_build_beach()
+		# 砂浜には椅子がないので、座る場所に丸いあとをつける
+		for i in state.seat_positions.size():
+			BeachStage.seat_mark(self, state.seat_positions[i])
 	else:
 		_build_floor()
 		for i in state.seat_positions.size():

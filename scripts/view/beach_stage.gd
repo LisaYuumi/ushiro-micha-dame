@@ -198,6 +198,27 @@ static func _parasol(v: WorldView, at: Vector3, col: Color) -> void:
 	v.add_child(root)
 
 
+## 座る場所の丸いあと(砂浜には椅子がないので、空いた席の場所がわかるように)。
+## 少し濃い砂の丸に、うすい砂のふち(砂がへこんだ感じ)
+static func seat_mark(v: WorldView, pos: Vector3) -> void:
+	var rim := CylinderMesh.new()
+	rim.top_radius = 0.46
+	rim.bottom_radius = 0.46
+	rim.height = 0.012
+	rim.radial_segments = 28
+	var rm := Toon.mesh(rim, COLOR_SAND_LIGHT, 0.0)
+	rm.position = Vector3(pos.x, 0.006, pos.z)
+	v.add_child(rm)
+	var dent := CylinderMesh.new()
+	dent.top_radius = 0.37
+	dent.bottom_radius = 0.37
+	dent.height = 0.014
+	dent.radial_segments = 28
+	var dm := Toon.mesh(dent, COLOR_WET_SAND, 0.015)
+	dm.position = Vector3(pos.x, 0.009, pos.z)
+	v.add_child(dm)
+
+
 # --- 落とし物 ---
 
 ## 落とし物の大きさ(持ち方と、床に置く高さに使う)
