@@ -361,7 +361,33 @@ func _round_level() -> int:
 	return 1 if state.round_index < 2 else 2
 
 
+## 重さの記録(ブラウザの開発者ツールのコンソールに、5秒ごとに出す)
+var _perf_left := 5.0
+var _perf_frames := 0
+var _perf_worst := 0.0
+
+
+func _log_perf(delta: float) -> void:
+	_perf_frames += 1
+	_perf_worst = maxf(_perf_worst, delta)
+	_perf_left -= delta
+	if _perf_left > 0.0:
+		return
+	print("perf fps=%d worst=%.0fms process=%.1fms physics=%.1fms draws=%d objects=%d prims=%dk nodes=%d" % [
+		Engine.get_frames_per_second(), _perf_worst * 1000.0,
+		Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+		Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
+		Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+		Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME),
+		Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000,
+		Performance.get_monitor(Performance.OBJECT_NODE_COUNT)])
+	_perf_left = 5.0
+	_perf_frames = 0
+	_perf_worst = 0.0
+
+
 func _process(delta: float) -> void:
+	_log_perf(delta)
 	_update_music(delta)
 	if _studio:
 		return
