@@ -66,7 +66,14 @@ var _milk_pill_icon: ButtonIcon
 var _milk_bar: Control
 
 
+## 名札(HeadOverlay・層 1)やボタン(層 2)より上に出す物: お知らせのカード・結果カード・真ん中の大きな文字
+var _top: CanvasLayer
+
+
 func _ready() -> void:
+	_top = CanvasLayer.new()
+	_top.layer = 5
+	add_child(_top)
 	_milk = Control.new()
 	_milk.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_milk.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -86,7 +93,7 @@ func _ready() -> void:
 
 	# 画面中央の大きな文字(「お手つき!」など)
 	_message = _make_label(72, Color.WHITE)
-	add_child(_message)
+	_top.add_child(_message)
 	_message.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_message.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -151,7 +158,7 @@ func show_result_card(title: String, sub: String, notes: Array, color: Color, ro
 	st.shadow_offset = Vector2(6, 8)
 	st.set_content_margin_all(32)
 	_result_card.add_theme_stylebox_override("panel", st)
-	add_child(_result_card)
+	_top.add_child(_result_card)
 	_result_card.custom_minimum_size = Vector2(600, 0)
 
 	var col := VBoxContainer.new()
@@ -229,7 +236,7 @@ func show_popup_card(title: String, tags: Array, color: Color, hint: String, sec
 	st.content_margin_top = 36
 	st.content_margin_bottom = 36
 	_popup.add_theme_stylebox_override("panel", st)
-	add_child(_popup)
+	_top.add_child(_popup)
 	var col := VBoxContainer.new()
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_theme_constant_override("separation", 22)
