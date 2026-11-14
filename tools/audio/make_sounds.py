@@ -570,9 +570,14 @@ def write(name, x):
             w.setsampwidth(2)
             w.setframerate(SR)
             w.writeframes(data.tobytes())
-        q = "3" if name.startswith("bgm") or name.startswith("amb") else "5"
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", wav_path, "-c:a", "libvorbis", "-q:a", q,
-                        os.path.join(OUT, name + ".ogg")], check=True)
+        if name.startswith("bgm") or name.startswith("amb"):
+            # BGM・環境音は長いので OGG(小さい)
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", wav_path, "-c:a", "libvorbis", "-q:a", "3",
+                            os.path.join(OUT, name + ".ogg")], check=True)
+        else:
+            # 短い効果音は圧縮しない WAV(22050Hz)。鳴らすたびに OGG をほどく計算がいらないので、スマホで軽い
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", wav_path, "-ar", "22050", "-c:a", "pcm_s16le",
+                            os.path.join(OUT, name + ".wav")], check=True)
 
 
 def main():

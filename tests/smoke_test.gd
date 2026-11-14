@@ -35,6 +35,7 @@ func _initialize() -> void:
 	_test_chaser_never_stops()
 	_test_chase_lanes_and_speed()
 	_test_obstacles()
+	_test_overtake_is_touch()
 	_test_no_otetsuki_during_chase()
 	_test_rounds_with_bots_always_finish()
 	_test_stamp_rules()
@@ -393,6 +394,25 @@ func _test_chase_lanes_and_speed() -> void:
 		s.chase_steer(c.id, 1.0)
 		s.tick(STEP)
 	_check(c.run_r <= float(GameConfig.LANE_RADII[GameConfig.LANE_RADII.size() - 1]) + 0.001, "コースの外側の端より外には出ない")
+
+
+func _test_overtake_is_touch() -> void:
+	# ちがう列(1m 以上はなれた列)で鬼を追い越しても、タッチになる
+	var s := _chasing_state(29)
+	var c := s.get_actor(s.chaser_id)
+	var oni := s.get_actor(s.oni_id)
+	oni.lane = 2
+	oni.steer_by_stick = false
+	var e := {}
+	for i in int(90.0 / STEP):
+		s.chase_lane(c.id, -1)
+		s.tick(STEP)
+		for ev in s.take_events():
+			if ev["type"] == "result":
+				e = ev
+		if not e.is_empty():
+			break
+	_check(not e.is_empty() and e["reason"] == "touched", "ちがう列で追いついても、タッチになる")
 
 
 func _test_obstacles() -> void:

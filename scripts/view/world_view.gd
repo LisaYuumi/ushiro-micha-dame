@@ -26,6 +26,7 @@ var _amb_player: AudioStreamPlayer
 var _clock_player: AudioStreamPlayer3D
 var _curtain_player: AudioStreamPlayer3D
 var _curtain_left := 8.0
+var _clock_left := 0.0
 ## 時計とカーテン(環境音を鳴らす場所)
 var _clock_node: Node3D
 var _curtain_node: Node3D
@@ -467,6 +468,11 @@ func _play_at(a: GameState.Actor, sound_name: String, vol_db: float) -> void:
 func _update_ambience(delta: float) -> void:
 	if _curtain_player == null:
 		return
+	# 時計のカチ・コチ(2秒の音を、2秒ごとに鳴らす。ずっと流しっぱなしにしないので軽い)
+	_clock_left -= delta
+	if _clock_left <= 0.0:
+		_clock_left = 2.0
+		_clock_player.play()
 	_curtain_left -= delta
 	if _curtain_left <= 0.0:
 		_curtain_left = randf_range(9.0, 20.0)
@@ -1324,7 +1330,7 @@ func _build_sounds(state: GameState) -> void:
 	_clock_player.stream = Sfx.get_stream("clock_tick")
 	if _clock_node:
 		_clock_player.global_position = _clock_node.global_position
-	_clock_player.play()
+	_clock_left = 0.0
 	_curtain_player = Sfx.player_3d(self, GameConfig.CURTAIN_VOLUME_DB, 3.0)
 	_curtain_player.stream = Sfx.get_stream("curtain")
 	if _curtain_node:

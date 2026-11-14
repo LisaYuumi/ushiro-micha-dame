@@ -131,6 +131,9 @@ var _round_base_scores: Dictionary = {}
 var obstacles: Array = []
 ## 鬼が最後の1周に入ったことを知らせたか(音の合図のため。ルールには関係しない)
 var _last_lap_told: bool = false
+## 追う人が輪の上をどこまで進んだか(oni_angle と同じく、周を重ねて増えていく角度)。
+## 列がちがっても、鬼に追いついた・追い越したらタッチにするため
+var chaser_progress: float = 0.0
 var _next_obstacle_id: int = 0
 
 ## 席の数(この試合。鬼は別に1人)
@@ -559,6 +562,8 @@ func pick_up(actor_id: int) -> void:
 	# 鬼も内側の列から走り出す(追う人だけが近道を走れないように。スティックを倒すまでは内側へ寄る)
 	oni.lane = 0
 	oni_radius = oni.run_r
+	# 追う人は鬼の後ろ(鬼より先に進んでいない)から始まる
+	chaser_progress = oni_angle - fposmod(oni_angle - runner_angle(a), TAU)
 	_last_lap_told = false
 	_build_obstacles()
 	events.append({"type": "picked_up", "actor": a.id})
@@ -1217,7 +1222,10 @@ func _tick_chase(delta: float) -> void:
 			_last_lap_told = true
 			events.append({"type": "last_lap"})
 
-	if _flat_distance(chaser.position, oni.position) <= GameConfig.TOUCH_DISTANCE:
+	# タッチ: すぐそばまで近づいたら。列がちがっても、輪の上で鬼に追いついた・追い越したらタッチ
+	# (前は近さだけで決めていたので、ちがう列で追い越すとタッチにならなかった)
+	var caught := (oni_angle - chaser_progress) * float(GameConfig.LANE_RADII[1]) <= GameConfig.TOUCH_DISTANCE * 0.5
+	if _flat_distance(chaser.position, oni.position) <= GameConfig.TOUCH_DISTANCE or caught:
 		_finish(chaser_id, oni_id, "touched")
 	elif sat:
 		_sit(oni, vacant_seat)
@@ -1252,6 +1260,8 @@ func _run(a: Actor, delta: float, is_oni: bool) -> void:
 		ang = minf(ang, oni_seat_angle)
 		oni_angle = ang
 		oni_radius = a.run_r
+	else:
+		chaser_progress += step
 	a.position = _ring_point(ang, a.run_r)
 	# 走る向き(列を変えている間は少し斜め)
 	var forward := Vector3(cos(ang), 0.0, -sin(ang))

@@ -11,8 +11,8 @@ config/features=PackedStringArray("4.5", "GL Compatibility")
 
 [audio]
 
-general/default_playback_type.web=1
-driver/output_latency.web=80
+general/default_playback_type.web=0
+driver/output_latency.web=150
 
 [display]
 
