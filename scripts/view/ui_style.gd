@@ -127,6 +127,7 @@ static func fit(ctrl: Control, base: int, max_w: float, min_size: int = 12) -> v
 
 
 static func refit_all() -> void:
+	var t0 := Time.get_ticks_usec()
 	var keep: Array = []
 	for f in _fits:
 		var c: Control = (f[0] as WeakRef).get_ref()
@@ -135,6 +136,9 @@ static func refit_all() -> void:
 		keep.append(f)
 		_apply_fit(c, f[1], f[2], f[3])
 	_fits = keep
+	var ms := (Time.get_ticks_usec() - t0) / 1000
+	if ms >= 10:
+		print("slow refit %dms (%d items)" % [ms, keep.size()])
 
 
 static func _apply_fit(ctrl: Control, base: int, max_w: float, min_size: int) -> void:
