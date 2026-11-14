@@ -158,6 +158,9 @@ func _ready() -> void:
 	_host_box.add_child(_button("スタート", func() -> void: start_pressed.emit(), Vector2(0, 100), true))
 
 	show_menu()
+	# 小物の画面の見本のキャラは、ここで1回だけ作っておく(開くたびに作ると重くて音が止まるので)
+	_acc_preview.prepare(Profile.color, Profile.accessories)
+	_acc_preview.warm_up()
 	# ほかの画面(ボタン)が先にできていても、決まった言語の文字の長さで大きさを合わせ直す
 	UiStyle.refit_all()
 
@@ -273,7 +276,7 @@ func _show_acc() -> void:
 	show_menu()
 	_menu.visible = false
 	_acc_box.visible = true
-	_acc_preview.rebuild(Profile.color, Profile.accessories)
+	_acc_preview.prepare(Profile.color, Profile.accessories)
 	_acc_preview.set_active(true)
 	_update_acc()
 

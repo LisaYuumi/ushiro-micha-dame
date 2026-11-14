@@ -27,8 +27,21 @@ func _init() -> void:
 	_vp.add_child(sun)
 
 
+var _color := Color(0, 0, 0, 0)
+
+
+## 見本を用意する: 体の色が前と同じなら作り直さず、小物だけ変える
+## (キャラを作るのは重いので、小物の画面を開くたびに作ると音が止まる。ゲームを開いたときに1回作っておく)
+func prepare(color: Color, acc: Dictionary) -> void:
+	if _model and color.is_equal_approx(_color):
+		_model.set_accessories(acc)
+		return
+	rebuild(color, acc)
+
+
 ## 体の色と小物で、見本を作り直す
 func rebuild(color: Color, acc: Dictionary) -> void:
+	_color = color
 	if _model:
 		_model.queue_free()
 	_model = CharacterModel.new()
@@ -48,6 +61,11 @@ func set_accessories(acc: Dictionary) -> void:
 func set_active(v: bool) -> void:
 	_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if v else SubViewport.UPDATE_DISABLED
 	set_process(v)
+
+
+## 見えないまま1回だけ描いておく(初めて開いたときに、描く準備で止まらないように)
+func warm_up() -> void:
+	_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
 func _process(delta: float) -> void:
