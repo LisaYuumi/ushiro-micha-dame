@@ -139,6 +139,8 @@ var chaser_progress: float = 0.0
 var blackout_round: int = -1
 var blackout: bool = false
 var _blackout_angle: float = INF
+## 停電が終わる鬼の角度(停電してから鬼が BLACKOUT_LAPS 周歩いたら、電気がつく)
+var _blackout_end_angle: float = INF
 var _next_obstacle_id: int = 0
 
 ## 席の数(この試合。鬼は別に1人)
@@ -408,7 +410,11 @@ func tick(delta: float) -> void:
 	if not blackout and (phase == Phase.WALKING or phase == Phase.DROPPED) and oni_angle >= _blackout_angle:
 		_blackout_angle = INF
 		blackout = true
+		_blackout_end_angle = oni_angle + TAU * GameConfig.BLACKOUT_LAPS
 		events.append({"type": "blackout"})
+	elif blackout and oni_angle >= _blackout_end_angle:
+		# 鬼が1周したら、電気がつく
+		_lights_on()
 	match phase:
 		Phase.WALKING, Phase.DROPPED:
 			_tick_walking(delta)
@@ -1318,6 +1324,7 @@ func _check_obstacles(a: Actor) -> void:
 ## 停電が終わって電気がつく(停電中でなければ何もしない)
 func _lights_on() -> void:
 	_blackout_angle = INF
+	_blackout_end_angle = INF
 	if blackout:
 		blackout = false
 		events.append({"type": "lights_on"})

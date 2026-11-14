@@ -675,12 +675,23 @@ func _test_blackout() -> void:
 	var g := GameState.new()
 	g.apply_snapshot(s.snapshot())
 	_check(g.blackout, "停電しているかは通信で届く")
-	_run_until(s, "dropped", 120.0)
-	if s.phase == GameState.Phase.DROPPED:
-		var target := s.get_actor_at_seat(s.drop_target_seat)
-		s.take_events()
-		s.pick_up(target.id)
-		_check(not s.blackout and _has(s.take_events(), "lights_on"), "追いかけっこが始まったら電気がつく")
+	# 鬼が1周したら、電気がつく
+	var start := s.oni_angle
+	var lit := _run_until(s, "lights_on", 200.0)
+	_check(not lit.is_empty() and not s.blackout, "鬼が1周したら電気がつく")
+	_check(s.oni_angle - start >= GameConfig.BLACKOUT_LAPS * TAU - 0.01, "電気がつくのは、停電から1周したあと")
+	# それより前に追いかけっこが始まったら、そこで電気がつく
+	var s3 := GameState.new()
+	s3.start_match(7)
+	s3.blackout_round = 0
+	s3.restart_round()
+	_run_until(s3, "blackout", 120.0)
+	_run_until(s3, "dropped", 120.0)
+	if s3.phase == GameState.Phase.DROPPED and s3.blackout:
+		var target := s3.get_actor_at_seat(s3.drop_target_seat)
+		s3.take_events()
+		s3.pick_up(target.id)
+		_check(not s3.blackout and _has(s3.take_events(), "lights_on"), "追いかけっこが始まったら電気がつく")
 	# 停電しないラウンドでは停電しない
 	var s2 := GameState.new()
 	s2.start_match(7)

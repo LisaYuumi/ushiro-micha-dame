@@ -247,6 +247,8 @@ const BLACKOUT_ROUND_MAX := 3
 ## 停電するまで、鬼がどれだけ歩くか(周の割合。この範囲でランダム)
 const BLACKOUT_START_LAPS_MIN := 0.25
 const BLACKOUT_START_LAPS_MAX := 0.8
+## 停電してから、鬼が何周歩いたら電気がつくか(それより前に追いかけっこが始まったら、そこでつく)
+const BLACKOUT_LAPS := 1.0
 ## 停電中の明るさ(0 = 真っ黒、1 = ふだんどおり)
 const BLACKOUT_BRIGHTNESS := 0.03
 ## 稲光の間かく(秒。この範囲でランダム)と、稲光で見える明るさ
