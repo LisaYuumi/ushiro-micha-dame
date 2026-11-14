@@ -874,8 +874,8 @@ func _draw_milk() -> void:
 ## 画面の四すみの紫のカギ形(手下のしるし)
 func _build_minion_corners() -> void:
 	var col := Color(0.55, 0.2, 0.7, 0.9)
-	var long := 110.0
-	var thick := 12.0
+	var long := 170.0
+	var thick := 18.0
 	for corner in 4:
 		var right := corner % 2 == 1
 		var bottom := corner >= 2
