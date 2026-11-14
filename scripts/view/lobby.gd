@@ -76,6 +76,11 @@ func _ready() -> void:
 	root.add_child(_title)
 	# 音が手がかりになるゲームなので、イヤホンをすすめる
 	root.add_child(_label("🎧 イヤホン推奨", 22))
+	# GPU を使えていないブラウザ: 重くなる理由と、直し方を出す
+	if Device.light_mode():
+		var note := _label("このブラウザは GPU を使っていないので重くなります(軽い動きにしています)。\nChrome の設定 → システム →「グラフィック アクセラレーションが使用可能な場合は使用する」をオンにすると軽くなります", 18)
+		note.add_theme_color_override("font_color", Color("B4372B"))
+		root.add_child(note)
 	_status = _label("", 22)
 	root.add_child(_status)
 

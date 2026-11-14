@@ -119,7 +119,7 @@ func refresh() -> void:
 
 
 func _toggle_mode() -> void:
-	Profile.smooth_audio = not Profile.smooth_audio
+	Profile.smooth_mode = 0 if Profile.smooth_audio() else 1
 	Profile.save()
 	Sfx.apply_playback_type(get_tree().root)
 	_update_labels()
@@ -128,6 +128,6 @@ func _toggle_mode() -> void:
 
 func _update_labels() -> void:
 	if _mode_button:
-		_mode_button.text = tr("音の鳴らし方: %s ▶") % (tr("なめらか(お試し)") if Profile.smooth_audio else tr("ふつう"))
+		_mode_button.text = tr("音の鳴らし方: %s ▶") % (tr("なめらか(お試し)") if Profile.smooth_audio() else tr("ふつう"))
 	for key in _sliders:
 		(_sliders[key][1] as Label).text = "%d%%" % int(round((_sliders[key][0] as HSlider).value * 100.0))

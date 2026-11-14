@@ -236,6 +236,7 @@ EN = {
     "音がガタガタ割れるときは「なめらか」を試してね": "If the sound crackles, try \"Smooth\"",
     "音の鳴らし方: %s ▶": "Sound mode: %s ▶",
     "なめらか(お試し)": "Smooth (beta)",
+    "このブラウザは GPU を使っていないので重くなります(軽い動きにしています)。\nChrome の設定 → システム →「グラフィック アクセラレーションが使用可能な場合は使用する」をオンにすると軽くなります": "This browser is not using the GPU, so the game is slow (light mode is on).\nIn Chrome: Settings > System > turn on \"Use graphics acceleration when available\".",
     "%d点": "%d pts",
     "ゴシゴシ!": "Wipe wipe!",
     # 停電イベント

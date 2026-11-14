@@ -51,15 +51,15 @@ var _jingle_hold := 0.0
 
 func _ready() -> void:
 	InputSetup.register()
+	# GPU を使えていないブラウザでは、軽い動きにする(1秒30コマまで。CPU を休ませて、熱で遅くなるのを防ぐ)
+	print("GPU: %s, light mode: %s" % [Device.gpu_name(), Device.light_mode()])
+	if Device.light_mode():
+		Engine.max_fps = 30
 	# 3D は決まった細かさで描く(画面の大きさが変わったら計算し直す)
 	_update_3d_scale()
 	get_viewport().size_changed.connect(_update_3d_scale)
 	# 音の出力の余裕(ブラウザの開発者ツールで確かめる用)
-	print("audio output latency: %.3f s, mix rate: %d, smooth audio: %s" % [AudioServer.get_output_latency(), AudioServer.get_mix_rate(), Profile.smooth_audio])
-	# ブラウザが絵を描くのに使っている部品(GPU)の名前。「SwiftShader」なら GPU を使わず CPU で描いていて重い
-	if OS.has_feature("web"):
-		var js := "(function(){try{var c=document.createElement('canvas');var g=c.getContext('webgl2')||c.getContext('webgl');if(!g)return 'none';var e=g.getExtension('WEBGL_debug_renderer_info');return e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER);}catch(x){return 'error';}})()"
-		print("GPU: %s" % str(JavaScriptBridge.eval(js)))
+	print("audio output latency: %.3f s, mix rate: %d, smooth audio: %s" % [AudioServer.get_output_latency(), AudioServer.get_mix_rate(), Profile.smooth_audio()])
 	# 音: BGM と、場所のない効果音(ボタン・チャイム・ジングルなど)
 	audio = AudioDirector.new()
 	add_child(audio)
@@ -426,7 +426,9 @@ func _log_perf(delta: float) -> void:
 ## 3D を描く細かさ: 画面の縦の点の数が RENDER_3D_HEIGHT より多ければ、その分だけ小さく描いて引きのばす
 func _update_3d_scale() -> void:
 	var h := float(DisplayServer.window_get_size().y)
-	var s := clampf(GameConfig.RENDER_3D_HEIGHT / maxf(h, 1.0), 0.35, 1.0)
+	# 軽い動きのときは、もっと粗く描く
+	var target := GameConfig.RENDER_3D_HEIGHT_LIGHT if Device.light_mode() else GameConfig.RENDER_3D_HEIGHT
+	var s := clampf(target / maxf(h, 1.0), 0.35, 1.0)
 	get_viewport().scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 	get_viewport().scaling_3d_scale = s
 	print("3D scale: %.2f (window height %d px)" % [s, int(h)])

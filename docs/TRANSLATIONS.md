@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(255)
+## 一覧(256)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -210,6 +210,7 @@
 | 音がガタガタ割れるときは「なめらか」を試してね | If the sound crackles, try "Smooth" |
 | 音の鳴らし方: %s ▶ | Sound mode: %s ▶ |
 | なめらか(お試し) | Smooth (beta) |
+| このブラウザは GPU を使っていないので重くなります(軽い動きにしています)。<br>Chrome の設定 → システム →「グラフィック アクセラレーションが使用可能な場合は使用する」をオンにすると軽くなります | This browser is not using the GPU, so the game is slow (light mode is on).<br>In Chrome: Settings > System > turn on "Use graphics acceleration when available". |
 | %d点 | %d pts |
 | ゴシゴシ! | Wipe wipe! |
 | 停電! | Blackout! |

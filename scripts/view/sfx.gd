@@ -84,7 +84,7 @@ static func player_3d(parent: Node, vol_db: float = 0.0, unit: float = 2.0) -> A
 ## 🔊の画面の「なめらか(お試し)」にすると、ブラウザに混ぜてもらう方式(SAMPLE)。画面の処理が重くても音がとぎれにくいが、
 ## 前に全員をこの方式にしたら Android の Chrome で鳴らなかったので、選んだ人だけ
 static func playback_type() -> int:
-	if Profile.smooth_audio and OS.has_feature("web"):
+	if Profile.smooth_audio() and OS.has_feature("web"):
 		return AudioServer.PLAYBACK_TYPE_SAMPLE
 	return AudioServer.PLAYBACK_TYPE_STREAM
 
