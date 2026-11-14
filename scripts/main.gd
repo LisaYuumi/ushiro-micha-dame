@@ -292,7 +292,8 @@ func _physics_process(delta: float) -> void:
 		hud.set_role_badge(tr("あなたは鬼の手下") if state.minion_id == me.id \
 				and state.phase != GameState.Phase.RESULT else "", Color(0.55, 0.2, 0.7))
 	# 牛乳がかかっている間は、画面が白い
-	hud.set_milk(state.is_milked(me) and state.phase != GameState.Phase.RESULT, state.milk_left_ratio(me))
+	# 追いかけっこで走っている間は、手で牛乳をぬぐって下のほうが見える(すぐ転ばないように)
+	hud.set_milk(state.is_milked(me) and state.phase != GameState.Phase.RESULT, state.milk_left_ratio(me), state.is_runner(me))
 	touch.set_milk_state(state.milk_left, _milk_aiming)
 	var judged := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
 	touch.set_looks_left(me.looks_left if judged else -1)

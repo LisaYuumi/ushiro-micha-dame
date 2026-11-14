@@ -48,6 +48,9 @@ var _milk_a := 0.0
 ## かかってからの時間(しずくがのびる動き)と、晴れるまでの残り(1 → 0)
 var _milk_t := 0.0
 var _milk_left := 1.0
+## 追いかけっこで走っている間は、手で牛乳をぬぐって下のほうが見える(0 = ぬぐっていない、1 = ぬぐった)
+var _milk_wipe := 0.0
+var _milk_wiping := false
 ## 上のまん中の「(牛乳びん) 見えるまで ▭▭▭」の札と、その棒
 var _milk_pill: PanelContainer
 var _milk_bar: Control
@@ -88,6 +91,8 @@ func _process(delta: float) -> void:
 	var want := 1.0 if _milk_on else 0.0
 	if _milk_a != want or (_milk_on and _milk.visible):
 		_milk_a = move_toward(_milk_a, want, delta / (0.15 if _milk_on else 0.8))
+		# 手でぬぐう: 0.5秒くらいで、牛乳が上へよけていく
+		_milk_wipe = move_toward(_milk_wipe, 1.0 if _milk_wiping else 0.0, delta / 0.5)
 		_milk_t = _milk_t + delta if _milk_on else _milk_t
 		_milk.visible = _milk_a > 0.0
 		_milk.modulate.a = _milk_a
@@ -664,11 +669,17 @@ func flash_stamp(color: Color) -> void:
 
 ## 牛乳がかかっている間は、上から白い牛乳がたれてくる(鬼の影や向かいの人の後ろが見えにくい)。
 ## left: 晴れるまでの残り(1 → 0)。上のまん中の「見えるまで」の棒に出す
-func set_milk(on: bool, left: float = 1.0) -> void:
+## wiped: 走っているので、手でぬぐって下のほうを見えるようにする(走っていて転ばないように)
+func set_milk(on: bool, left: float = 1.0, wiped: bool = false) -> void:
 	if on and not _milk_on:
 		_milk_t = 0.0
+		_milk_wipe = 0.0
 	_milk_on = on
 	_milk_left = clampf(left, 0.0, 1.0)
+	if wiped and not _milk_wiping and on:
+		# 「ゴシゴシ」: ぬぐいはじめ
+		show_message(tr("ゴシゴシ!"), Color(0.3, 0.45, 0.7), 0.8)
+	_milk_wiping = wiped
 
 
 func is_milk_shown() -> bool:
@@ -729,10 +740,12 @@ func _draw_milk() -> void:
 	var tex := MilkArt.texture(sz)
 	if tex:
 		var drop := -(1.0 - grow) * sz.y * 0.6 + sin(t * 1.3) * 3.0
+		# 手でぬぐったら、牛乳は上のほうだけに(走る先の下半分が見える)
+		drop -= _milk_wipe * sz.y * GameConfig.MILK_WIPE_UP
 		_milk.draw_texture_rect(tex, Rect2(Vector2(0, drop), sz), false)
-	# 落ちていく粒(しずくの下から、ゆっくり落ちてくり返す)
+	# 落ちていく粒(しずくの下から、ゆっくり落ちてくり返す)。ぬぐったら出さない
 	var band := sz.y * MilkArt.BAND
-	for i in 7:
+	for i in (0 if _milk_wipe > 0.5 else 7):
 		var x := sz.x * (0.08 + 0.135 * float(i)) + sin(float(i) * 4.1) * 20.0
 		var start := band + sz.y * 0.12
 		var fall := fmod(t * (40.0 + 12.0 * float(i % 3)) + float(i) * 97.0, sz.y * 0.3)

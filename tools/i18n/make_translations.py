@@ -201,6 +201,7 @@ EN = {
     "だったよ!": " ",
     "鬼がかって +%d点": "Oni won +%d",
     "%d点": "%d pts",
+    "ゴシゴシ!": "Wipe wipe!",
     # 停電イベント
     "停電!": "Blackout!",
     "次のラウンドは停電": "Next round: blackout",
