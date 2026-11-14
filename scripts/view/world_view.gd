@@ -1078,7 +1078,7 @@ func _build_milk_ring(color: Color = ButtonIcon.MILK_BLUE) -> Node3D:
 	var dash := BoxMesh.new()
 	dash.size = Vector3(0.16, 0.01, 0.045)
 	var n := 18
-	var r := 0.62
+	var r := MILK_RING_RADIUS
 	for i in n:
 		var mi := MeshInstance3D.new()
 		mi.mesh = dash
@@ -1112,6 +1112,11 @@ func set_milk_aim(on: bool) -> void:
 	_milk_aim = on
 
 
+## 足もとの青い丸の大きさと高さ(タップの当たり判定にも使う)
+const MILK_RING_RADIUS := 0.62
+const MILK_RING_Y := 0.04
+
+
 func _update_milk_ring(state: GameState, delta: float) -> void:
 	for a in state.actors:
 		var on := _milk_aim and state.can_milk(a.id)
@@ -1123,7 +1128,7 @@ func _update_milk_ring(state: GameState, delta: float) -> void:
 			_milk_rings[a.id] = ring
 		ring.visible = on
 		if on:
-			ring.position = Vector3(a.position.x, 0.04, a.position.z)
+			ring.position = Vector3(a.position.x, MILK_RING_Y, a.position.z)
 			ring.rotation.y += delta * 0.6
 
 
@@ -1477,6 +1482,27 @@ func pick_actor_at(state: GameState, screen_pos: Vector2) -> int:
 			if d < best_dist:
 				best_dist = d
 				best = a.id
+	if best >= 0:
+		return best
+	# 牛乳・水鉄砲の相手を選んでいる間は、足もとの青い丸をタップしても選べる
+	# (タップした場所を床の上に移して、丸の中に入っているか)
+	var from := cam.project_ray_origin(screen_pos)
+	var dir := cam.project_ray_normal(screen_pos)
+	if absf(dir.y) < 0.0001:
+		return -1
+	var t := (MILK_RING_Y - from.y) / dir.y
+	if t <= 0.0:
+		return -1
+	var hit := from + dir * t
+	var best_r := MILK_RING_RADIUS + 0.15
+	for id in _milk_rings:
+		var ring: Node3D = _milk_rings[id]
+		if not ring.visible:
+			continue
+		var dr := Vector2(hit.x - ring.position.x, hit.z - ring.position.z).length()
+		if dr < best_r:
+			best_r = dr
+			best = id
 	return best
 
 

@@ -41,6 +41,8 @@ var _lang_button: Button
 var _volume_box: VBoxContainer
 var _volume_panel: VolumePanel
 var _preview: Panel
+## ブラウザ版の入力の窓(ページを止めないので、入力している間も音が止まらない)
+var _web_input: WebInput
 ## 小物の画面(見本のキャラと、小物ごとの形・色のボタン)
 var _acc_box: VBoxContainer
 var _acc_preview: AccessoryPreview
@@ -51,6 +53,8 @@ var _acc_color_buttons := {}
 
 func _ready() -> void:
 	layer = 10
+	_web_input = WebInput.new()
+	add_child(_web_input)
 	Profile.load_saved()
 	# 言語: 自分で選んだ言語、なければ端末の言語
 	Locale.setup(Profile.lang)
@@ -399,9 +403,10 @@ func _show_words() -> void:
 
 func _ask_word(kind: String) -> void:
 	var now: String = Profile.stamp_words.get(kind, Texts.stamp_word(kind))
-	var t := _prompt(tr("%s の言葉(%d文字まで)") % [Texts.STAMP_EMOJI[kind], WordFilter.MAX_LEN], now)
-	if t != "":
-		_set_word(kind, t)
+	_web_input.ask(tr("%s の言葉(%d文字まで)") % [Texts.STAMP_EMOJI[kind], WordFilter.MAX_LEN], now, WordFilter.MAX_LEN,
+			func(t: String) -> void:
+				if t != "":
+					_set_word(kind, t))
 
 
 ## 言葉を決める: チェックを通ったら保存。だめなら理由を出して、前の言葉のまま
@@ -447,13 +452,17 @@ func _update_words() -> void:
 
 
 func _ask_name() -> void:
-	var t := _prompt(tr("名前(%d文字まで)") % Profile.NAME_MAX, Profile.player_name)
-	if t != "":
-		_set_name(t)
+	_web_input.ask(tr("名前(%d文字まで)") % Profile.NAME_MAX, Profile.player_name, Profile.NAME_MAX,
+			func(t: String) -> void:
+				if t != "":
+					_set_name(t))
 
 
 func _ask_color() -> void:
-	var t := _prompt("カラーコード(例: #4D96FF)", "#" + Profile.color.to_html(false))
+	_web_input.ask(tr("カラーコード(例: #4D96FF)"), "#" + Profile.color.to_html(false), 9, _set_color_code)
+
+
+func _set_color_code(t: String) -> void:
 	if t == "":
 		return
 	var c := Profile.parse_color(t, Color(0, 0, 0, 0))
@@ -463,10 +472,6 @@ func _ask_color() -> void:
 	_set_color(c)
 
 
-## ブラウザの入力ダイアログ(キャンセルなら "")
-func _prompt(question: String, current: String) -> String:
-	var r = JavaScriptBridge.eval("prompt(%s, %s)" % [JSON.stringify(question), JSON.stringify(current)], true)
-	return "" if r == null else str(r)
 
 
 func _set_name(text: String) -> void:

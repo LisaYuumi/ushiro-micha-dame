@@ -242,6 +242,7 @@ the minion…"
 四角メガネ,四角メガネ,Square
 つける,つける,Wear
 なし,なし,None
+キャンセル,キャンセル,Cancel
 音がガタガタ割れるときは「なめらか」を試してね,音がガタガタ割れるときは「なめらか」を試してね,"If the sound crackles, try ""Smooth"""
 音の鳴らし方: %s ▶,音の鳴らし方: %s ▶,Sound mode: %s ▶
 なめらか(お試し),なめらか(お試し),Smooth (beta)

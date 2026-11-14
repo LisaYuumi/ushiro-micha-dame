@@ -18,6 +18,8 @@ var _milk_button: Button
 var _milk_label: Label
 ## 海辺の舞台: 牛乳のかわりに水鉄砲
 var _water := false
+## 「落とす」「フェイク」のボタンの落とし物の絵(ラウンドごとに変わる)
+var _item_icons: Array[ButtonIcon] = []
 var _milk_badge: Label
 var _milk_icon: ButtonIcon
 var _milk_inner: Panel
@@ -58,6 +60,7 @@ func _ready() -> void:
 	# (「止まる」ボタンはない。スティックを歩く向きと反対に倒すと止まり、倒し続けると戻る)
 	var drop := _add_button("", "oni_drop", Vector2(1, 1), Rect2(-UiStyle.SAFE - 220, -250, 220, 220), 36)
 	_icon_face(drop, "drop", "落とす", Vector2(96, 80), 32, GameConfig.COLOR_PAPER)
+	_item_icons.append(drop.get_child(drop.get_child_count() - 1).get_child(0) as ButtonIcon)
 	_oni_buttons.append(drop)
 	# 牛乳(押す→「えいっ」になる→座っている人をタップしてかける。もう一度押すとやめる。1ラウンド1回)
 	_milk_button = _add_button("", "oni_milk", Vector2(1, 1), Rect2(-UiStyle.SAFE - 385, -250, 150, 118), 24)
@@ -82,6 +85,7 @@ func _ready() -> void:
 	_oni_buttons.append(_milk_button)
 	var fake := _add_button("", "oni_feint", Vector2(1, 1), Rect2(-UiStyle.SAFE - 385, -122, 150, 92), 22)
 	_icon_face(fake, "fake", "フェイク", Vector2(84, 46), 22, GameConfig.COLOR_INK)
+	_item_icons.append(fake.get_child(fake.get_child_count() - 1).get_child(0) as ButtonIcon)
 	_oni_buttons.append(fake)
 	# 追いかけっこ中のバナナの皮(下のまん中)
 	_chase_buttons.append(_add_button("鬼にバナナ", "banana_oni", Vector2(0.5, 1), Rect2(-300, -110, 280, 90), 28))
@@ -183,6 +187,13 @@ func set_looks_left(n: int) -> void:
 
 ## 牛乳ボタンの見た目: 使える(白地に青の内枠・牛乳びん)/相手を選んでいる(青く光る・かたむけたパック・「えいっ」)/
 ## 使ったあと(灰色・倒れた空っぽのパック・「からっぽ」・押せない)。右上の角に残りの回数
+## このラウンドの落とし物の絵にする(ButtonIcon.item_key)
+func set_item_icon(key: String) -> void:
+	for ic in _item_icons:
+		if ic:
+			ic.item = key
+
+
 func set_water(v: bool) -> void:
 	if _water == v:
 		return

@@ -262,6 +262,8 @@ func _build_view() -> void:
 	var water := state.stage == "beach"
 	hud.set_water(water)
 	touch.set_water(water)
+	# 「落とす」「フェイク」のボタンの絵は、このラウンドの落とし物
+	touch.set_item_icon(ButtonIcon.item_key(state.stage, state.round_index))
 
 
 ## ラウンドが変わったときに、画面とボットを作り直す
