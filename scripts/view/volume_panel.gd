@@ -6,6 +6,8 @@ extends VBoxContainer
 const ROWS := [["全体", "vol_master"], ["BGM", "vol_bgm"], ["効果音", "vol_sfx"]]
 
 var _sliders := {}
+## 音の鳴らし方の切りかえボタン(ふつう ⇔ なめらか・お試し)
+var _mode_button: Button
 
 
 func _ready() -> void:
@@ -49,6 +51,16 @@ func _ready() -> void:
 		pct.custom_minimum_size = Vector2(70, 0)
 		row.add_child(pct)
 		_sliders[key] = [sl, pct]
+	if OS.has_feature("web"):
+		_mode_button = Button.new()
+		_mode_button.custom_minimum_size = Vector2(0, 56)
+		_mode_button.focus_mode = Control.FOCUS_NONE
+		UiStyle.button(_mode_button, false, 22)
+		_mode_button.pressed.connect(_toggle_mode)
+		add_child(_mode_button)
+		var hint := UiStyle.label("音がガタガタ割れるときは「なめらか」を試してね", 18, GameConfig.COLOR_INK.lightened(0.3))
+		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		add_child(hint)
 	_update_labels()
 
 
@@ -62,6 +74,10 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventScreenTouch:
 		var t := event as InputEventScreenTouch
+		if t.pressed and _mode_button and _mode_button.get_global_rect().has_point(t.position):
+			_toggle_mode()
+			get_viewport().set_input_as_handled()
+			return
 		if t.pressed:
 			for key in _sliders:
 				var sl: HSlider = _sliders[key][0]
@@ -102,6 +118,16 @@ func refresh() -> void:
 	_update_labels()
 
 
+func _toggle_mode() -> void:
+	Profile.smooth_audio = not Profile.smooth_audio
+	Profile.save()
+	Sfx.apply_playback_type(get_tree().root)
+	_update_labels()
+	AudioDirector.click()
+
+
 func _update_labels() -> void:
+	if _mode_button:
+		_mode_button.text = tr("音の鳴らし方: %s ▶") % (tr("なめらか(お試し)") if Profile.smooth_audio else tr("ふつう"))
 	for key in _sliders:
 		(_sliders[key][1] as Label).text = "%d%%" % int(round((_sliders[key][0] as HSlider).value * 100.0))

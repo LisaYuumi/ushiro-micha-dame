@@ -31,6 +31,8 @@ static var vol_sfx := 1.0
 static var stage := "classroom"
 ## 小物(Accessories の形)
 static var accessories := {}
+## 音の鳴らし方: true = ブラウザに音を混ぜてもらう(サンプル再生。画面が重くても音がとぎれにくい・お試し)
+static var smooth_audio := false
 static var _loaded := false
 
 
@@ -52,6 +54,7 @@ static func load_saved() -> void:
 	stamp_words = clean_words(cfg.get_value("profile", "stamp_words", {}))
 	stage = Items.clean_stage(str(cfg.get_value("profile", "stage", "classroom")))
 	accessories = Accessories.clean(cfg.get_value("profile", "accessories", {}))
+	smooth_audio = bool(cfg.get_value("profile", "smooth_audio", false))
 
 
 static func save() -> void:
@@ -67,6 +70,7 @@ static func save() -> void:
 	cfg.set_value("profile", "stamp_words", stamp_words)
 	cfg.set_value("profile", "stage", stage)
 	cfg.set_value("profile", "accessories", accessories)
+	cfg.set_value("profile", "smooth_audio", smooth_audio)
 	cfg.save(PATH)
 
 

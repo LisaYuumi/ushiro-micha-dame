@@ -29,7 +29,7 @@ func _ready() -> void:
 	for i in 2:
 		var p := AudioStreamPlayer.new()
 		p.bus = Sfx.BUS_BGM
-		p.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
+		p.playback_type = Sfx.playback_type()
 		p.volume_db = -80.0
 		add_child(p)
 		_bgm.append(p)

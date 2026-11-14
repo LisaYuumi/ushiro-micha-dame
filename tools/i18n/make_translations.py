@@ -233,6 +233,9 @@ EN = {
     "四角メガネ": "Square",
     "つける": "Wear",
     "なし": "None",
+    "音がガタガタ割れるときは「なめらか」を試してね": "If the sound crackles, try \"Smooth\"",
+    "音の鳴らし方: %s ▶": "Sound mode: %s ▶",
+    "なめらか(お試し)": "Smooth (beta)",
     "%d点": "%d pts",
     "ゴシゴシ!": "Wipe wipe!",
     # 停電イベント

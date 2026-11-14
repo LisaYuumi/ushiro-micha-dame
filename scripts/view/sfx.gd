@@ -64,10 +64,7 @@ static func player_2d(parent: Node, vol_db: float = 0.0) -> AudioStreamPlayer:
 	var p := AudioStreamPlayer.new()
 	p.bus = BUS_SFX
 	p.volume_db = vol_db
-	# Godot が自分で混ぜる方式(STREAM)で鳴らす。ブラウザの「サンプル再生」は Android の Chrome で鳴らなかった。
-	# 震え(音のとぎれ)は、効果音を WAV にして軽くして減らす。
-	# (project.godot で出力の余裕 output_latency.web を変えたら iPhone で鳴らなくなったので、設定は変えない)
-	p.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
+	p.playback_type = playback_type()
 	parent.add_child(p)
 	return p
 
@@ -78,6 +75,28 @@ static func player_3d(parent: Node, vol_db: float = 0.0, unit: float = 2.0) -> A
 	p.bus = BUS_SFX
 	p.volume_db = vol_db
 	p.unit_size = unit
-	p.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
+	p.playback_type = playback_type()
 	parent.add_child(p)
 	return p
+
+
+## 音の鳴らし方。ふだんは Godot が自分で混ぜる方式(STREAM)。
+## 🔊の画面の「なめらか(お試し)」にすると、ブラウザに混ぜてもらう方式(SAMPLE)。画面の処理が重くても音がとぎれにくいが、
+## 前に全員をこの方式にしたら Android の Chrome で鳴らなかったので、選んだ人だけ
+static func playback_type() -> int:
+	if Profile.smooth_audio and OS.has_feature("web"):
+		return AudioServer.PLAYBACK_TYPE_SAMPLE
+	return AudioServer.PLAYBACK_TYPE_STREAM
+
+
+## 鳴らし方を切りかえたあと: 今ある全部のプレイヤーに当てる(鳴っている BGM・環境音は、同じ位置から鳴らし直す)
+static func apply_playback_type(root: Node) -> void:
+	var t := playback_type()
+	for n in root.find_children("*", "", true, false):
+		if n is AudioStreamPlayer or n is AudioStreamPlayer2D or n is AudioStreamPlayer3D:
+			var playing: bool = n.playing
+			var pos: float = n.get_playback_position() if playing else 0.0
+			n.stop()
+			n.playback_type = t
+			if playing:
+				n.play(pos)

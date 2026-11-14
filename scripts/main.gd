@@ -55,7 +55,11 @@ func _ready() -> void:
 	_update_3d_scale()
 	get_viewport().size_changed.connect(_update_3d_scale)
 	# 音の出力の余裕(ブラウザの開発者ツールで確かめる用)
-	print("audio output latency: %.3f s, mix rate: %d" % [AudioServer.get_output_latency(), AudioServer.get_mix_rate()])
+	print("audio output latency: %.3f s, mix rate: %d, smooth audio: %s" % [AudioServer.get_output_latency(), AudioServer.get_mix_rate(), Profile.smooth_audio])
+	# ブラウザが絵を描くのに使っている部品(GPU)の名前。「SwiftShader」なら GPU を使わず CPU で描いていて重い
+	if OS.has_feature("web"):
+		var js := "(function(){try{var c=document.createElement('canvas');var g=c.getContext('webgl2')||c.getContext('webgl');if(!g)return 'none';var e=g.getExtension('WEBGL_debug_renderer_info');return e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER);}catch(x){return 'error';}})()"
+		print("GPU: %s" % str(JavaScriptBridge.eval(js)))
 	# 音: BGM と、場所のない効果音(ボタン・チャイム・ジングルなど)
 	audio = AudioDirector.new()
 	add_child(audio)
