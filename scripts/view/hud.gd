@@ -291,7 +291,7 @@ func _build_minion_card(parent: Container, minion: Dictionary) -> void:
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var people: Array = minion.get("people", [])
 	var two := people.size() >= 2
-	holder.custom_minimum_size = Vector2(420 if two else 360, 236)
+	holder.custom_minimum_size = Vector2(420 if two else 360, 250)
 	holder.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	parent.add_child(holder)
 	_minion_card = holder
@@ -308,13 +308,13 @@ func _build_minion_card(parent: Container, minion: Dictionary) -> void:
 	bcol.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bcol.alignment = BoxContainer.ALIGNMENT_CENTER
 	back.add_child(bcol)
-	var q1 := UiStyle.label("手下はだれ?", 30, Color.WHITE)
+	var q1 := UiStyle.label("手下はだれ?", 26, Color.WHITE)
 	q1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bcol.add_child(q1)
-	var q2 := UiStyle.label("?", 84, Color.WHITE)
+	var q2 := UiStyle.label("?", 60, Color.WHITE)
 	q2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bcol.add_child(q2)
-	var hint := UiStyle.pill("タップでめくってね", 22)
+	var hint := UiStyle.pill("タップでめくってね", 18)
 	(hint.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = Color("F2E6FA")
 	hint.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	bcol.add_child(hint)
