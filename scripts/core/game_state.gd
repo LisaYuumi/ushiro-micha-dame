@@ -135,7 +135,7 @@ var _next_obstacle_id: int = 0
 
 ## 席の数(この試合。鬼は別に1人)
 var seat_count: int = GameConfig.SEAT_COUNT
-## 鬼は人だけにするか(オンラインの試遊用)
+## オンラインの試合か(最初の鬼は人から選ぶ。次からは、ボットでも負けた人が鬼)
 var humans_only_oni: bool = false
 ## ラウンドを始めるたびに1つ増える(ホスト以外の画面が、見た目を作り直す合図)
 var round_serial: int = 0
@@ -319,17 +319,7 @@ func _lineup_after_result() -> Array:
 		"all_out":
 			# 全員お手つきで抜けた: 鬼はそのまま
 			next_oni = oni_id
-	# オンラインの試遊: 鬼は人だけ。ボットが負けたら、座っている人の中から次の鬼を選ぶ
-	if humans_only_oni and get_actor(next_oni).is_bot:
-		var humans := []
-		for i in seat_ids.size():
-			if not get_actor(seat_ids[i]).is_bot:
-				humans.append(i)
-		if not humans.is_empty():
-			var idx: int = humans[rng.randi_range(0, humans.size() - 1)]
-			var human: int = seat_ids[idx]
-			seat_ids[idx] = next_oni
-			next_oni = human
+	# 負けた人が次の鬼(オンラインでも、ボットが負けたらそのボットが鬼。ボットの鬼はホストが動かす)
 	return [seat_ids, next_oni]
 
 

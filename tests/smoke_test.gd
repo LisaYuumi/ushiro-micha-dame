@@ -1453,8 +1453,9 @@ func _test_online_match_setup() -> void:
 
 
 func _test_humans_only_oni() -> void:
-	# ボットが負けても、次の鬼は人
+	# オンラインでも、負けた人が次の鬼(ボットが負けたら、そのボットが鬼)
 	var ok := 0
+	var bot_oni := 0
 	for seed_value in 20:
 		var s := GameState.new()
 		s.start_match_custom(seed_value, [0, 5], 5, {0: "A", 5: "B"}, true)
@@ -1463,8 +1464,12 @@ func _test_humans_only_oni() -> void:
 		var e := _play_round_with_bots_and_human_oni(s, b)
 		if e.is_empty():
 			continue
+		var loser: int = e["loser"] if e["reason"] != "all_out" else s.oni_id
 		s.next_round()
-		_check(not s.get_actor(s.oni_id).is_bot, "seed %d: 鬼は人だけ" % seed_value)
+		_check(s.oni_id == loser, "seed %d: 負けた人が次の鬼" % seed_value)
+		if s.get_actor(s.oni_id).is_bot:
+			bot_oni += 1
+			_check(not s.oni_is_player, "ボットの鬼は自動で動く")
 		var seated := 0
 		for a in s.actors:
 			if a.role == GameState.Role.SEATED:
@@ -1472,6 +1477,7 @@ func _test_humans_only_oni() -> void:
 		_check(seated == GameConfig.SEAT_COUNT, "席は全部うまっている")
 		ok += 1
 	_check(ok > 0, "(確認用)ためせた")
+	_check(bot_oni > 0, "ボットが負けたら、ボットが鬼になる")
 
 
 func _play_round_with_bots_and_human_oni(s: GameState, b: BotBrain) -> Dictionary:
