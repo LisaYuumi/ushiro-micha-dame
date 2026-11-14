@@ -54,6 +54,12 @@ class Actor:
 	var home_seat: int = -1
 	## 牛乳をかけられたときの鬼の角度(INF = かかっていない)。鬼が半周歩くまで画面が白い
 	var milk_angle: float = INF
+	## 追いかけっこで走っている列(0 内・1 まん中・2 外)と、輪の中心からのいまの距離
+	var lane: int = 1
+	var run_r: float = 0.0
+	## ジャンプしている残り時間(秒)/障害物にもうぶつからない残り時間(秒)
+	var jump_left: float = 0.0
+	var immune_left: float = 0.0
 
 
 ## 席の位置(床の上)
@@ -118,7 +124,10 @@ var _bot_milk_at_drop: bool = false
 var _round_base_scores: Dictionary = {}
 
 ## 床に落ちているバナナの皮 [{"pos": Vector3, "sender": id}]
-var bananas: Array = []
+## 追いかけっこのコースの障害物: [{"id", "angle", "lane", "kind", "high", "sender"}]
+## kind: "bucket"(バケツ・低い)/"chair"(椅子・高い)/"desk"(机・高い)/"banana"(バナナの皮・低い。ぶつかると消える)
+var obstacles: Array = []
+var _next_obstacle_id: int = 0
 
 ## 席の数(この試合。鬼は別に1人)
 var seat_count: int = GameConfig.SEAT_COUNT
@@ -362,7 +371,7 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	oni_entering = false
 	result = {}
 	active_stamps = {}
-	bananas = []
+	obstacles = []
 	milk_left = GameConfig.MILK_PER_ROUND
 	_round_base_scores = scores.duplicate()
 	var step := TAU / seat_count
@@ -540,8 +549,18 @@ func pick_up(actor_id: int) -> void:
 	# 鬼は気づいてすぐ走り出す。空いた席まで(少なくとも一度は)輪を回ってから座る
 	oni_pause_left = 0.0
 	oni_entering = false
+	# 輪の外側を CHASE_LAPS 周してから、空いた席に座る
 	var target := seat_angle(vacant_seat)
-	oni_seat_angle = target + ceilf((oni_angle - target + 0.001) / TAU) * TAU
+	oni_seat_angle = target + ceilf((oni_angle - target + 0.001) / TAU) * TAU + float(GameConfig.CHASE_LAPS - 1) * TAU
+	var oni := get_actor(oni_id)
+	for runner in [a, oni]:
+		var r := Vector2(runner.position.x, runner.position.z).length()
+		runner.run_r = r
+		runner.lane = nearest_lane(r)
+		runner.jump_left = 0.0
+		runner.immune_left = 0.0
+	oni_radius = oni.run_r
+	_build_obstacles()
 	events.append({"type": "picked_up", "actor": a.id})
 
 
@@ -679,8 +698,8 @@ func _plan_bot_milk() -> void:
 	_bot_milk_after = oni_angle + TAU * rng.randf_range(0.3, 1.5)
 
 
-## バナナの皮を投げる。座っている人が、追いかけっこ中に、鬼か追いかける人を狙う。
-## 狙った人の少し前の通り道に落ちる(曲がればよけられる)。投げられたら true
+## バナナの皮を投げる。座っている人(お手つきで抜けた人も)が、追いかけっこ中に、鬼か追いかける人を狙う。
+## 狙った人の少し前の、いま走っている列に落ちる(低い障害物: ジャンプか列を変えればよけられる)。投げられたら true
 func throw_banana(sender_id: int, target_id: int) -> bool:
 	var sender := get_actor(sender_id)
 	var target := get_actor(target_id)
@@ -691,12 +710,109 @@ func throw_banana(sender_id: int, target_id: int) -> bool:
 	if target_id != oni_id and target_id != chaser_id:
 		return false
 	sender.bananas_left -= 1
-	var ang := atan2(target.position.x, target.position.z)
-	var r := Vector2(target.position.x, target.position.z).length()
-	var pos := _ring_point(ang + GameConfig.BANANA_AHEAD / maxf(r, 0.01), r)
-	bananas.append({"pos": pos, "sender": sender_id})
-	events.append({"type": "banana", "sender": sender_id, "target": target_id, "pos": pos})
+	var r: float = GameConfig.LANE_RADII[target.lane]
+	var ang := fposmod(runner_angle(target) + GameConfig.BANANA_AHEAD / r, TAU)
+	var ob := _add_obstacle(ang, target.lane, "banana")
+	ob["sender"] = sender_id
+	events.append({"type": "banana", "sender": sender_id, "target": target_id, "pos": obstacle_position(ob)})
 	return true
+
+
+## 走る人がジャンプする(追いかけっこ中。低い障害物を越えられる)
+func chase_jump(actor_id: int) -> void:
+	var a := get_actor(actor_id)
+	if not is_runner(a) or a.jump_left > 0.0 or a.slip_left > 0.0:
+		return
+	if actor_id == oni_id and oni_entering:
+		return
+	a.jump_left = GameConfig.JUMP_TIME
+	events.append({"type": "jump", "actor": actor_id})
+
+
+## 走る人が列を変える(dir: -1 で内側、+1 で外側)
+func chase_lane(actor_id: int, dir: int) -> void:
+	var a := get_actor(actor_id)
+	if not is_runner(a):
+		return
+	a.lane = clampi(a.lane + signi(dir), 0, GameConfig.LANE_RADII.size() - 1)
+
+
+## 追いかけっこで走っている人か(追いかける人と、鬼)
+func is_runner(a: Actor) -> bool:
+	return a != null and phase == Phase.CHASE and (a.id == chaser_id or a.id == oni_id)
+
+
+## 走る人の、輪の上の角度(0〜TAU)
+func runner_angle(a: Actor) -> float:
+	return fposmod(atan2(a.position.x, a.position.z), TAU)
+
+
+## いちばん近い列の番号
+static func nearest_lane(r: float) -> int:
+	var best := 0
+	for i in GameConfig.LANE_RADII.size():
+		if absf(float(GameConfig.LANE_RADII[i]) - r) < absf(float(GameConfig.LANE_RADII[best]) - r):
+			best = i
+	return best
+
+
+## 障害物の床の上の位置
+func obstacle_position(ob: Dictionary) -> Vector3:
+	return _ring_point(ob["angle"], GameConfig.LANE_RADII[ob["lane"]])
+
+
+## この人の前(同じ列)で、いちばん近い障害物と、そこまでの距離(メートル)。within より遠ければ {}
+func obstacle_ahead(a: Actor, lane: int, within: float) -> Dictionary:
+	var ang := runner_angle(a)
+	var r: float = GameConfig.LANE_RADII[lane]
+	var best := {}
+	var best_d := within
+	for ob in obstacles:
+		if ob["lane"] != lane:
+			continue
+		var d := fposmod(float(ob["angle"]) - ang, TAU) * r
+		if d < best_d:
+			best_d = d
+			best = ob
+	if best.is_empty():
+		return {}
+	return {"obstacle": best, "dist": best_d}
+
+
+func _add_obstacle(angle: float, lane: int, kind: String) -> Dictionary:
+	var ob := {"id": _next_obstacle_id, "angle": angle, "lane": lane, "kind": kind,
+			"high": kind in GameConfig.OBSTACLE_HIGH, "sender": -1}
+	_next_obstacle_id += 1
+	obstacles.append(ob)
+	return ob
+
+
+## コースに障害物を置く(後ろに寄せた机・椅子・バケツ)。だいたい同じ間かくで、1か所に1つ。
+## 走りはじめた2人のすぐ前には置かない
+func _build_obstacles() -> void:
+	obstacles = []
+	var mid: float = GameConfig.LANE_RADII[1]
+	var n := maxi(int(TAU * mid / GameConfig.OBSTACLE_SPACING), 3)
+	var starts := [runner_angle(get_actor(chaser_id)), runner_angle(get_actor(oni_id))]
+	var base := rng.randf() * TAU
+	for k in n:
+		var ang := fposmod(base + TAU * float(k) / float(n) + rng.randf_range(-0.15, 0.15) * TAU / float(n), TAU)
+		var near_start := false
+		for st in starts:
+			var ahead := fposmod(ang - float(st), TAU) * mid
+			if ahead < GameConfig.OBSTACLE_START_CLEAR or ahead > TAU * mid - 1.0:
+				near_start = true
+		if near_start:
+			continue
+		var pick := rng.randf()
+		var kind := "bucket"
+		var acc := 0.0
+		for kname in GameConfig.OBSTACLE_KINDS:
+			acc += float(GameConfig.OBSTACLE_KINDS[kname])
+			if pick <= acc:
+				kind = kname
+				break
+		_add_obstacle(ang, rng.randi_range(0, GameConfig.LANE_RADII.size() - 1), kind)
 
 
 func oni_drop(actor_id: int) -> bool:
@@ -854,6 +970,9 @@ func snapshot(viewer: int = -1) -> Dictionary:
 			"personality": a.personality,
 			"home_seat": a.home_seat,
 			"milk_angle": a.milk_angle,
+			"lane": a.lane,
+			"run_r": a.run_r,
+			"jump_left": a.jump_left,
 		})
 	return {
 		"actors": list,
@@ -872,7 +991,7 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"round": round_index,
 		"scores": scores,
 		"match_over": match_over,
-		"bananas": bananas,
+		"obstacles": obstacles,
 		"milk_left": milk_left,
 		"stamp_words": stamp_words,
 		"round_serial": round_serial,
@@ -914,6 +1033,9 @@ func apply_snapshot(s: Dictionary) -> void:
 		a.personality = d.get("personality", "")
 		a.home_seat = d.get("home_seat", -1)
 		a.milk_angle = d.get("milk_angle", INF)
+		a.lane = d.get("lane", 1)
+		a.run_r = d.get("run_r", 0.0)
+		a.jump_left = d.get("jump_left", 0.0)
 	phase = s["phase"]
 	oni_id = s["oni_id"]
 	oni_is_player = s["oni_is_player"]
@@ -929,7 +1051,7 @@ func apply_snapshot(s: Dictionary) -> void:
 	round_index = s["round"]
 	scores = s["scores"]
 	match_over = s["match_over"]
-	bananas = s["bananas"]
+	obstacles = s.get("obstacles", [])
 	milk_left = s.get("milk_left", 0)
 	stamp_words = s.get("stamp_words", {})
 	round_serial = s["round_serial"]
@@ -1072,24 +1194,20 @@ func _is_out(actor_id: int) -> bool:
 func _tick_chase(delta: float) -> void:
 	var oni := get_actor(oni_id)
 	var chaser := get_actor(chaser_id)
-	if not _slipping(chaser, delta):
-		_move_chaser(chaser, delta)
-		_check_banana(chaser)
+	_run(chaser, delta, false)
 
 	var sat := false
-	if _slipping(oni, delta):
-		pass
-	elif oni_entering:
+	if oni_entering:
 		var seat_pos := seat_positions[vacant_seat]
 		var to_seat := seat_pos - oni.position
 		if to_seat.length() > 0.001:
 			oni.yaw = atan2(-to_seat.x, -to_seat.z)
-		oni.position = oni.position.move_toward(seat_pos, GameConfig.ONI_RUN_SPEED * delta)
+		oni.position = oni.position.move_toward(seat_pos, GameConfig.CHASE_SPEED * delta)
+		oni.jump_left = 0.0
 		sat = oni.position.distance_to(seat_pos) < 0.01
 	else:
-		_move_oni_running(oni, delta)
+		_run(oni, delta, true)
 		oni_entering = oni_angle >= oni_seat_angle
-		_check_banana(oni)
 
 	if _flat_distance(chaser.position, oni.position) <= GameConfig.TOUCH_DISTANCE:
 		_finish(chaser_id, oni_id, "touched")
@@ -1098,65 +1216,57 @@ func _tick_chase(delta: float) -> void:
 		_finish(oni_id, chaser_id, "sat")
 
 
-## 転んでいる間は動けない。転んでいたら true
-func _slipping(a: Actor, delta: float) -> bool:
-	if a.slip_left <= 0.0:
-		return false
-	a.slip_left -= delta
-	return true
-
-
-## バナナの皮を踏んだら転ぶ(皮はなくなる)
-func _check_banana(a: Actor) -> void:
-	for i in bananas.size():
-		if _flat_distance(a.position, bananas[i]["pos"]) <= GameConfig.BANANA_HIT_RADIUS:
-			a.slip_left = GameConfig.SLIP_TIME
-			var b: Dictionary = bananas[i]
-			bananas.remove_at(i)
-			events.append({"type": "slip", "actor": a.id, "sender": b["sender"]})
-			return
-
-
-## 追いかけっこ中の鬼: 空いた席に向かって自動で走る。
-## 人の鬼は、追いかける人と同じく内側/外側に曲がれる。ボットの鬼は輪の上をそのまま走る。
-func _move_oni_running(oni: Actor, delta: float) -> void:
-	var forward := Vector3(cos(oni_angle), 0.0, -sin(oni_angle))
-	var outward := Vector3(sin(oni_angle), 0.0, cos(oni_angle))
-	var steer := 0.0
-	if oni_is_player:
-		steer = clampf(oni.move_dir.dot(outward), -1.0, 1.0) * GameConfig.CHASER_STEER
-	var dir := (forward + outward * steer).normalized()
-	var step := GameConfig.ONI_RUN_SPEED * delta
-	var new_r := clampf(oni_radius + dir.dot(outward) * step, GameConfig.CHASER_MIN_RADIUS, GameConfig.CHASER_MAX_RADIUS)
-	var dr := new_r - oni_radius
-	var forward_step := sqrt(maxf(step * step - dr * dr, 0.0))
-	oni_angle = minf(oni_angle + forward_step / ((oni_radius + new_r) / 2.0), oni_seat_angle)
-	oni_radius = new_r
-	oni.position = _ring_point(oni_angle, oni_radius)
-	oni.yaw = atan2(-dir.x, -dir.z)
-
-
-## 追いかける人を動かす。鬼と同じ向きに自動で走り続け、内側/外側にだけ曲がれる。
-## 席の内側には入れない。立ち止まって待ちぶせはできない。
-func _move_chaser(a: Actor, delta: float) -> void:
-	var ang := atan2(a.position.x, a.position.z)
-	# 鬼が走る向き(角度が増える向き)と、輪の外向き
+## 走る人を1こま進める: 自動で前へ(鬼と同じ向き・同じ速さ)、選んだ列へ横に寄る、ジャンプ、障害物
+func _run(a: Actor, delta: float, is_oni: bool) -> void:
+	a.jump_left = maxf(a.jump_left - delta, 0.0)
+	a.immune_left = maxf(a.immune_left - delta, 0.0)
+	if a.slip_left > 0.0:
+		a.slip_left -= delta
+		return
+	var want: float = GameConfig.LANE_RADII[a.lane]
+	var side := clampf(want - a.run_r, -GameConfig.LANE_CHANGE_SPEED * delta, GameConfig.LANE_CHANGE_SPEED * delta)
+	a.run_r += side
+	var ang := oni_angle if is_oni else runner_angle(a)
+	var step := GameConfig.CHASE_SPEED * delta / maxf(a.run_r, 0.5)
+	ang += step
+	if is_oni:
+		ang = minf(ang, oni_seat_angle)
+		oni_angle = ang
+		oni_radius = a.run_r
+	a.position = _ring_point(ang, a.run_r)
+	# 走る向き(列を変えている間は少し斜め)
 	var forward := Vector3(cos(ang), 0.0, -sin(ang))
 	var outward := Vector3(sin(ang), 0.0, cos(ang))
-	var steer := clampf(a.move_dir.dot(outward), -1.0, 1.0) * GameConfig.CHASER_STEER
-	var dir := (forward + outward * steer).normalized()
-	# 輪の中心からの距離(r)と角度(ang)で動かす。走れる範囲の端に当たったら、
-	# 外/内へ動けなかった分を前へ回して、いつでも同じ速さで走る
-	# 重い落とし物を持っているほど遅い
-	var step := GameConfig.CHASER_SPEED * lerpf(1.0, GameConfig.CARRY_SPEED_HEAVY, item_weight()) * delta
-	var r := Vector2(a.position.x, a.position.z).length()
-	var dr := dir.dot(outward) * step
-	var new_r := clampf(r + dr, GameConfig.CHASER_MIN_RADIUS, GameConfig.CHASER_MAX_RADIUS)
-	dr = new_r - r
-	var forward_step := sqrt(maxf(step * step - dr * dr, 0.0))
-	ang += forward_step / maxf((r + new_r) / 2.0, 0.01)
-	a.position = Vector3(sin(ang), 0.0, cos(ang)) * new_r
+	var dir := (forward * GameConfig.CHASE_SPEED + outward * side / maxf(delta, 0.0001)).normalized()
 	a.yaw = atan2(-dir.x, -dir.z)
+	_check_obstacles(a)
+
+
+## 障害物にぶつかったら転ぶ(鬼も追いかける人も同じ)。高い物はジャンプしても越えられない。
+## 重い物を持っている人(追いかける人)は、起き上がるまでが長い。バナナは踏むと消える
+func _check_obstacles(a: Actor) -> void:
+	if a.immune_left > 0.0:
+		return
+	var ang := runner_angle(a)
+	for i in obstacles.size():
+		var ob: Dictionary = obstacles[i]
+		if absf(a.run_r - float(GameConfig.LANE_RADII[ob["lane"]])) > GameConfig.OBSTACLE_LANE_HALF:
+			continue
+		var arc := absf(wrapf(float(ob["angle"]) - ang, -PI, PI)) * a.run_r
+		if arc > GameConfig.OBSTACLE_HIT_ARC:
+			continue
+		if a.jump_left > 0.0 and not ob["high"]:
+			continue # ジャンプで越えた
+		var t := GameConfig.SLIP_TIME
+		if a.id == chaser_id:
+			t *= lerpf(1.0, GameConfig.SLIP_HEAVY_MULT, item_weight())
+		a.slip_left = t
+		a.immune_left = t + GameConfig.HIT_IMMUNE_TIME
+		a.jump_left = 0.0
+		if ob["kind"] == "banana":
+			obstacles.remove_at(i)
+		events.append({"type": "slip", "actor": a.id, "sender": ob["sender"], "kind": ob["kind"]})
+		return
 
 
 func _finish(winner_id: int, loser_id: int, reason: String) -> void:

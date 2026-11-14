@@ -68,18 +68,34 @@ const LOOK_BACK_LEAN := 0.2
 const MESSAGE_TIME := 1.5
 
 # --- 追いかけっこ ---
-## 鬼が走る速さ(メートル/秒)
-const ONI_RUN_SPEED := 3.0
-## 追いかける人の速さ(メートル/秒)。鬼よりわずかに速い
-const CHASER_SPEED := 3.3
+## 鬼が輪の外側を何周したら、空いた席に座れるか(座れたら鬼の勝ち。それまでにタッチされたら負け)
+const CHASE_LAPS := 2
+## 鬼と追いかける人の走る速さ(メートル/秒)。同じ速さ。走るのは自動
+const CHASE_SPEED := 3.2
 ## この距離(メートル)まで近づいたらタッチ成立
 const TOUCH_DISTANCE := 1.0
-## 追いかける人が走れる範囲(輪の中心からの距離)。席の内側には入れない
-const CHASER_MIN_RADIUS := 3.55
-const CHASER_MAX_RADIUS := 6.0
-## 追いかける人は自動で鬼と同じ向きに走り続ける。操作は内側/外側へのハンドルだけ。
-## 1.0 で、いっぱいに切ると斜め45度に曲がる
-const CHASER_STEER := 1.0
+## コースの3つの列(内・まん中・外)の、輪の中心からの距離(メートル)。内側ほど近道
+const LANE_RADII := [3.8, 4.4, 5.0]
+## 列を変える速さ(メートル/秒、横に動く速さ)
+const LANE_CHANGE_SPEED := 4.0
+## ジャンプしている時間(秒)と高さ(メートル)。低い障害物(バケツ・バナナ)はジャンプで越えられる
+const JUMP_TIME := 0.6
+const JUMP_HEIGHT := 0.55
+## 障害物にぶつかる距離(通り道にそって・メートル)と、同じ列とみなす横のずれ(メートル)
+const OBSTACLE_HIT_ARC := 0.4
+const OBSTACLE_LANE_HALF := 0.3
+## 障害物のおおよその間かく(メートル、まん中の列で)。走りはじめの人の前、この距離には置かない
+const OBSTACLE_SPACING := 4.2
+const OBSTACLE_START_CLEAR := 3.5
+## 障害物の種類と、その割合(低い物はジャンプでも列を変えてもよけられる。高い物は列を変えるしかない)
+const OBSTACLE_KINDS := {"bucket": 0.5, "chair": 0.25, "desk": 0.25}
+const OBSTACLE_HIGH := ["chair", "desk"]
+## 重い物を持って転ぶと、起き上がるまでがこの倍まで長くなる(教卓で最大)
+const SLIP_HEAVY_MULT := 2.2
+## 転んだあと、この秒数は同じ障害物にもう一度ぶつからない
+const HIT_IMMUNE_TIME := 0.6
+## ボットが障害物に気づかずにぶつかる確率(同じ速さなので、ぶつかるとタッチや逃げ切りのチャンスになる)
+const BOT_DODGE_MISS := 0.25
 
 # --- ボット ---
 ## 後ろにハンカチを落とされたボットが気づくまでの時間(秒)。この範囲でランダム。
@@ -89,8 +105,10 @@ const BOT_NOTICE_TIME_MAX := 55.0
 
 # --- 追いかけるときのカメラ ---
 ## 自分が追いかけるとき、カメラを輪の外側のどれだけ後ろ・上に置くか(メートル)
-const CHASE_CAM_DISTANCE := 3.0
-const CHASE_CAM_HEIGHT := 3.2
+const CHASE_CAM_DISTANCE := 3.2
+## 走る人の、どれだけ先を見るか(メートル。後ろから追うカメラ)
+const CHASE_CAM_LOOK_AHEAD := 4.0
+const CHASE_CAM_HEIGHT := 2.4
 ## 自分が鬼のときのカメラ(追いかける人より近く。鬼の背中ごしに輪が見えるくらい)
 const ONI_CAM_DISTANCE := 1.9
 const ONI_CAM_HEIGHT := 2.0
@@ -176,8 +194,6 @@ const OTETSUKI_DAZED_COUNT := 3
 ## 置く音の大きさ(dB)と、聞こえる距離。重いほど大きく遠くまで
 const DROP_VOLUME_DB_HEAVY := 6.0
 const DROP_SOUND_RANGE_HEAVY := 8.0
-## 拾って追いかける人の速さの倍率(重いほど遅い)
-const CARRY_SPEED_HEAVY := 0.7
 ## 落とすまで鬼が持ち歩く間の速さの倍率
 const ONI_CARRY_SPEED_HEAVY := 0.8
 ## ボットが気づくまでの時間の倍率(重いほど音が大きく、早く気づく)
@@ -221,10 +237,8 @@ const OUT_CAM_FOV := 60.0
 # --- バナナの皮 ---
 ## 1人が1ラウンドに投げられる数
 const BANANAS_PER_ROUND := 1
-## 狙った人の、どれだけ前(メートル、通り道にそって)に落ちるか
-const BANANA_AHEAD := 2.5
-## 踏んだと判定する距離(メートル)
-const BANANA_HIT_RADIUS := 0.45
+## 狙った人の、どれだけ前(メートル、通り道にそって)に落ちるか(狙った人のいまの列に落ちる)
+const BANANA_AHEAD := 3.0
 ## 転んで止まる時間(秒)
 const SLIP_TIME := 1.0
 ## ボットが追いかけっこ中にバナナを投げる確率と、投げるまでの時間(秒)

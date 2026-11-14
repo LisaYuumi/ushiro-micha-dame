@@ -10,6 +10,8 @@ var _seated_buttons: Array[Button] = []
 var _oni_buttons: Array[Button] = []
 ## 座っていて、追いかけっこ中だけ出すボタン(バナナの皮)
 var _chase_buttons: Array[Button] = []
+## 追いかけっこで走っているときのボタン(◀ 内側へ・外側へ ▶)。ジャンプは画面のタップ
+var _runner_buttons: Array[Button] = []
 var _look_button: Button
 ## 鬼の「牛乳をかける」ボタンと、表示中の残り回数
 var _milk_button: Button
@@ -79,6 +81,9 @@ func _ready() -> void:
 	# 追いかけっこ中のバナナの皮(下のまん中)
 	_chase_buttons.append(_add_button("鬼にバナナ", "banana_oni", Vector2(0.5, 1), Rect2(-300, -110, 280, 90), 28))
 	_chase_buttons.append(_add_button("追う人にバナナ", "banana_chaser", Vector2(0.5, 1), Rect2(20, -110, 280, 90), 28))
+	# 走っているとき: 左下に「◀ 内側」、右下に「外側 ▶」(スワイプでも同じ)
+	_runner_buttons.append(_add_button("◀ 内側", "lane_in", Vector2(0, 1), Rect2(UiStyle.SAFE, -190, 200, 160), 32))
+	_runner_buttons.append(_add_button("外側 ▶", "lane_out", Vector2(1, 1), Rect2(-UiStyle.SAFE - 200, -190, 200, 160), 32))
 	# 左下: 走るためのスティック
 	var stick := VirtualStick.new()
 	add_child(stick)
@@ -131,6 +136,7 @@ func _build_look_face(b: Button) -> void:
 	badge.add_child(num)
 	b.add_child(badge)
 	badge.position = Vector2(220 - 44, -20)
+	badge.visible = false
 	_look_badge = badge
 	_look_badge_label = num
 
@@ -249,18 +255,20 @@ func _corner_badge(b: Button, pos: Vector2) -> Label:
 	return num
 
 
-## 鬼のとき/座っているとき/座っていて追いかけっこ中/お手つきで抜けたときで、出すボタンを切りかえる
-func set_oni_mode(is_oni: bool, seated_in_chase: bool = false, out: bool = false) -> void:
-	if _mode == [is_oni, seated_in_chase, _result, out]:
+## 鬼のとき/座っているとき/座っていて追いかけっこ中/お手つきで抜けたとき/走っているときで、出すボタンを切りかえる
+func set_oni_mode(is_oni: bool, seated_in_chase: bool = false, out: bool = false, runner: bool = false) -> void:
+	if _mode == [is_oni, seated_in_chase, _result, out, runner]:
 		return
-	_mode = [is_oni, seated_in_chase, _result, out]
+	_mode = [is_oni, seated_in_chase, _result, out, runner]
 	_out = out
 	for b in _seated_buttons:
-		b.visible = not is_oni and not seated_in_chase and not _result and not out
+		b.visible = not is_oni and not seated_in_chase and not _result and not out and not runner
 	for b in _oni_buttons:
-		b.visible = is_oni and not _result
+		b.visible = is_oni and not _result and not runner
 	for b in _chase_buttons:
 		b.visible = seated_in_chase and not _result
+	for b in _runner_buttons:
+		b.visible = runner and not _result
 	# 切りかえで押しっぱなしになった指を離しておく
 	for index in _touch_action.keys():
 		var entry: Dictionary = _touch_action[index]
@@ -323,8 +331,8 @@ const HOW_TO_PLAY := """・振り向く(長押し): 押している間だけ後�
 ・お手つき(なにもないのに振り向く): 輪から抜けて真ん中で休む。そのラウンドは0点。全員の後ろが見えて、だれにでもスタンプを送れる
 ・人をタップ: その人の頭の上にスタンプが出るので、選んで送る(同じ人には1ラウンド1回)
 ・鬼: 自動で前に歩く。スティックを歩く向きに倒すと速く、反対に倒すと止まり、倒し続けると少し戻れる(3歩分まで)。落とす・フェイク(落とす音だけ)・牛乳(牛乳ボタン→「えいっ」になったら、座っている人をタップしてかける。もう一度押すとやめる。画面が半周のあいだ白くなる。1ラウンド1回)
-・追いかけっこ: 自動で走る。スティックの上で内側(近道)、下で外側。座っている人はバナナを投げられる
-キーボード: スペース=振り向く 1〜4=スタンプ M=牛乳 Z X C V=鬼のスタンプ W/S=内側/外側 A/D=鬼の速さ
+・追いかけっこ: 鬼が輪の外側を2周して空いた席に座れば鬼の勝ち、それまでにタッチすれば追いかけた人の勝ち。走るのは自動(2人とも同じ速さ)。タップでジャンプ、左右にスワイプ(か ◀ ▶)で内側・外側の列に動く。低い物(バケツ・バナナ)はジャンプか列を変えて、高い物(椅子・机)は列を変えてよける。ぶつかると転ぶ。座っている人はバナナを投げられる
+キーボード: スペース=振り向く 1〜4=スタンプ M=牛乳 Z X C V=鬼のスタンプ 走るとき: スペース/W=ジャンプ A/D=内側/外側 鬼が歩くとき: A/D=速く/止まる・戻る
  E=落とす F=フェイク B/N=バナナ R=やり直し O=役を変える F1=上から見る K=転ぶ L=牛乳をかぶる(確認用) Tab=メニュー"""
 
 

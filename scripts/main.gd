@@ -17,6 +17,9 @@ var cmds: Object
 var _last_sound := ""
 ## スタンプを送る相手(画面でタップして選ぶ。-1 は未選択)
 var _stamp_target := -1
+## 走っているときのスワイプ: 押しはじめた場所(指の番号 -> 位置)と、スワイプとみなす横の距離(ピクセル)
+var _swipe_start := {}
+const SWIPE_MIN := 60.0
 ## 鬼が牛乳ボタンを押して、かける相手を選んでいるところか(「えいっ」の状態)
 var _milk_aiming := false
 ## ひとりで遊ぶとき、この画面のプレイヤーが鬼をやるか
@@ -213,6 +216,10 @@ func _on_remote_command(peer_id: int, cmd: String, args: Array) -> void:
 			state.oni_milk(id, int(args[0]))
 		"throw_banana":
 			state.throw_banana(id, int(args[0]))
+		"chase_jump":
+			state.chase_jump(id)
+		"chase_lane":
+			state.chase_lane(id, int(args[0]))
 		"send_stamp":
 			state.send_stamp(id, int(args[0]), str(args[1]))
 
@@ -288,9 +295,11 @@ func _physics_process(delta: float) -> void:
 	# 勝敗が出ている間は、名札とゲーム用のボタンを隠して結果カードだけにする(⚙は残す)
 	var showing_result := state.phase == GameState.Phase.RESULT
 	touch.set_result_mode(showing_result)
+	var runner := state.is_runner(me)
 	touch.set_oni_mode(_i_am_oni(),
-			(me.role == GameState.Role.SEATED or out) and state.phase == GameState.Phase.CHASE, out)
-	touch.set_stick_visible(me.role == GameState.Role.ONI or me.role == GameState.Role.CHASER)
+			(me.role == GameState.Role.SEATED or out) and state.phase == GameState.Phase.CHASE, out, runner)
+	# スティックは、鬼が歩いているときだけ(走っているときはタップ・スワイプ・◀▶)
+	touch.set_stick_visible(me.role == GameState.Role.ONI and not runner)
 	var ov := view.get_overlay()
 	if ov:
 		# 牛乳がかかっている間は名札も見えない(鬼の名札で場所がわからないように)。吹き出しは出したまま
@@ -385,6 +394,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _i_am_oni() and event.is_action_pressed("oni_stamp_%d" % i):
 				_send_stamp(Stamps.ALL[i])
 				return
+		# 追いかけっこで走っているとき: タップでジャンプ、左右にスワイプで列を変える
+		if state.is_runner(state.get_local_player()):
+			_runner_touch(event)
+			return
 		# 画面に映っている人をタップ/クリックすると、スタンプを送る相手になる
 		var pos := Vector2(-1, -1)
 		if event is InputEventScreenTouch and event.pressed:
@@ -393,6 +406,36 @@ func _unhandled_input(event: InputEvent) -> void:
 			pos = event.position
 		if pos.x >= 0.0:
 			_on_tap(pos)
+
+
+## 走っているときの指の操作: 押した場所から左右に動かして離したら列を変える(左 = 内側、右 = 外側)。
+## ほとんど動かさずに離したらジャンプ
+func _runner_touch(event: InputEvent) -> void:
+	var key := -1
+	var pos := Vector2.ZERO
+	var pressed := false
+	if event is InputEventScreenTouch:
+		key = (event as InputEventScreenTouch).index
+		pos = (event as InputEventScreenTouch).position
+		pressed = (event as InputEventScreenTouch).pressed
+	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		key = 100
+		pos = (event as InputEventMouseButton).position
+		pressed = (event as InputEventMouseButton).pressed
+	else:
+		return
+	if pressed:
+		_swipe_start[key] = pos
+		return
+	if not _swipe_start.has(key):
+		return
+	var d: Vector2 = pos - _swipe_start[key]
+	_swipe_start.erase(key)
+	var id := state.local_player_id
+	if absf(d.x) > SWIPE_MIN and absf(d.x) > absf(d.y):
+		cmds.chase_lane(id, -1 if d.x < 0.0 else 1)
+	else:
+		cmds.chase_jump(id)
 
 
 ## 「次へ・やり直し」: 勝敗が出ていれば次のラウンドへ、試合が終わっていれば新しい試合、
@@ -639,9 +682,9 @@ func _show_event(e: Dictionary) -> void:
 				hud.show_message("あった!", Color(0.1, 0.5, 0.9), GameConfig.MESSAGE_TIME)
 		"picked_up":
 			if e["actor"] == me:
-				hud.show_message("追いかけろ!", Color(0.1, 0.5, 0.9), GameConfig.MESSAGE_TIME)
+				hud.show_message("追いかけろ!\nタップでジャンプ・左右にスワイプでよける", Color(0.1, 0.5, 0.9), 2.2)
 			elif _i_am_oni():
-				hud.show_message("気づかれた! 逃げろ!", Color(0.85, 0.1, 0.1), GameConfig.MESSAGE_TIME)
+				hud.show_message("気づかれた! 逃げろ!\nタップでジャンプ・左右にスワイプでよける", Color(0.85, 0.1, 0.1), 2.2)
 			else:
 				hud.show_message("%s が追いかけた!" % _name(e["actor"]), Color(0.3, 0.3, 0.3), GameConfig.MESSAGE_TIME)
 		"result":
@@ -767,6 +810,9 @@ func _update_help() -> void:
 	if _i_am_oni() and state.phase == GameState.Phase.WALKING:
 		var laps := int((state.oni_angle - state.oni_start_angle) / TAU) + 1
 		extra = "鬼 %d周目(%d周で自動で落とす)" % [laps, GameConfig.ONI_MAX_LAPS_BEFORE_DROP]
+	elif state.phase == GameState.Phase.CHASE:
+		var laps_left := maxi(int(ceilf((state.oni_seat_angle - state.oni_angle) / TAU)), 1)
+		extra = "鬼が座るまで あと%d周" % laps_left
 	elif _i_am_oni():
 		extra = "あなたは鬼"
 	hud.set_round_info("ラウンド %d/%d" % [state.round_index + 1, GameConfig.ROUNDS_PER_MATCH],

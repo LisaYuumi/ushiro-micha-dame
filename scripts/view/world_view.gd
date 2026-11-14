@@ -27,7 +27,8 @@ var _milk_aim := false
 var _stamp_ring: Node3D
 const STAMP_RING_COLOR := Color("FFC93C")
 ## 床のバナナの皮の見た目(状態の bananas と同じ数だけ出す)
-var _banana_nodes: Array[MeshInstance3D] = []
+## 追いかけっこのコースの障害物(とバナナの皮)の見た目(障害物の id -> Node3D)
+var _obstacle_nodes := {}
 ## 鬼が自分の後ろに来たとき、自分の前の床に映る影
 var _oni_shadow: MeshInstance3D
 var _oni_shadow_mat: StandardMaterial3D
@@ -112,7 +113,7 @@ func build(state: GameState) -> void:
 	_dust_left.clear()
 	_last_pos.clear()
 	_still_time.clear()
-	_banana_nodes.clear()
+	_obstacle_nodes.clear()
 	_milk_nodes.clear()
 
 	_build_environment()
@@ -156,6 +157,9 @@ func sync(state: GameState, delta: float) -> void:
 		var node: Node3D = _actor_nodes.get(a.id)
 		if node:
 			node.position = a.position
+			# ジャンプしている人は、ふわっと上に
+			if a.jump_left > 0.0:
+				node.position.y += sin(PI * (1.0 - a.jump_left / GameConfig.JUMP_TIME)) * GameConfig.JUMP_HEIGHT
 			node.rotation.y = a.yaw
 			var blob: MeshInstance3D = _blobs.get(a.id)
 			if blob:
@@ -173,7 +177,7 @@ func sync(state: GameState, delta: float) -> void:
 	_update_seat_camera(state, delta)
 	if _overlay:
 		_overlay.update(state, get_viewport().get_camera_3d())
-	_update_bananas(state)
+	_update_obstacles(state)
 	_update_oni_shadow(state)
 	_update_milk_ring(state, delta)
 	_clock += delta
@@ -999,24 +1003,111 @@ func _update_milk(state: GameState, a: GameState.Actor, model: CharacterModel) -
 		milk.global_transform = Transform3D(model.global_transform.basis.orthonormalized(), head.origin)
 
 
-## バナナの皮: 状態の bananas に合わせて、黄色い三日月っぽい形を出す
-func _update_bananas(state: GameState) -> void:
-	while _banana_nodes.size() < state.bananas.size():
-		var m := BoxMesh.new()
-		m.size = Vector3(0.32, 0.05, 0.12)
-		var mi := _mesh(m, Color(1.0, 0.85, 0.1))
-		mi.rotation.y = randf() * TAU
-		add_child(mi)
-		_banana_nodes.append(mi)
-	for i in _banana_nodes.size():
-		var shown := i < state.bananas.size()
-		_banana_nodes[i].visible = shown
-		if shown:
-			_banana_nodes[i].position = state.bananas[i]["pos"] + Vector3(0, 0.05, 0)
+## 障害物: 状態の obstacles に合わせて出す/消す。後ろに寄せたバケツ・椅子・机と、投げられたバナナの皮
+func _update_obstacles(state: GameState) -> void:
+	var alive := {}
+	for ob in state.obstacles:
+		var id: int = ob["id"]
+		alive[id] = true
+		if not _obstacle_nodes.has(id):
+			var n := _build_obstacle(str(ob["kind"]))
+			add_child(n)
+			_obstacle_nodes[id] = n
+			if ob["kind"] == "banana":
+				_pop_at(state.obstacle_position(ob), "ぽいっ", Color(1.0, 0.85, 0.1))
+		var node: Node3D = _obstacle_nodes[id]
+		var ang: float = ob["angle"]
+		node.position = state.obstacle_position(ob)
+		# 通り道に横向きに置く(正面がコースの向き)
+		node.rotation.y = ang - PI / 2.0
+	for id in _obstacle_nodes.keys():
+		if not alive.has(id):
+			(_obstacle_nodes[id] as Node3D).queue_free()
+			_obstacle_nodes.erase(id)
 
 
-## 座っている自分から見えない席(両どなり)の後ろに落ちた物は、自分の席のカメラに映さない。
-## (上から見る確認用カメラには映る)
+## 障害物の形(教室の物)。低い物: バケツ・バナナ(ジャンプで越えられる)/高い物: 椅子・机(列を変えてよける)
+func _build_obstacle(kind: String) -> Node3D:
+	var root := Node3D.new()
+	match kind:
+		"bucket":
+			var body := CylinderMesh.new()
+			body.top_radius = 0.2
+			body.bottom_radius = 0.16
+			body.height = 0.32
+			var b := Toon.mesh(body, Color("4D96FF"), 0.03)
+			b.position.y = 0.16
+			root.add_child(b)
+			var rim := CylinderMesh.new()
+			rim.top_radius = 0.215
+			rim.bottom_radius = 0.215
+			rim.height = 0.03
+			var r := Toon.mesh(rim, Color("2F6FD0"), 0.0)
+			r.position.y = 0.32
+			root.add_child(r)
+			# 中の水
+			var water := CylinderMesh.new()
+			water.top_radius = 0.18
+			water.bottom_radius = 0.18
+			water.height = 0.01
+			var w := Toon.mesh(water, Color("CFE6F7"), 0.0)
+			w.position.y = 0.3
+			root.add_child(w)
+		"chair":
+			var seat := Toon.mesh(StaticBatch.chamfer_mesh(Vector3(0.44, 0.05, 0.42), 0.015), COLOR_CHAIR, 0.025)
+			seat.position.y = 0.44
+			root.add_child(seat)
+			var back := Toon.mesh(StaticBatch.chamfer_mesh(Vector3(0.44, 0.34, 0.05), 0.015), COLOR_CHAIR, 0.025)
+			back.position = Vector3(0, 0.72, 0.19)
+			root.add_child(back)
+			for x in [-0.19, 0.19]:
+				for z in [-0.18, 0.18]:
+					var leg := Toon.mesh(StaticBatch.chamfer_mesh(Vector3(0.035, 0.44, 0.035), 0.008), COLOR_METAL, 0.015)
+					leg.position = Vector3(x, 0.22, z)
+					root.add_child(leg)
+		"desk":
+			var top := Toon.mesh(StaticBatch.chamfer_mesh(Vector3(0.62, 0.05, 0.46), 0.015), COLOR_DESK_TOP, 0.025)
+			top.position.y = 0.72
+			root.add_child(top)
+			var box := Toon.mesh(StaticBatch.chamfer_mesh(Vector3(0.56, 0.14, 0.4), 0.02), COLOR_DESK_BOX, 0.025)
+			box.position.y = 0.62
+			root.add_child(box)
+			for x in [-0.27, 0.27]:
+				for z in [-0.19, 0.19]:
+					var leg := Toon.mesh(StaticBatch.chamfer_mesh(Vector3(0.035, 0.6, 0.035), 0.008), COLOR_METAL, 0.015)
+					leg.position = Vector3(x, 0.3, z)
+					root.add_child(leg)
+		_:
+			# バナナの皮: 黄色い皮が3枚ひらいた形
+			for k in 3:
+				var peel := Toon.mesh(StaticBatch.chamfer_mesh(Vector3(0.09, 0.04, 0.26), 0.015), Color(1.0, 0.85, 0.1), 0.02)
+				peel.position = Vector3(0, 0.03, 0)
+				peel.rotation.y = TAU * float(k) / 3.0
+				peel.position += Vector3(sin(peel.rotation.y), 0, cos(peel.rotation.y)) * 0.08
+				root.add_child(peel)
+	return root
+
+
+## 床の上の位置に、ポンと文字を出す(バナナが落ちたときなど)
+func _pop_at(pos: Vector3, text: String, color: Color) -> void:
+	var l := Label3D.new()
+	l.text = text
+	l.font = HudFont.get_font()
+	l.font_size = 110
+	l.pixel_size = 0.006
+	l.outline_size = 20
+	l.outline_modulate = GameConfig.COLOR_INK
+	l.modulate = color
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.no_depth_test = true
+	l.position = pos + Vector3(0, 0.6, 0)
+	add_child(l)
+	var tw := l.create_tween()
+	tw.tween_property(l, "position:y", l.position.y + 0.5, 0.6)
+	tw.tween_property(l, "scale", Vector3.ZERO, 0.15)
+	tw.tween_callback(l.queue_free)
+
+
 func _hide_item_if_not_visible_to_me(state: GameState) -> void:
 	var me := state.get_local_player()
 	# 手下は両どなりの後ろも見える(GameState.sees_behind)
@@ -1265,6 +1356,19 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 		_seat_cam.cull_mask = 0xFFFFF
 	else:
 		_seat_cam.cull_mask = 0xFFFFF & ~self_bit & ~(1 << (HIDDEN_LAYER - 1))
+	if state.is_runner(me):
+		# 追いかけっこで走っている: 走る人のすぐ後ろ・少し上から、走る先を見る(走る向きが画面の奥)
+		var ang := state.runner_angle(me)
+		var fwd := Vector3(cos(ang), 0.0, -sin(ang))
+		var want_r := Vector3(me.position.x, 0.0, me.position.z) - fwd * GameConfig.CHASE_CAM_DISTANCE \
+				+ Vector3(0, GameConfig.CHASE_CAM_HEIGHT, 0)
+		var wr := 1.0 if delta == 0.0 else clampf(delta * 6.0, 0.0, 1.0)
+		if _seat_cam.position.distance_to(want_r) > 6.0:
+			wr = 1.0
+		var ahead_ang := ang + GameConfig.CHASE_CAM_LOOK_AHEAD / maxf(me.run_r, 1.0)
+		var look := Vector3(sin(ahead_ang), 0.0, cos(ahead_ang)) * me.run_r + Vector3(0, 0.6, 0)
+		_seat_cam.look_at_from_position(_seat_cam.position.lerp(want_r, wr), look)
+		return
 	if me.role != GameState.Role.SEATED:
 		var out := Vector3(me.position.x, 0.0, me.position.z).normalized()
 		var is_oni := me.role == GameState.Role.ONI

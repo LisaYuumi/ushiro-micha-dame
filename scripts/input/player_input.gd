@@ -10,6 +10,15 @@ static func apply(state: GameState, cmds: Object, cam_basis: Basis) -> void:
 	var id := state.local_player_id
 	if state.get_actor(id) == null:
 		return
+	if state.is_runner(state.get_actor(id)):
+		# 追いかけっこで走っている(鬼も追いかける人も): 走るのは自動。ジャンプと、列を変える(内側/外側)だけ
+		if Input.is_action_just_pressed("chase_jump"):
+			cmds.chase_jump(id)
+		if Input.is_action_just_pressed("lane_in"):
+			cmds.chase_lane(id, -1)
+		if Input.is_action_just_pressed("lane_out"):
+			cmds.chase_lane(id, 1)
+		return
 	if state.oni_id == id:
 		# 鬼のとき: 落とす・フェイク(歩く速さと止まる・戻るはスティック。牛乳は main が送る)
 		if Input.is_action_just_pressed("oni_drop"):

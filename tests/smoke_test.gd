@@ -31,7 +31,8 @@ func _initialize() -> void:
 	_test_oni_sits_if_chaser_stands_still()
 	_test_touch_wins()
 	_test_chaser_never_stops()
-	_test_chaser_cannot_run_backward_or_inside()
+	_test_chase_lanes_and_speed()
+	_test_obstacles()
 	_test_no_otetsuki_during_chase()
 	_test_rounds_with_bots_always_finish()
 	_test_stamp_rules()
@@ -281,25 +282,29 @@ func _test_pick_up_rules() -> void:
 
 
 func _test_oni_sits_if_chaser_stands_still() -> void:
+	# 同じ速さなので、外側の列を走ると遠回りで追いつけない。鬼は2周して空いた席に座る
 	var s := _chasing_state(17)
-	# 外側ばかり走ると遠回りで追いつけない
 	var c := s.get_actor(s.chaser_id)
+	var start_angle := s.oni_angle
 	var e := {}
-	for i in int(60.0 / STEP):
-		s.set_move(c.id, Vector3(c.position.x, 0.0, c.position.z).normalized())
+	var t := 0.0
+	for i in int(90.0 / STEP):
+		s.chase_lane(c.id, 1)
 		s.tick(STEP)
+		t += STEP
 		for ev in s.take_events():
 			if ev["type"] == "result":
 				e = ev
 		if not e.is_empty():
 			break
-	_check(not e.is_empty() and e["reason"] == "sat", "外側ばかり走ると鬼に座られる")
+	_check(not e.is_empty() and e["reason"] == "sat", "外側の列ばかり走ると鬼に座られる")
 	if e.is_empty():
 		return
 	var oni := s.get_actor(s.oni_id)
 	_check(e["winner"] == s.oni_id and e["loser"] == s.chaser_id, "座られたら追いかけた人の負け")
 	_check(oni.seat_index == s.vacant_seat, "鬼は空いた席に座る")
-	_check(oni.position.distance_to(s.seat_positions[s.vacant_seat]) < 0.05, "鬼は席の位置にいる")
+	_check(s.oni_angle - start_angle > float(GameConfig.CHASE_LAPS - 1) * TAU,
+			"鬼は %d 周してから座る(%.1f 周)" % [GameConfig.CHASE_LAPS, (s.oni_angle - start_angle) / TAU])
 
 
 func _test_chaser_never_stops() -> void:
@@ -313,50 +318,110 @@ func _test_chaser_never_stops() -> void:
 
 
 func _test_touch_wins() -> void:
+	# 内側の列は近道。内側を走れば、まん中の列を走る鬼に追いつける
 	var s := _chasing_state(19)
 	var chaser := s.get_actor(s.chaser_id)
 	var e := {}
-	for i in int(60.0 / STEP):
-		s.set_move(chaser.id, BotBrain.chase_steer(s, chaser))
+	for i in int(90.0 / STEP):
+		s.chase_lane(chaser.id, -1)
 		s.tick(STEP)
 		for ev in s.take_events():
 			if ev["type"] == "result":
 				e = ev
 		if not e.is_empty():
 			break
-	_check(not e.is_empty() and e["reason"] == "touched", "3秒で気づいて内側を走ればタッチできる")
+	_check(not e.is_empty() and e["reason"] == "touched", "内側(近道)を走ればタッチできる")
 	if not e.is_empty():
 		_check(e["winner"] == chaser.id and e["loser"] == s.oni_id, "タッチしたら追いかけた人の勝ち")
 
 
-func _test_chaser_cannot_run_backward_or_inside() -> void:
+func _test_chase_lanes_and_speed() -> void:
 	var s := _chasing_state(23)
 	var c := s.get_actor(s.chaser_id)
-	var start_angle := atan2(c.position.x, c.position.z)
-	var backward := Vector3(-cos(start_angle), 0.0, sin(start_angle))
-	for i in 60:
-		s.set_move(c.id, backward)
+	var oni := s.get_actor(s.oni_id)
+	# 列は3つ。端より外には行けない
+	for i in 5:
+		s.chase_lane(c.id, 1)
+	_check(c.lane == GameConfig.LANE_RADII.size() - 1, "外側の列より外には行けない")
+	for i in 5:
+		s.chase_lane(c.id, -1)
+	_check(c.lane == 0, "内側の列より内には行けない")
+	for i in int(1.0 / STEP):
 		s.tick(STEP)
-	var moved := wrapf(atan2(c.position.x, c.position.z) - start_angle, -PI, PI)
-	_check(moved > 0.1, "逆向きを押しても、鬼と同じ向きに自動で走り続ける")
-	for i in 120:
-		s.set_move(c.id, -Vector3(c.position.x, 0.0, c.position.z).normalized())
-		s.tick(STEP)
-	var r := Vector2(c.position.x, c.position.z).length()
-	_check(r >= GameConfig.CHASER_MIN_RADIUS - 0.001, "席の内側には入れない")
+	_check(absf(c.run_r - float(GameConfig.LANE_RADII[0])) < 0.01, "選んだ列に寄る")
+	# 鬼も追いかける人も同じ速さ
+	var p0 := c.position
+	var o0 := oni.position
+	s.tick(STEP)
+	var cs := c.position.distance_to(p0) / STEP
+	var os := oni.position.distance_to(o0) / STEP
+	_check(absf(cs - GameConfig.CHASE_SPEED) < 0.05 and absf(os - GameConfig.CHASE_SPEED) < 0.05,
+			"鬼も追いかける人も同じ速さ(%.2f / %.2f)" % [cs, os])
+	# 座っている人は走れない
+	var seated := s.get_actor_at_seat((s.vacant_seat + 2) % GameConfig.SEAT_COUNT)
+	var lane0 := seated.lane
+	s.chase_lane(seated.id, 1)
+	s.chase_jump(seated.id)
+	_check(seated.lane == lane0 and seated.jump_left == 0.0, "座っている人は列を変えたりジャンプしたりできない")
 
-	# 内側の端で内側を押しても速さが落ちないか(追いかけっこが続いているうちに測る)
-	var s2 := _chasing_state(23)
-	var c2 := s2.get_actor(s2.chaser_id)
-	for i in 30:
-		s2.set_move(c2.id, -Vector3(c2.position.x, 0.0, c2.position.z).normalized())
-		s2.tick(STEP)
-	_check(s2.phase == GameState.Phase.CHASE, "(確認用)まだ追いかけっこ中")
-	var p0 := c2.position
-	s2.set_move(c2.id, -Vector3(c2.position.x, 0.0, c2.position.z).normalized())
-	s2.tick(STEP)
-	var speed := c2.position.distance_to(p0) / STEP
-	_check(absf(speed - GameConfig.CHASER_SPEED) < 0.05, "内側の端で内側を押しても速さは落ちない")
+
+func _test_obstacles() -> void:
+	# コースに障害物が置かれる。走りはじめた2人のすぐ前には置かない
+	var s0 := _dropped_state(41)
+	var target := s0.get_actor_at_seat(s0.drop_target_seat)
+	s0.set_looking_back(target.id, true)
+	s0.pick_up(target.id)
+	_check(s0.obstacles.size() >= 3, "コースに障害物がある(%d 個)" % s0.obstacles.size())
+	var mid: float = GameConfig.LANE_RADII[1]
+	for ob in s0.obstacles:
+		for who in [s0.chaser_id, s0.oni_id]:
+			var ahead := fposmod(float(ob["angle"]) - s0.runner_angle(s0.get_actor(who)), TAU) * mid
+			_check(ahead >= GameConfig.OBSTACLE_START_CLEAR - 0.01, "走りはじめの人のすぐ前には置かない")
+	# 高い物(椅子)は、ジャンプしても越えられずに転ぶ。鬼も同じ
+	for jump in [false, true]:
+		var s := _chasing_state(43)
+		var oni := s.get_actor(s.oni_id)
+		var r: float = GameConfig.LANE_RADII[oni.lane]
+		var ob := s._add_obstacle(fposmod(s.runner_angle(oni) + 1.0 / r, TAU), oni.lane, "chair")
+		var slipped := false
+		for i in int(1.0 / STEP):
+			if jump and i == int(0.15 / STEP):
+				s.chase_jump(oni.id)
+			s.tick(STEP)
+			for e in s.take_events():
+				if e["type"] == "slip" and e["actor"] == oni.id:
+					slipped = true
+		_check(slipped, "椅子にぶつかると鬼も転ぶ%s" % ("(ジャンプしても)" if jump else ""))
+		_check(s.obstacles.has(ob), "椅子はぶつかっても残る")
+	# 低い物(バケツ)は、ジャンプで越えられる。列を変えてもよけられる
+	for how in ["none", "jump", "lane"]:
+		var s := _chasing_state(45)
+		var c := s.get_actor(s.chaser_id)
+		var r: float = GameConfig.LANE_RADII[c.lane]
+		s._add_obstacle(fposmod(s.runner_angle(c) + 1.2 / r, TAU), c.lane, "bucket")
+		var slipped := false
+		var stopped_for := 0.0
+		for i in int(1.4 / STEP):
+			if how == "jump" and i == int(0.2 / STEP):
+				s.chase_jump(c.id)
+			if how == "lane" and i == 0:
+				s.chase_lane(c.id, 1 if c.lane == 0 else -1)
+			var p0 := c.position
+			s.tick(STEP)
+			if c.position.distance_to(p0) < 0.0001:
+				stopped_for += STEP
+			for e in s.take_events():
+				if e["type"] == "slip" and e["actor"] == c.id:
+					slipped = true
+			if s.phase != GameState.Phase.CHASE:
+				break
+		match how:
+			"none":
+				_check(slipped and stopped_for > 0.5, "バケツをよけないと転んで少し止まる")
+			"jump":
+				_check(not slipped, "バケツはジャンプで越えられる")
+			"lane":
+				_check(not slipped, "バケツは列を変えてもよけられる")
 
 
 func _test_no_otetsuki_during_chase() -> void:
@@ -791,7 +856,7 @@ func _test_match_scores_and_end() -> void:
 	var c := s3.get_actor(s3.chaser_id)
 	var e3 := {}
 	for i in int(60.0 / STEP):
-		s3.set_move(c.id, BotBrain.chase_steer(s3, c))
+		s3.chase_lane(c.id, -1)
 		s3.tick(STEP)
 		for ev in s3.take_events():
 			if ev["type"] == "result":
@@ -803,7 +868,9 @@ func _test_match_scores_and_end() -> void:
 
 
 func _test_heavier_items_slow_the_chaser() -> void:
+	# 重い物を持っても速さは同じ。そのかわり、転んだときに起き上がるまでが長い
 	var speeds := []
+	var falls := []
 	for round_no in [0, GameConfig.ROUNDS_PER_MATCH - 1]:
 		var s := GameState.new()
 		s.start_match(67)
@@ -814,11 +881,20 @@ func _test_heavier_items_slow_the_chaser() -> void:
 			s.tick(STEP)
 		var target := s.get_actor_at_seat(s.drop_target_seat)
 		s.pick_up(target.id)
+		s.obstacles = []
 		var p0 := target.position
 		s.tick(STEP)
 		speeds.append(target.position.distance_to(p0) / STEP)
-	_check(speeds[1] < speeds[0] * 0.8, "教卓を持つと、ハンカチより遅い")
-	print("chaser speed: handkerchief %.2f / heaviest %.2f" % [speeds[0], speeds[1]])
+		var r: float = GameConfig.LANE_RADII[target.lane]
+		s._add_obstacle(fposmod(s.runner_angle(target) + 0.5 / r, TAU), target.lane, "bucket")
+		for i in int(0.5 / STEP):
+			s.tick(STEP)
+			if target.slip_left > 0.0:
+				break
+		falls.append(target.slip_left)
+	_check(absf(speeds[0] - speeds[1]) < 0.05, "教卓を持っても、ハンカチと同じ速さ")
+	_check(falls[1] > falls[0] * 1.5, "教卓を持って転ぶと、起き上がるまでが長い(%.2f / %.2f 秒)" % [falls[0], falls[1]])
+	print("chaser speed: handkerchief %.2f / heaviest %.2f, fall %.2f / %.2f" % [speeds[0], speeds[1], falls[0], falls[1]])
 
 
 func _test_banana_rules() -> void:
@@ -832,7 +908,11 @@ func _test_banana_rules() -> void:
 	_check(not s.throw_banana(thrower.id, s.oni_id), "1ラウンド1個まで")
 	var other := s.get_actor_at_seat((s.vacant_seat + 3) % GameConfig.SEAT_COUNT)
 	_check(s.throw_banana(other.id, s.oni_id), "鬼にも投げられる")
-	_check(s.bananas.size() == 2, "床にバナナが2つ")
+	var n_banana := 0
+	for ob in s.obstacles:
+		if ob["kind"] == "banana":
+			n_banana += 1
+	_check(n_banana == 2, "コースにバナナが2つ")
 	# 追いかける人はまっすぐ走ると踏んで転ぶ
 	var c := s.get_actor(s.chaser_id)
 	var slipped := false
@@ -863,14 +943,14 @@ func _test_banana_can_be_dodged() -> void:
 	var thrower := s.get_actor_at_seat((s.vacant_seat + 2) % GameConfig.SEAT_COUNT)
 	s.throw_banana(thrower.id, c.id)
 	var slipped := false
+	# 列を変えてよける
+	s.chase_lane(c.id, 1 if c.lane == 0 else -1)
 	for i in int(2.0 / STEP):
-		# 外側に曲がってよける
-		s.set_move(c.id, Vector3(c.position.x, 0, c.position.z).normalized())
 		s.tick(STEP)
 		for e in s.take_events():
 			if e["type"] == "slip":
 				slipped = true
-	_check(not slipped, "曲がればバナナをよけられる")
+	_check(not slipped, "列を変えればバナナをよけられる")
 
 
 func _test_bots_throw_bananas() -> void:
@@ -1208,7 +1288,7 @@ func _test_minion() -> void:
 	var b4: int = s4.scores[m4.id]
 	var e4 := {}
 	for i in int(60.0 / STEP):
-		s4.set_move(c.id, BotBrain.chase_steer(s4, c))
+		s4.chase_lane(c.id, -1)
 		s4.tick(STEP)
 		for ev in s4.take_events():
 			if ev["type"] == "result":
@@ -1416,6 +1496,8 @@ func _chasing_state(seed_value: int) -> GameState:
 	s.set_looking_back(target.id, true)
 	s.pick_up(target.id)
 	s.take_events()
+	# 決まった結果を確かめるため、コースの障害物はなし(障害物のテストは自分で置く)
+	s.obstacles = []
 	return s
 
 

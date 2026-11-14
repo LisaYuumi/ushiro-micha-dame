@@ -14,6 +14,8 @@ var _look_left := {}
 var _banana_left := {}
 ## 振り向いてよくなる前に届いたスタンプを、あとで考え直す人(id -> true)
 var _stamp_pending := {}
+## 走るボットが、その障害物をよけるか(「走る人の id|障害物の id」 -> true/false。気づかずにぶつかることがある)
+var _dodge := {}
 
 
 func reset(seed_value: int = -1) -> void:
@@ -22,6 +24,7 @@ func reset(seed_value: int = -1) -> void:
 	_look_left.clear()
 	_banana_left.clear()
 	_stamp_pending.clear()
+	_dodge.clear()
 	if seed_value >= 0:
 		rng.seed = seed_value
 	else:
@@ -34,8 +37,11 @@ func update(state: GameState, delta: float) -> void:
 			continue
 		match a.role:
 			GameState.Role.ONI:
-				# 鬼のボットも、ときどきスタンプを送る(だいたい嘘)
-				_update_stamp(state, a, delta)
+				if state.phase == GameState.Phase.CHASE:
+					_update_runner(state, a)
+				else:
+					# 鬼のボットも、ときどきスタンプを送る(だいたい嘘)
+					_update_stamp(state, a, delta)
 			GameState.Role.SEATED:
 				_update_seated(state, a, delta)
 				_update_look(state, a, delta)
@@ -206,17 +212,49 @@ func _update_banana(state: GameState, a: GameState.Actor, delta: float) -> void:
 		state.throw_banana(a.id, target)
 
 
-## 追いかけるボット: ふだんは内側(近道)を走り、鬼に近づいたら鬼のほうへ曲がる
-## (前へは自動で走る)
+## 追いかけるボット
 func _update_chaser(state: GameState, a: GameState.Actor) -> void:
-	state.set_move(a.id, chase_steer(state, a))
+	_update_runner(state, a)
 
 
-## 追いかけ方のお手本(テストでも使う)
-static func chase_steer(state: GameState, a: GameState.Actor) -> Vector3:
-	var oni := state.get_actor(state.oni_id)
-	var to_oni := oni.position - a.position
-	to_oni.y = 0.0
-	if to_oni.length() < 2.5:
-		return to_oni.normalized()
-	return -Vector3(a.position.x, 0.0, a.position.z).normalized()
+## 走るボット(鬼も追いかける人も): 前の障害物を見て、低い物はジャンプ、高い物は列を変えてよける
+## (ときどき気づかずにぶつかる)。障害物がなければ内側(近道)を走る。
+## 追いかける人は、鬼のすぐ後ろまで来たら鬼と同じ列に入る(タッチしやすいように)
+func _update_runner(state: GameState, a: GameState.Actor) -> void:
+	if a.slip_left > 0.0:
+		return
+	var look := state.obstacle_ahead(a, a.lane, 3.0)
+	if not look.is_empty():
+		var ob: Dictionary = look["obstacle"]
+		var d: float = look["dist"]
+		var key := "%d|%d" % [a.id, ob["id"]]
+		if not _dodge.has(key):
+			_dodge[key] = rng.randf() >= GameConfig.BOT_DODGE_MISS
+		if _dodge[key]:
+			if ob["high"]:
+				if d < 2.4:
+					var to := _free_lane(state, a)
+					if to != a.lane:
+						state.chase_lane(a.id, to - a.lane)
+			elif d < 0.9:
+				state.chase_jump(a.id)
+		return
+	if a.id == state.chaser_id:
+		var oni := state.get_actor(state.oni_id)
+		var gap := fposmod(state.runner_angle(oni) - state.runner_angle(a), TAU) * a.run_r
+		if gap < 3.0 and oni.lane != a.lane and state.obstacle_ahead(a, oni.lane, 2.5).is_empty():
+			state.chase_lane(a.id, oni.lane - a.lane)
+			return
+	# 何もなければ内側へ(近道)
+	if a.lane > 0 and state.obstacle_ahead(a, a.lane - 1, 3.0).is_empty():
+		state.chase_lane(a.id, -1)
+
+
+## となりの列で、前に障害物がない列(内側を先に見る)。なければ今の列
+func _free_lane(state: GameState, a: GameState.Actor) -> int:
+	for cand in [a.lane - 1, a.lane + 1]:
+		if cand < 0 or cand >= GameConfig.LANE_RADII.size():
+			continue
+		if state.obstacle_ahead(a, cand, 2.6).is_empty():
+			return cand
+	return a.lane
