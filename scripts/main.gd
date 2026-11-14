@@ -51,6 +51,9 @@ var _jingle_hold := 0.0
 
 func _ready() -> void:
 	InputSetup.register()
+	# 3D は決まった細かさで描く(画面の大きさが変わったら計算し直す)
+	_update_3d_scale()
+	get_viewport().size_changed.connect(_update_3d_scale)
 	# 音の出力の余裕(ブラウザの開発者ツールで確かめる用)
 	print("audio output latency: %.3f s, mix rate: %d" % [AudioServer.get_output_latency(), AudioServer.get_mix_rate()])
 	# 音: BGM と、場所のない効果音(ボタン・チャイム・ジングルなど)
@@ -386,11 +389,24 @@ func _log_perf(delta: float) -> void:
 	_perf_worst = 0.0
 
 
+## 3D を描く細かさ: 画面の縦の点の数が RENDER_3D_HEIGHT より多ければ、その分だけ小さく描いて引きのばす
+func _update_3d_scale() -> void:
+	var h := float(DisplayServer.window_get_size().y)
+	var s := clampf(GameConfig.RENDER_3D_HEIGHT / maxf(h, 1.0), 0.35, 1.0)
+	get_viewport().scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	get_viewport().scaling_3d_scale = s
+	print("3D scale: %.2f (window height %d px)" % [s, int(h)])
+
+
 func _process(delta: float) -> void:
 	_log_perf(delta)
 	_update_music(delta)
 	if _studio:
 		return
+	# ロビーの間は、後ろの3D(教室)を描かない(水色の幕でほとんど見えないのに重いので)
+	var show_3d := not lobby.visible
+	if view.visible != show_3d:
+		view.set_shown(show_3d)
 	view.sync(state, delta)
 
 

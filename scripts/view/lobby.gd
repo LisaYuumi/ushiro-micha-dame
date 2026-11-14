@@ -56,7 +56,7 @@ func _ready() -> void:
 	Locale.setup(Profile.lang)
 	var bg := ColorRect.new()
 	var sky := GameConfig.COLOR_SKY
-	sky.a = 0.93
+	sky.a = 1.0
 	bg.color = sky
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
