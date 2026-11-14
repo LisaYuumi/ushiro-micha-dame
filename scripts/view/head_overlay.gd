@@ -154,10 +154,10 @@ func update(state: GameState, cam: Camera3D) -> void:
 			var st: Dictionary = list[i]
 			var sender := state.get_actor(st["sender"])
 			var col: Color = sender.color if sender else Color.WHITE
-			(t["styles"][i] as StyleBoxFlat).bg_color = col
+			UiStyle.set_bg(t["styles"][i] as StyleBoxFlat, col)
 			var l: Label = t["labels"][i]
 			l.text = "%s:%s" % [sender_name(state, st["sender"]), stamp_text(state, st["sender"], st["kind"])]
-			l.add_theme_color_override("font_color", Hud.text_color_on(col))
+			UiStyle.set_font_color(l, Hud.text_color_on(col))
 			var bs := b.get_combined_minimum_size()
 			var r: Rect2 = _tag_rects[id]
 			y -= bs.y + 2.0

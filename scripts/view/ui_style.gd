@@ -155,3 +155,16 @@ static func _apply_fit(ctrl: Control, base: int, max_w: float, min_size: int) ->
 		size -= 1
 	ctrl.add_theme_font_size_override("font_size", size)
 
+
+
+## 文字の色を変える(同じ色なら何もしない。毎フレーム呼んでも、並べ直しが起きないように)
+static func set_font_color(l: Label, c: Color) -> void:
+	if l.has_theme_color_override("font_color") and l.get_theme_color("font_color") == c:
+		return
+	l.add_theme_color_override("font_color", c)
+
+
+## 地の色を変える(同じ色なら何もしない)
+static func set_bg(st: StyleBoxFlat, c: Color) -> void:
+	if st.bg_color != c:
+		st.bg_color = c

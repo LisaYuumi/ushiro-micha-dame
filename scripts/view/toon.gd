@@ -139,8 +139,37 @@ static func material_batched(color: Color, outline: float) -> Material:
 
 ## メッシュに材質をつけた MeshInstance3D を作る(影は落とさない: アニメ塗りなので)
 static func mesh(m: Mesh, color: Color, outline: float = GameConfig.OUTLINE_WIDTH) -> MeshInstance3D:
+	lighten(m)
 	var mi := MeshInstance3D.new()
 	mi.mesh = m
 	mi.material_override = material(color, outline)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return mi
+
+
+## 丸い形(球・カプセル・円柱・ドーナツ)の細かさを、見た目が変わらない程度に下げる(スマホで軽くするため)。
+## Godot の初期の細かさ(球は 64×32 で約4000個の三角形)のときだけ下げる。自分で細かさを決めた形はそのまま。
+## 輪郭線で同じ形をもう1回描くので、三角形の数はそのまま2倍効いてくる
+static func lighten(m: Mesh) -> void:
+	if m is SphereMesh:
+		var sp := m as SphereMesh
+		if sp.radial_segments == 64 and sp.rings == 32:
+			var n := clampi(int(sp.radius * 110.0), 10, 24)
+			sp.radial_segments = n
+			sp.rings = maxi(n / 2, 5)
+	elif m is CapsuleMesh:
+		var cp := m as CapsuleMesh
+		if cp.radial_segments == 64 and cp.rings == 8:
+			cp.radial_segments = clampi(int(cp.radius * 110.0), 10, 20)
+			cp.rings = 4
+	elif m is CylinderMesh:
+		var cy := m as CylinderMesh
+		if cy.radial_segments == 64:
+			cy.radial_segments = clampi(int(maxf(cy.top_radius, cy.bottom_radius) * 110.0), 10, 28)
+			if cy.rings == 4:
+				cy.rings = 0
+	elif m is TorusMesh:
+		var tm := m as TorusMesh
+		if tm.rings == 64 and tm.ring_segments == 32:
+			tm.rings = 24
+			tm.ring_segments = 8

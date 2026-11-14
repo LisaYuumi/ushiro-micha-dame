@@ -640,9 +640,9 @@ func show_my_stamps(list: Array) -> void:
 		var key := "%s|%s" % [st["sender"], st["kind"]]
 		keys.append(key)
 		var col: Color = st["sender_color"]
-		_slot_styles[i].bg_color = col
+		UiStyle.set_bg(_slot_styles[i], col)
 		_slot_labels[i].text = "%s:%s" % [st["sender"], st.get("text", Texts.stamp(st["kind"]))]
-		_slot_labels[i].add_theme_color_override("font_color", text_color_on(col))
+		UiStyle.set_font_color(_slot_labels[i], text_color_on(col))
 		box.visible = true
 		if not (key in _shown_keys):
 			# 新しく届いた: ポンと大きくなってから元の大きさへ
@@ -866,7 +866,7 @@ func _draw_milk() -> void:
 func set_role_badge(text: String, color: Color) -> void:
 	_pill_text(_badge, text)
 	_badge.visible = text != ""
-	(_badge.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = color
+	UiStyle.set_bg(_badge.get_theme_stylebox("panel") as StyleBoxFlat, color)
 
 
 func _set_frame_alpha(a: float) -> void:
