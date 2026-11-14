@@ -51,6 +51,8 @@ var _jingle_hold := 0.0
 
 func _ready() -> void:
 	InputSetup.register()
+	# 音の出力の余裕(ブラウザの開発者ツールで確かめる用)
+	print("audio output latency: %.3f s, mix rate: %d" % [AudioServer.get_output_latency(), AudioServer.get_mix_rate()])
 	# 音: BGM と、場所のない効果音(ボタン・チャイム・ジングルなど)
 	audio = AudioDirector.new()
 	add_child(audio)
