@@ -152,6 +152,8 @@ var round_serial: int = 0
 
 ## 試合: 今のラウンド(0 から)、点数(id -> 点)、試合が終わったか
 var round_index: int = 0
+## 舞台("classroom" / "beach")。試合の前に決める(試合の途中では変えない)
+var stage: String = "classroom"
 var scores: Dictionary = {}
 var match_over: bool = false
 var _round_start_lineup: Array = []
@@ -321,7 +323,7 @@ func restart_round() -> void:
 
 ## 今のラウンドの落とし物の名前と重さ(0〜1)
 func item_name() -> String:
-	return Items.name_of(round_index)
+	return Items.name_of(round_index, stage)
 
 
 func item_weight() -> float:
@@ -1073,6 +1075,7 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"result": result,
 		"stamps": active_stamps,
 		"round": round_index,
+		"stage": stage,
 		"scores": scores,
 		"match_over": match_over,
 		"obstacles": obstacles,
@@ -1138,6 +1141,7 @@ func apply_snapshot(s: Dictionary) -> void:
 	result = s["result"]
 	active_stamps = s["stamps"]
 	round_index = s["round"]
+	stage = Items.clean_stage(str(s.get("stage", "classroom")))
 	scores = s["scores"]
 	match_over = s["match_over"]
 	obstacles = s.get("obstacles", [])

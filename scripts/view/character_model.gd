@@ -135,6 +135,8 @@ var _blink_wait := randf_range(1.5, 4.0)
 var _blink_left := 0.0
 ## 鬼だけがかぶる、学校の黄色い帽子
 var _hat: Node3D
+## 海辺の鬼がかぶる麦わら帽子(ふだんは作らない。はじめてかぶるときに作る)
+var _straw_hat: Node3D
 const COLOR_HAT := Color("FFD43B")
 const COLOR_HAT_BAND := Color("F2B705")
 
@@ -335,6 +337,9 @@ func _build_body(color: Color) -> void:
 		_attach("DEF-hand." + side, _mesh(hand, color, line), at)
 
 
+const COLOR_STRAW := Color("EAC66A")
+
+
 ## 学校の黄色い帽子: 丸い山と、ぐるっと一周のつば、帽子の帯(ふだんは隠しておく)
 func _build_hat() -> void:
 	var line := GameConfig.OUTLINE_WIDTH / BODY_SCALE
@@ -380,9 +385,46 @@ func eye_points() -> PackedVector3Array:
 
 
 ## 帽子をかぶる/ぬぐ(鬼だけがかぶる)
-func set_hat(v: bool) -> void:
+## straw = true なら麦わら帽子(海辺)
+func set_hat(v: bool, straw: bool = false) -> void:
+	if straw and v and _straw_hat == null:
+		_build_straw_hat()
 	if _hat:
-		_hat.visible = v
+		_hat.visible = v and not straw
+	if _straw_hat:
+		_straw_hat.visible = v and straw
+
+
+## 麦わら帽子: 低い山と、広いつば、赤いリボン
+func _build_straw_hat() -> void:
+	var line := GameConfig.OUTLINE_WIDTH / BODY_SCALE
+	_straw_hat = Node3D.new()
+	_attach("DEF-head", _straw_hat, _head_transform())
+	var crown := CylinderMesh.new()
+	crown.top_radius = 0.17
+	crown.bottom_radius = 0.215
+	crown.height = 0.16
+	crown.radial_segments = 24
+	var crown_mi := _mesh(crown, COLOR_STRAW, line)
+	crown_mi.position = Vector3(0, HEAD_Y + 0.22, 0)
+	_straw_hat.add_child(crown_mi)
+	var band := CylinderMesh.new()
+	band.top_radius = 0.205
+	band.bottom_radius = 0.218
+	band.height = 0.05
+	band.radial_segments = 24
+	var band_mi := _mesh(band, Color("E5483B"), 0.0)
+	band_mi.position = Vector3(0, HEAD_Y + 0.17, 0)
+	_straw_hat.add_child(band_mi)
+	var brim := CylinderMesh.new()
+	brim.top_radius = 0.42
+	brim.bottom_radius = 0.43
+	brim.height = 0.02
+	brim.radial_segments = 32
+	var brim_mi := _mesh(brim, COLOR_STRAW, line)
+	brim_mi.position = Vector3(0, HEAD_Y + 0.15, 0)
+	brim_mi.rotation.x = -0.06
+	_straw_hat.add_child(brim_mi)
 
 
 ## 頭の球の位置と向き(骨組みの座標で)。顔の -Z が体の正面(素材の +Z)を向く

@@ -54,6 +54,10 @@ var _blackout: BlackoutLayer
 var _batch: StaticBatch
 ## 教室を作るときに見る状態(ラウンドで変わる黒板の落書き・時計・日直)
 var _room_state: GameState
+## 海辺の舞台か(座る人は砂に体育座り・鬼は麦わら帽子・牛乳のかわりに水鉄砲)
+var _beach := false
+## 砂に座るので、座っている人のカメラを下げる高さ
+const BEACH_CAM_DROP := 0.3
 ## 足もとのぼんやりした丸い影(id -> MeshInstance3D)と、その材質
 var _blobs := {}
 static var _blob_mat: StandardMaterial3D
@@ -134,11 +138,15 @@ func build(state: GameState) -> void:
 	_obstacle_nodes.clear()
 	_milk_nodes.clear()
 
+	_beach = state.stage == "beach"
 	_build_environment()
 	_room_state = state
-	_build_floor()
-	for i in state.seat_positions.size():
-		_build_chair(state.seat_positions[i], state.seat_yaws[i])
+	if _beach:
+		_build_beach()
+	else:
+		_build_floor()
+		for i in state.seat_positions.size():
+			_build_chair(state.seat_positions[i], state.seat_yaws[i])
 	for a in state.actors:
 		var node := _build_character(a, a.id == state.local_player_id)
 		add_child(node)
@@ -188,7 +196,7 @@ func sync(state: GameState, delta: float) -> void:
 				model.set_look(a.looking_back)
 				model.set_pose(_pose_of(state, a))
 				# 鬼だけが学校の黄色い帽子をかぶる
-				model.set_hat(a.id == state.oni_id)
+				model.set_hat(a.id == state.oni_id, _beach)
 			_update_expression(state, a, model, delta)
 			_update_milk(state, a, model)
 	_update_seat_camera(state, delta)
@@ -222,7 +230,8 @@ func sync(state: GameState, delta: float) -> void:
 ## 姿勢: 座っている人は座る、追いかけっこ中は走る、鬼は歩く(止まっていれば立つ)
 func _pose_of(state: GameState, a: GameState.Actor) -> String:
 	if a.role == GameState.Role.SEATED:
-		return "sit"
+		# 海辺では、砂に直接体育座り
+		return "floor" if _beach else "sit"
 	if a.role == GameState.Role.OUT:
 		# お手つきで抜けた人は、真ん中で体育座り
 		return "floor"
@@ -481,7 +490,7 @@ func _play_at(a: GameState.Actor, sound_name: String, vol_db: float) -> void:
 
 ## 環境音: 遠くの校庭のざわめき(ずっと小さく)、時計のカチコチ(時計から)、ときどきカーテンの音(窓から)
 func _update_ambience(delta: float) -> void:
-	if _curtain_player == null:
+	if _curtain_player == null or _beach:
 		return
 	# 時計のカチ・コチ(2秒の音を、2秒ごとに鳴らす。ずっと流しっぱなしにしないので軽い)
 	_clock_left -= delta
@@ -512,7 +521,7 @@ func is_top_camera() -> bool:
 func _build_environment() -> void:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = GameConfig.COLOR_SKY
+	env.background_color = BeachStage.COLOR_SKY if _beach else GameConfig.COLOR_SKY
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(1, 1, 1)
 	env.ambient_light_energy = 0.5
@@ -574,6 +583,21 @@ func _build_floor() -> void:
 	# 色ごとにまとめた背景を置く
 	_batch.build(self)
 	_batch = null
+
+
+## 海辺: 砂浜・海・飾り(BeachStage)。転んだ体が乗る床(物理演算用)も置く
+func _build_beach() -> void:
+	_batch = StaticBatch.new()
+	BeachStage.build_world(self)
+	_batch.build(self)
+	_batch = null
+	BeachStage.build_props(self)
+	var floor_body := StaticBody3D.new()
+	floor_body.collision_layer = 1 << (CharacterModel.FLOOR_LAYER - 1)
+	var floor_shape := CollisionShape3D.new()
+	floor_shape.shape = WorldBoundaryShape3D.new()
+	floor_body.add_child(floor_shape)
+	add_child(floor_body)
 
 
 ## 床板: 0.4 m 幅の板を、長さと継ぎ目をずらして並べる。色は3段階で少しずつちがう
@@ -1018,12 +1042,14 @@ func _update_oni_shadow(state: GameState) -> void:
 ## 頭からかぶった牛乳: 白いかたまりと、顔の横にたれるしずく(輪郭線つき)
 func _build_milk_splash() -> Node3D:
 	var root := Node3D.new()
+	# 海辺は水鉄砲の水(水色)
+	var col := Color("BFE8FF") if _beach else Color(1.0, 0.99, 0.95)
 	var cap := SphereMesh.new()
 	cap.radius = 0.2
 	cap.height = 0.16
 	cap.radial_segments = 14
 	cap.rings = 6
-	var top := Toon.mesh(cap, Color(1.0, 0.99, 0.95), 0.02)
+	var top := Toon.mesh(cap, col, 0.02)
 	top.position = Vector3(0, 0.36, 0)
 	root.add_child(top)
 	for k in 4:
@@ -1032,7 +1058,7 @@ func _build_milk_splash() -> Node3D:
 		drop.height = 0.12
 		drop.radial_segments = 8
 		drop.rings = 4
-		var d := Toon.mesh(drop, Color(1.0, 0.99, 0.95), 0.015)
+		var d := Toon.mesh(drop, col, 0.015)
 		var ang := TAU * (float(k) + 0.25) / 4.0
 		d.position = Vector3(sin(ang) * 0.21, 0.24 - 0.05 * float(k % 2), cos(ang) * 0.21)
 		root.add_child(d)
@@ -1116,7 +1142,9 @@ func _update_obstacles(state: GameState) -> void:
 		var id: int = ob["id"]
 		alive[id] = true
 		if not _obstacle_nodes.has(id):
-			var n := _build_obstacle(str(ob["kind"]))
+			var n: Node3D = BeachStage.build_obstacle(str(ob["kind"])) if _beach else null
+			if n == null:
+				n = _build_obstacle(str(ob["kind"]))
 			add_child(n)
 			_obstacle_nodes[id] = n
 			if ob["kind"] == "banana":
@@ -1246,6 +1274,9 @@ func _carry_item(m: CharacterModel) -> void:
 	var body := m.global_transform.basis.orthonormalized()
 	# キャラの正面は -Z、背中は +Z
 	var back := body.z.normalized()
+	if _beach:
+		_carry_beach_item(m, body, back)
+		return
 	match _item_index:
 		0:
 			# ハンカチ: 手からぶら下がる(布を縦にして、少し小さく)
@@ -1269,6 +1300,24 @@ func _carry_item(m: CharacterModel) -> void:
 			_handkerchief.transform = Transform3D(body, pos)
 
 
+## 海辺の落とし物の持ち方: 貝殻は手に、ビーチボールは胸の前に抱え、浮き輪は腰に通し、
+## 砂の城とバナナボートは頭の上に担ぐ
+func _carry_beach_item(m: CharacterModel, body: Basis, back: Vector3) -> void:
+	match _item_index:
+		0:
+			var hand := m.bone_world("DEF-hand.R").origin
+			_handkerchief.transform = Transform3D(body, hand + Vector3(0, -0.06, 0))
+		1:
+			var chest := m.bone_world("DEF-spine.003").origin
+			_handkerchief.transform = Transform3D(body, chest - back * 0.3 + Vector3(0, -0.35, 0))
+		2:
+			var hips := m.bone_world("DEF-spine.001").origin
+			_handkerchief.transform = Transform3D(body, hips + Vector3(0, -0.06, 0))
+		_:
+			var head := m.bone_world("DEF-head").origin
+			_handkerchief.transform = Transform3D(body, head + Vector3(0, CharacterModel.HEAD_RADIUS + 0.04, 0))
+
+
 ## 落とし物の輪郭線(床の上で目立つように、ふつうより太く)
 const ITEM_OUTLINE := 0.04
 const COLOR_HANKIE := Color("EE5A4B")
@@ -1280,6 +1329,14 @@ func _build_handkerchief(state: GameState) -> void:
 	var shape: Array = ITEM_SHAPES[index]
 	var size: Vector3 = shape[0]
 	_handkerchief = Node3D.new()
+	if _beach:
+		# 海辺の落とし物: 貝殻・ビーチボール・浮き輪・砂の城・バナナボート
+		BeachStage.build_item(_handkerchief, index)
+		_handkerchief.visible = false
+		add_child(_handkerchief)
+		_item_index = index
+		_item_size = BeachStage.ITEM_SIZES[index]
+		return
 	# 床に置いたとき、底が床につくように。ハンカチと上履きは小さいので、色と形で目立たせる
 	match index:
 		0:
@@ -1313,19 +1370,20 @@ func _build_handkerchief(state: GameState) -> void:
 func _build_sounds(state: GameState) -> void:
 	# 足音は鬼の体についていく(左右・遠近で鬼の位置がなんとなくわかる。大きさは GameConfig で変えられる)
 	_step_player = Sfx.player_3d(_actor_nodes[state.oni_id] as Node3D, GameConfig.FOOTSTEP_VOLUME_DB, GameConfig.FOOTSTEP_UNIT_SIZE)
-	_step_player.stream = Sfx.get_stream("step")
+	_step_player.stream = Sfx.get_stream("step_sand" if _beach else "step")
 	_step_player.max_polyphony = 2
 	_oni_last_pos = state.get_actor(state.oni_id).position
 	_oni_walked = 0.0
 	_chaser_step_player = Sfx.player_3d(self, GameConfig.RUN_STEP_VOLUME_DB, GameConfig.FOOTSTEP_UNIT_SIZE)
-	_chaser_step_player.stream = Sfx.get_stream("run_step")
+	_chaser_step_player.stream = Sfx.get_stream("run_step_sand" if _beach else "run_step")
 	_chaser_step_player.max_polyphony = 2
 	_chaser_last_pos = Vector3.ZERO
 	_chaser_walked = 0.0
 
 	# 落とし物の音は、そのラウンドの落とし物の音(本物もフェイクも同じ)
 	_drop_player = Sfx.player_3d(self, GameConfig.DROP_VOLUME_DB, GameConfig.DROP_SOUND_RANGE)
-	_drop_player.stream = Sfx.get_stream("drop_%d" % clampi(state.round_index, 0, 4))
+	var drop_name := ("drop_beach_%d" if _beach else "drop_%d") % clampi(state.round_index, 0, 4)
+	_drop_player.stream = Sfx.get_stream(drop_name)
 
 	# 場所のある効果音(振り向く・お手つき・拾う・転ぶなど)
 	_fx3d.clear()
@@ -1339,7 +1397,7 @@ func _build_sounds(state: GameState) -> void:
 
 	# 環境音(ごく小さく)
 	_amb_player = Sfx.player_2d(self, GameConfig.AMBIENT_VOLUME_DB)
-	_amb_player.stream = Sfx.get_stream("amb_school")
+	_amb_player.stream = Sfx.get_stream("amb_beach" if _beach else "amb_school")
 	_amb_player.play()
 	_clock_player = Sfx.player_3d(self, GameConfig.CLOCK_VOLUME_DB, 2.0)
 	_clock_player.stream = Sfx.get_stream("clock_tick")
@@ -1508,6 +1566,8 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 	# 前を向いているときは少し後ろ・上から、振り向くと頭の位置から後ろをのぞきこむ
 	var back := lerpf(GameConfig.SEAT_CAM_BACK, GameConfig.LOOK_BACK_LEAN, t)
 	var height := lerpf(GameConfig.SEAT_CAM_HEIGHT, GameConfig.SEAT_CAM_HEIGHT_BACK, t)
+	if _beach:
+		height -= BEACH_CAM_DROP
 	_seat_cam.position = me.position + Vector3(0, height, 0) + back_dir * back
 	var pitch := lerpf(GameConfig.SEAT_CAM_PITCH_FRONT, GameConfig.SEAT_CAM_PITCH_BACK, t)
 	_seat_cam.rotation = Vector3(deg_to_rad(pitch), me.yaw + PI * t, 0.0)

@@ -16,6 +16,8 @@ var _look_button: Button
 ## 鬼の「牛乳をかける」ボタンと、表示中の残り回数
 var _milk_button: Button
 var _milk_label: Label
+## 海辺の舞台: 牛乳のかわりに水鉄砲
+var _water := false
 var _milk_badge: Label
 var _milk_icon: ButtonIcon
 var _milk_inner: Panel
@@ -181,6 +183,14 @@ func set_looks_left(n: int) -> void:
 
 ## 牛乳ボタンの見た目: 使える(白地に青の内枠・牛乳びん)/相手を選んでいる(青く光る・かたむけたパック・「えいっ」)/
 ## 使ったあと(灰色・倒れた空っぽのパック・「からっぽ」・押せない)。右上の角に残りの回数
+func set_water(v: bool) -> void:
+	if _water == v:
+		return
+	_water = v
+	# 次の set_milk_state で描き直す
+	_milk_shown = -99
+
+
 func set_milk_state(n: int, aiming: bool) -> void:
 	var key := n * 2 + (1 if aiming else 0)
 	if key == _milk_shown:
@@ -193,7 +203,7 @@ func set_milk_state(n: int, aiming: bool) -> void:
 	if empty:
 		normal = UiStyle.box(Color("E6E1D8"), false)
 		normal.border_color = Color("9A948C")
-		_milk_icon.kind = "milk_empty"
+		_milk_icon.kind = "water_empty" if _water else "milk_empty"
 		_milk_label.text = "からっぽ"
 		_milk_label.add_theme_color_override("font_color", Color("8A847C"))
 	elif aiming:
@@ -202,13 +212,13 @@ func set_milk_state(n: int, aiming: bool) -> void:
 		normal.shadow_color = Color(ButtonIcon.MILK_BLUE, 0.45)
 		normal.shadow_size = 10
 		normal.shadow_offset = Vector2.ZERO
-		_milk_icon.kind = "milk_pour"
+		_milk_icon.kind = "water_pour" if _water else "milk_pour"
 		_milk_label.text = "えいっ"
 		_milk_label.add_theme_color_override("font_color", GameConfig.COLOR_PAPER)
 	else:
 		normal = UiStyle.box(GameConfig.COLOR_PAPER)
-		_milk_icon.kind = "milk"
-		_milk_label.text = "牛乳"
+		_milk_icon.kind = "water" if _water else "milk"
+		_milk_label.text = "水鉄砲" if _water else "牛乳"
 		_milk_label.add_theme_color_override("font_color", GameConfig.COLOR_INK)
 	_milk_inner.visible = not empty and not aiming
 	UiStyle.refit_all()

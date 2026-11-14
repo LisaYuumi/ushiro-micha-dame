@@ -59,7 +59,7 @@ func _ready() -> void:
 	cmds = state
 	# 後ろに見える教室だけ先に作っておく(ロビーの背景)
 	state.start_match(-1, false)
-	view.build(state)
+	_build_view()
 	# 結果カードで、手下だと思う人の札をタップした
 	hud.vote_pressed.connect(_on_vote_pressed)
 	lobby.solo_pressed.connect(_on_solo)
@@ -152,6 +152,7 @@ func _on_host_start() -> void:
 			colors[next_id] = c
 		next_id += 1
 	var first_oni: int = humans[randi_range(0, humans.size() - 1)]
+	state.stage = Profile.stage
 	state.start_match_custom(-1, humans, first_oni, names, true, _seats, colors)
 	state.local_player_id = 0
 	mode = Mode.HOST
@@ -242,8 +243,17 @@ func _start_round() -> void:
 	if mode == Mode.HOST:
 		_on_host_start()
 		return
+	state.stage = Profile.stage
 	state.start_match(-1, _player_is_oni, _seats, Profile.player_name, Profile.color)
 	_refresh_round()
+
+
+## 3D の画面を作り直す。舞台が海辺なら、牛乳のボタンと画面の白いたれを水鉄砲・水しぶきにする
+func _build_view() -> void:
+	view.build(state)
+	var water := state.stage == "beach"
+	hud.set_water(water)
+	touch.set_water(water)
 
 
 ## ラウンドが変わったときに、画面とボットを作り直す
@@ -258,7 +268,7 @@ func _refresh_round() -> void:
 	_apply_stamp_words()
 	hud.show_my_stamps([])
 	hud.hide_message()
-	view.build(state)
+	_build_view()
 	_update_help()
 
 
@@ -407,7 +417,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		Profile.load_saved()
 		Profile.show_personality = not Profile.show_personality
 		Profile.save()
-		view.build(state)
+		_build_view()
 	elif event.is_action_pressed("debug_finish"):
 		# 確認用(ひとりのときだけ): いまのラウンドをすぐ「見逃し」で終わらせて、結果カードを見る
 		if mode == Mode.SOLO and state.phase != GameState.Phase.RESULT and state.phase != GameState.Phase.CHASE:
@@ -594,7 +604,7 @@ func set_language(lang: String) -> void:
 		_apply_stamp_words()
 		if mode == Mode.GUEST:
 			net.send_profile(Profile.to_dict())
-		view.build(state)
+		_build_view()
 		_update_help()
 
 
@@ -709,9 +719,9 @@ func _show_event(e: Dictionary) -> void:
 				hud.show_message(tr("かける人をタップしてね"), Color(0.3, 0.3, 0.3), 1.0)
 		"milk":
 			if e["target"] == me:
-				hud.show_message(tr("牛乳かけられた!"), Color(0.3, 0.45, 0.7), 1.2)
+				hud.show_message(tr("水鉄砲でかけられた!") if state.stage == "beach" else tr("牛乳かけられた!"), Color(0.3, 0.45, 0.7), 1.2)
 			elif e["sender"] == me:
-				hud.show_message(tr("%s に牛乳!") % _name(e["target"]), Color(0.3, 0.45, 0.7), 1.0)
+				hud.show_message((tr("%s に水鉄砲!") if state.stage == "beach" else tr("%s に牛乳!")) % _name(e["target"]), Color(0.3, 0.45, 0.7), 1.0)
 		"out":
 			if e["actor"] == me:
 				hud.show_message(tr("お手つき!\n真ん中でお休み(このラウンド0点)"), Color(0.85, 0.1, 0.1), 2.0)
@@ -852,7 +862,7 @@ func _show_result(r: Dictionary) -> void:
 		rows.append(row)
 	var vote := {"open": voting, "can_vote": can_vote}
 	var last := state.round_index + 1 >= GameConfig.ROUNDS_PER_MATCH
-	var next_text := tr("さいごの結果へ") if last else tr("次のラウンド(%s)へ") % Items.name_of(state.round_index + 1)
+	var next_text := tr("さいごの結果へ") if last else tr("次のラウンド(%s)へ") % Items.name_of(state.round_index + 1, state.stage)
 	hud.hide_message()
 	if r["winner"] == me:
 		hud.confetti()

@@ -60,6 +60,9 @@ var _milk_wipe := 0.0
 var _milk_wiping := false
 ## 上のまん中の「(牛乳びん) 見えるまで ▭▭▭」の札と、その棒
 var _milk_pill: PanelContainer
+## 海辺の舞台: 白い牛乳のかわりに、水色の水しぶき
+var _water := false
+var _milk_pill_icon: ButtonIcon
 var _milk_bar: Control
 
 
@@ -790,7 +793,8 @@ func _build_milk_pill() -> void:
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_theme_constant_override("separation", 8)
 	_milk_pill.add_child(row)
-	row.add_child(ButtonIcon.make("milk", Vector2(28, 34)))
+	_milk_pill_icon = ButtonIcon.make("milk", Vector2(28, 34))
+	row.add_child(_milk_pill_icon)
 	var l := UiStyle.label("見えるまで", 20, GameConfig.COLOR_INK)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(l)
@@ -822,17 +826,23 @@ func _build_milk_pill() -> void:
 	_milk_pill.grow_horizontal = Control.GROW_DIRECTION_BOTH
 
 
+func set_water(v: bool) -> void:
+	_water = v
+	if _milk_pill_icon:
+		_milk_pill_icon.kind = "water" if v else "milk"
+
+
 ## 上から白い牛乳がたれる: 見本をまねた絵(MilkArt の SVG)を上からすべり下ろして出し、
 ## その下で白い粒がゆっくり落ちる(黒い輪郭)
 func _draw_milk() -> void:
 	var sz := _milk.size
 	var t := Time.get_ticks_msec() / 1000.0
 	var ink := GameConfig.COLOR_INK
-	var white := Color(1.0, 1.0, 0.99)
+	var white := Color(MilkArt.WATER_WHITE) if _water else Color(1.0, 1.0, 0.99)
 	# かかった直後は、上からすべり下りてくる
 	var grow := clampf(_milk_t / 0.6, 0.0, 1.0)
 	grow = 1.0 - pow(1.0 - grow, 3.0)
-	var tex := MilkArt.texture(sz)
+	var tex := MilkArt.texture(sz, 1.5, _water)
 	if tex:
 		var drop := -(1.0 - grow) * sz.y * 0.6 + sin(t * 1.3) * 3.0
 		# 手でぬぐったら、牛乳は上のほうだけに(走る先の下半分が見える)

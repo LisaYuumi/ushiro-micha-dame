@@ -218,6 +218,18 @@ Waiting for everyone"
 the minion…"
 投票,投票,Vote
 当たり +%d,当たり +%d,Correct +%d
+教室,教室,Classroom
+海辺,海辺,Beach
+貝殻,貝殻,Seashell
+ビーチボール,ビーチボール,Beach ball
+浮き輪,浮き輪,Swim ring
+砂の城,砂の城,Sandcastle
+バナナボート,バナナボート,Banana boat
+水鉄砲,水鉄砲,Squirt
+水鉄砲でかけられた!,水鉄砲でかけられた!,You got squirted!
+%s に水鉄砲!,%s に水鉄砲!,Squirted %s!
+舞台: %s ▶,舞台: %s ▶,Stage: %s ▶
+人数: %d人 ▶,人数: %d人 ▶,Players: %d ▶
 %d点,%d点,%d pts
 ゴシゴシ!,ゴシゴシ!,Wipe wipe!
 停電!,停電!,Blackout!

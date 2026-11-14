@@ -23,6 +23,8 @@ var _code := ""
 ## 遊ぶ人数(鬼をふくむ全員の数)。ひとりで遊ぶとき・部屋を作るときに使う
 var players: int = GameConfig.PLAYER_COUNT_OPTIONS[0]
 var _players_button: Button
+## 舞台(タップで変える。この端末に保存)
+var _stage_button: Button
 ## スマホの指で押せるように、ボタンは自分で当たり判定をする
 var _buttons: Array[Button] = []
 ## 名前と色(Profile に保存する)
@@ -96,9 +98,17 @@ func _ready() -> void:
 	var solo := _button("ひとりで遊ぶ", func() -> void: solo_pressed.emit(), big, true)
 	solo.add_theme_font_size_override("font_size", 36)
 	menu_grid.add_child(solo)
-	_players_button = _button("", func() -> void: _toggle_players(), big)
-	menu_grid.add_child(_players_button)
+	# 人数と舞台(上下に半分ずつ)
+	var opts := VBoxContainer.new()
+	opts.add_theme_constant_override("separation", 10)
+	menu_grid.add_child(opts)
+	var half := Vector2(0, (big.y - 10.0) / 2.0)
+	_players_button = _button("", func() -> void: _toggle_players(), half)
+	opts.add_child(_players_button)
+	_stage_button = _button("", func() -> void: _toggle_stage(), half)
+	opts.add_child(_stage_button)
 	_update_players_button()
+	_update_stage_button()
 	menu_grid.add_child(_button("部屋を作る\n(ホスト)", func() -> void: host_pressed.emit(), big))
 	menu_grid.add_child(_button("部屋に入る\n(合言葉)", func() -> void: _show_join(), big))
 	for b in menu_grid.get_children():
@@ -365,6 +375,17 @@ func _toggle_players() -> void:
 	_update_players_button()
 
 
+func _toggle_stage() -> void:
+	var list: Array = Items.STAGES
+	Profile.stage = list[(list.find(Profile.stage) + 1) % list.size()]
+	Profile.save()
+	_update_stage_button()
+
+
+func _update_stage_button() -> void:
+	_stage_button.text = tr("舞台: %s ▶") % Items.stage_name(Profile.stage)
+
+
 func _update_language_button() -> void:
 	_lang_button.text = "🌐 " + str(Locale.NAMES.get(Locale.current(), Locale.current()))
 
@@ -375,13 +396,14 @@ func refresh_texts() -> void:
 	_update_language_button()
 	_update_profile()
 	_update_players_button()
+	_update_stage_button()
 	_update_words()
 	if _words_box.visible:
 		set_status("")
 
 
 func _update_players_button() -> void:
-	_players_button.text = tr("人数: %d人\n(タップで変える)") % players
+	_players_button.text = tr("人数: %d人 ▶") % players
 
 
 func show_menu() -> void:

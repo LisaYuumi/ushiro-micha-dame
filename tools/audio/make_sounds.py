@@ -571,6 +571,88 @@ def curtain():
     return norm(lowpass(noise(d), 1100) * env_ar(d, 0.7, 0.9) * (0.7 + 0.3 * np.sin(2 * np.pi * 2.3 * t_of(d))), 0.5)
 
 
+# --- 9. 海辺の舞台 ---
+
+def drop_beach_0():
+    # 貝殻「コトッ」: 小さくてかたい、砂の上なので短い
+    t = t_of(0.12)
+    shell = (np.sin(2 * np.pi * 2300 * t) * 0.6 + np.sin(2 * np.pi * 3400 * t) * 0.4) * np.exp(-t / 0.018)
+    sand = bandpass(noise(0.1), 1500, 6000) * env_exp(0.1, 0.03) * 0.5
+    return norm(mix(shell, sand, click(0.02, 2000, 6000, 0.004) * 0.4), 0.75)
+
+
+def drop_beach_1():
+    # ビーチボール「ボヨン、ボヨン」: 空気の入ったボールが2回はずむ
+    def boing(f, scale):
+        d = 0.22
+        t = t_of(d)
+        f_t = f * (1.0 + 0.25 * np.exp(-t / 0.03))
+        ph = 2 * np.pi * np.cumsum(f_t) / SR
+        return (np.sin(ph) * np.exp(-t / 0.07) + lowpass(noise(d), 600) * env_exp(d, 0.03) * 0.3) * scale
+    return norm(mix(boing(150, 1.0), at(boing(165, 0.55), 0.26), at(boing(175, 0.25), 0.44)), 0.85)
+
+
+def drop_beach_2():
+    # 浮き輪「ボフッ」: ゴムのふくらんだ輪が砂に落ちる、やわらかい低い音
+    d = 0.3
+    body = thud(130, 80, d, 0.07)
+    rub = bandpass(noise(d), 200, 900) * env_exp(d, 0.05) * 0.6
+    squeak = tone(glide(600, 450, 0.08), 0.08) * env_exp(0.08, 0.03) * 0.15
+    return norm(mix(body, rub, at(squeak, 0.02)), 0.85)
+
+
+def drop_beach_3():
+    # 砂の城「ザザッ」: 重い砂のかたまりが置かれて、少しくずれる
+    d = 0.6
+    thump = thud(100, 50, 0.3, 0.07)
+    pour = lowpass(highpass(noise(d), 700), 5000) * env_ar(d, 0.02, 0.45) * 0.7
+    trickle = bandpass(noise(0.35), 2500, 7000) * env_ar(0.35, 0.05, 0.25) * 0.35
+    return norm(mix(thump, pour, at(trickle, 0.22)), 0.85)
+
+
+def drop_beach_4():
+    # バナナボート「ボヨォーン」: 大きなゴムボートが砂にドスンと落ちて、ゆれる
+    d = 1.0
+    t = t_of(d)
+    boom = thud(80, 38, d, 0.25)
+    wob = np.sin(2 * np.pi * (95 + 12 * np.sin(2 * np.pi * 5.5 * t)) * t) * np.exp(-t / 0.3) * 0.6
+    sand = lowpass(noise(d), 1500) * env_exp(d, 0.2) * 0.4
+    return norm(mix(boom, wob, sand), 0.9)
+
+
+def step_sand():
+    # 鬼の足音(砂): サクッ。教室より少しやわらかいが、聞こえるように中くらいの高さ
+    crunch = bandpass(noise(0.11), 900, 4200) * env_ar(0.11, 0.01, 0.09)
+    grain = highpass(noise(0.06), 3000) * env_exp(0.06, 0.015) * 0.35
+    body = thud(160, 100, 0.06, 0.02) * 0.4
+    return norm(mix(crunch, grain, body), 0.9)
+
+
+def run_step_sand():
+    # 走る足音(砂): ザッ
+    return norm(mix(bandpass(noise(0.07), 600, 3500) * env_ar(0.07, 0.005, 0.06), thud(140, 90, 0.05, 0.015) * 0.4), 0.8)
+
+
+def amb_beach():
+    # 波の音(ループ): 寄せては返す、ゆっくりのザザーン。ときどき遠くのカモメ
+    d = 16.0
+    t = t_of(d)
+    base = lowpass(noise(d), 2200)
+    # 波は約 5.3 秒ごと(ループの長さで割り切れるように 3 回)
+    phase = (t / d * 3.0) % 1.0
+    swell = np.where(phase < 0.35, (phase / 0.35) ** 2, np.exp(-(phase - 0.35) / 0.22))
+    foam = highpass(noise(d), 2500) * np.clip(swell - 0.5, 0, 1) * 0.6
+    under = lowpass(noise(d), 300) * 0.25
+    gulls = np.zeros(len(t))
+    for s0 in [3.4, 3.9, 11.2]:
+        g = voice(glide(1500, 1100, 0.35), 0.35, [(1800, 1.0), (3200, 0.4)], breath=0.05) * env_ar(0.35, 0.05, 0.25) * 0.08
+        gulls[int(s0 * SR): int(s0 * SR) + len(g)] += g
+    loop = base * (0.15 + 0.85 * swell) * 0.8 + foam + under + gulls
+    fade = int(0.5 * SR)
+    loop[:fade] = loop[:fade] * np.linspace(0, 1, fade) + loop[-fade:] * np.linspace(1, 0, fade)
+    return norm(loop[:-fade], 0.6)
+
+
 SOUNDS = {
     "drop_0": drop_0, "drop_1": drop_1, "drop_2": drop_2, "drop_3": drop_3, "drop_4": drop_4,
     "step": step, "run_step": run_step,
@@ -582,6 +664,9 @@ SOUNDS = {
     "bgm_lobby": bgm_lobby, "bgm_round_1": bgm_round_1, "bgm_round_2": bgm_round_2, "bgm_round_3": bgm_round_3,
     "bgm_chase": bgm_chase,
     "amb_school": amb_school, "clock_tick": clock_tick, "curtain": curtain,
+    "drop_beach_0": drop_beach_0, "drop_beach_1": drop_beach_1, "drop_beach_2": drop_beach_2,
+    "drop_beach_3": drop_beach_3, "drop_beach_4": drop_beach_4,
+    "step_sand": step_sand, "run_step_sand": run_step_sand, "amb_beach": amb_beach,
 }
 
 

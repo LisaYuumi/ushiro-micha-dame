@@ -65,6 +65,7 @@ func _initialize() -> void:
 	_test_minion()
 	_test_two_minions()
 	_test_minion_vote()
+	_test_beach_stage()
 	_test_bot_personalities()
 	_test_look_limit_and_patience()
 	_test_online_match_setup()
@@ -1833,3 +1834,22 @@ func _test_minion_vote() -> void:
 		brain.update(s4, STEP)
 		s4.tick(STEP)
 	_check(not s4.voting_open, "ボットだけなら、ボットが全員投票して発表される")
+
+
+## 舞台: 海辺の落とし物と、状態で届く舞台
+func _test_beach_stage() -> void:
+	var s := GameState.new()
+	s.stage = "beach"
+	s.start_match(90)
+	_check(s.stage == "beach", "試合を始めても舞台はそのまま")
+	var names := []
+	for i in Items.count():
+		names.append(Items.NAMES_BY_STAGE["beach"][i])
+	_check(names == ["貝殻", "ビーチボール", "浮き輪", "砂の城", "バナナボート"], "海辺の落とし物は 貝殻→ビーチボール→浮き輪→砂の城→バナナボート")
+	var g := GameState.new()
+	g.apply_snapshot(s.snapshot(1))
+	_check(g.stage == "beach", "参加した人にも舞台が届く")
+	_check(Items.clean_stage("castle") == "classroom", "知らない舞台は教室")
+	var c := GameState.new()
+	c.start_match(91)
+	_check(c.stage == "classroom", "はじめの舞台は教室")

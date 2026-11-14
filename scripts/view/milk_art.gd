@@ -10,6 +10,9 @@ extends RefCounted
 const INK := "#1E1B18"
 const WHITE := "#FFFFFD"
 const SHADE := "#CFE6F7"
+## 海辺の水鉄砲の水しぶき(同じ形で、水色)
+const WATER_WHITE := "#E3F6FF"
+const WATER_SHADE := "#7CC8EE"
 ## 輪郭の太さ・かげの厚み(画面の高さ 720 のとき)
 const LINE := 8.0
 const SHADE_DEPTH := 10.0
@@ -47,14 +50,14 @@ static var _cache := {}
 
 
 ## 画面の大きさ size(論理ピクセル)の絵。pixel_scale 倍の細かさで作る
-static func texture(size: Vector2, pixel_scale: float = 1.5) -> Texture2D:
+static func texture(size: Vector2, pixel_scale: float = 1.5, water: bool = false) -> Texture2D:
 	var w := maxf(size.x, 64.0)
 	var h := maxf(size.y, 64.0)
-	var key := "%d|%d|%.2f" % [int(w), int(h), pixel_scale]
+	var key := "%d|%d|%.2f|%s" % [int(w), int(h), pixel_scale, water]
 	if _cache.has(key):
 		return _cache[key]
 	var img := Image.new()
-	var err := img.load_svg_from_string(svg(w, h), pixel_scale)
+	var err := img.load_svg_from_string(svg(w, h, water), pixel_scale)
 	if err != OK:
 		return null
 	var tex := ImageTexture.create_from_image(img)
@@ -74,7 +77,9 @@ static func band_edge(x: float, w: float, h: float) -> float:
 
 
 ## 牛乳の形の SVG(幅 w・高さ h)
-static func svg(w: float, h: float) -> String:
+static func svg(w: float, h: float, water: bool = false) -> String:
+	var white := WATER_WHITE if water else WHITE
+	var shade := WATER_SHADE if water else SHADE
 	var k := h / 720.0
 	var shapes := _shapes(w, h)
 	var out := PackedStringArray()
@@ -84,17 +89,17 @@ static func svg(w: float, h: float) -> String:
 		out.append('<path d="%s" fill="%s" stroke="%s" stroke-width="%.1f" stroke-linejoin="round"/>' % [d, INK, INK, LINE * k * 2.0])
 	# 水色(かげ)を塗り、白を少し上にずらして重ねる(下のふちに水色が残る)
 	for d in shapes:
-		out.append('<path d="%s" fill="%s"/>' % [d, SHADE])
+		out.append('<path d="%s" fill="%s"/>' % [d, shade])
 	for d in shapes:
-		out.append('<path d="%s" fill="%s" transform="translate(0,%.1f)"/>' % [d, WHITE, -SHADE_DEPTH * k])
+		out.append('<path d="%s" fill="%s" transform="translate(0,%.1f)"/>' % [d, white, -SHADE_DEPTH * k])
 	# 帯の中のうすい水色のむら
 	for i in 4:
 		var cx := w * (0.14 + 0.24 * float(i))
 		var cy := h * BAND * (0.3 + 0.35 * fposmod(float(i) * 0.37, 1.0))
-		out.append('<ellipse cx="%.1f" cy="%.1f" rx="%.1f" ry="%.1f" fill="%s" opacity="0.8"/>' % [cx, cy, h * 0.09, h * 0.02, SHADE])
+		out.append('<ellipse cx="%.1f" cy="%.1f" rx="%.1f" ry="%.1f" fill="%s" opacity="0.8"/>' % [cx, cy, h * 0.09, h * 0.02, shade])
 	# 落ちかけの粒(それぞれ黒い輪郭)
 	for drop in _loose_drops(w, h):
-		out.append(_drop_svg(drop[0], drop[1], drop[2], k))
+		out.append(_drop_svg(drop[0], drop[1], drop[2], k, white))
 	out.append('</svg>')
 	return "".join(out)
 
@@ -159,7 +164,7 @@ static func _loose_drops(w: float, h: float) -> Array:
 
 
 ## しずく形の粒(上がとがって、下が丸い。白に黒い輪郭)
-static func _drop_svg(cx: float, cy: float, r: float, k: float) -> String:
+static func _drop_svg(cx: float, cy: float, r: float, k: float, white: String = WHITE) -> String:
 	return '<path d="M %.1f %.1f Q %.1f %.1f %.1f %.1f A %.1f %.1f 0 1 1 %.1f %.1f Q %.1f %.1f %.1f %.1f Z" fill="%s" stroke="%s" stroke-width="%.1f"/>' % [
 		cx, cy - r * 2.3, cx + r * 0.25, cy - r * 1.2, cx + r, cy, r, r, cx - r, cy,
-		cx - r * 0.25, cy - r * 1.2, cx, cy - r * 2.3, WHITE, INK, LINE * k * 0.7]
+		cx - r * 0.25, cy - r * 1.2, cx, cy - r * 2.3, white, INK, LINE * k * 0.7]

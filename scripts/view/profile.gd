@@ -27,6 +27,8 @@ static var lang := ""
 static var vol_master := 1.0
 static var vol_bgm := 0.7
 static var vol_sfx := 1.0
+## ロビーで選んだ舞台(Items.STAGES)
+static var stage := "classroom"
 static var _loaded := false
 
 
@@ -46,6 +48,7 @@ static func load_saved() -> void:
 	vol_bgm = clampf(float(cfg.get_value("profile", "vol_bgm", 0.7)), 0.0, 1.0)
 	vol_sfx = clampf(float(cfg.get_value("profile", "vol_sfx", 1.0)), 0.0, 1.0)
 	stamp_words = clean_words(cfg.get_value("profile", "stamp_words", {}))
+	stage = Items.clean_stage(str(cfg.get_value("profile", "stage", "classroom")))
 
 
 static func save() -> void:
@@ -59,6 +62,7 @@ static func save() -> void:
 	cfg.set_value("profile", "vol_bgm", vol_bgm)
 	cfg.set_value("profile", "vol_sfx", vol_sfx)
 	cfg.set_value("profile", "stamp_words", stamp_words)
+	cfg.set_value("profile", "stage", stage)
 	cfg.save(PATH)
 
 

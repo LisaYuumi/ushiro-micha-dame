@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(228)
+## 一覧(240)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -183,6 +183,18 @@
 | みんなが手下を<br>当てています… | Everyone is guessing<br>the minion… |
 | 投票 | Vote |
 | 当たり +%d | Correct +%d |
+| 教室 | Classroom |
+| 海辺 | Beach |
+| 貝殻 | Seashell |
+| ビーチボール | Beach ball |
+| 浮き輪 | Swim ring |
+| 砂の城 | Sandcastle |
+| バナナボート | Banana boat |
+| 水鉄砲 | Squirt |
+| 水鉄砲でかけられた! | You got squirted! |
+| %s に水鉄砲! | Squirted %s! |
+| 舞台: %s ▶ | Stage: %s ▶ |
+| 人数: %d人 ▶ | Players: %d ▶ |
 | %d点 | %d pts |
 | ゴシゴシ! | Wipe wipe! |
 | 停電! | Blackout! |

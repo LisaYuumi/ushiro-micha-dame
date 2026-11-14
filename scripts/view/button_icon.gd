@@ -37,6 +37,15 @@ func _draw() -> void:
 		"milk_empty":
 			# 倒れた空っぽのパック(灰色っぽく)
 			_draw_carton(c + Vector2(0, s * 0.1), s * 0.8, line, deg_to_rad(-80.0), Color("F2EFEA"), Color("B9B4AC"), Color("8A847C"))
+		"water":
+			_draw_water_gun(c, s, line, Color("FF8A3D"), Color("6CC6F2"), INK)
+		"water_pour":
+			# 水鉄砲から水が飛ぶ(白い線で描く: 青い地の上に乗せるため)
+			_draw_water_gun(c + Vector2(s * 0.1, s * 0.05), s * 0.9, line, Color.WHITE, Color("BFE8FF"), INK)
+			for d in [Vector2(-0.42, -0.2), Vector2(-0.3, -0.32), Vector2(-0.46, -0.04)]:
+				_drop_shape(c + (d as Vector2) * s, s * 0.07, line * 0.7)
+		"water_empty":
+			_draw_water_gun(c, s * 0.9, line, Color("D8D3CC"), Color("ECE8E2"), Color("8A847C"))
 		"drop":
 			_draw_hankie(c, s, line, false)
 		"fake":
@@ -86,6 +95,28 @@ func _draw_carton(c: Vector2, s: float, line: float, rot: float, body: Color, ba
 		draw_polyline(closed, ink, line, true)
 	draw_rect(spout, ink, false, line * 0.8)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## 水鉄砲(左向き): 銃身・上の水タンク・持ち手・引き金
+func _draw_water_gun(c: Vector2, s: float, line: float, body: Color, tank: Color, ink: Color) -> void:
+	var barrel := Rect2(c + Vector2(-s * 0.42, -s * 0.12), Vector2(s * 0.78, s * 0.2))
+	var nozzle := Rect2(c + Vector2(-s * 0.5, -s * 0.08), Vector2(s * 0.1, s * 0.12))
+	var grip := PackedVector2Array([c + Vector2(s * 0.08, s * 0.06), c + Vector2(s * 0.3, s * 0.06),
+			c + Vector2(s * 0.36, s * 0.42), c + Vector2(s * 0.14, s * 0.42)])
+	draw_colored_polygon(grip, body)
+	var gc := grip.duplicate()
+	gc.append(grip[0])
+	draw_polyline(gc, ink, line, true)
+	draw_rect(barrel, body)
+	draw_rect(barrel, ink, false, line)
+	draw_rect(nozzle, body)
+	draw_rect(nozzle, ink, false, line * 0.8)
+	# タンク(丸)
+	var tc := c + Vector2(-s * 0.04, -s * 0.26)
+	draw_circle(tc, s * 0.17 + line * 0.5, ink)
+	draw_circle(tc, s * 0.17 - line * 0.5, tank)
+	# 引き金
+	draw_arc(c + Vector2(s * 0.02, s * 0.14), s * 0.07, 0.0, PI, 8, ink, line * 0.8, true)
 
 
 ## しずく(白に黒い輪郭)
