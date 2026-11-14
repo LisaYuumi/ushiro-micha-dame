@@ -440,18 +440,18 @@ func _build_acc_hat(kind: String, col: Color, line: float) -> Node3D:
 			crown.height = 0.228
 			crown.is_hemisphere = true
 			var cm := _mesh(crown, col, line)
-			cm.position = Vector3(0, HEAD_Y + 0.08, 0)
-			cm.scale = Vector3(1.0, 0.85, 1.0)
+			cm.position = Vector3(0, HEAD_Y + 0.11, 0)
+			cm.scale = Vector3(1.0, 0.8, 1.0)
 			root.add_child(cm)
 			var visor := _mesh(StaticBatch.chamfer_mesh(Vector3(0.3, 0.025, 0.2), 0.012), col.darkened(0.12), line)
-			visor.position = Vector3(0, HEAD_Y + 0.09, -0.27)
+			visor.position = Vector3(0, HEAD_Y + 0.13, -0.27)
 			visor.rotation.x = -0.12
 			root.add_child(visor)
 			var button := SphereMesh.new()
 			button.radius = 0.025
 			button.height = 0.03
 			var bm := _mesh(button, col.darkened(0.12), 0.0)
-			bm.position = Vector3(0, HEAD_Y + 0.275, 0)
+			bm.position = Vector3(0, HEAD_Y + 0.29, 0)
 			root.add_child(bm)
 		"beanie":
 			var crown := SphereMesh.new()
@@ -546,8 +546,10 @@ func _build_glasses(kind: String, col: Color, line: float) -> Node3D:
 ## リボン: 頭の右上に、2つの輪と結び目と、たれる2本の端
 func _build_ribbon(col: Color, line: float) -> Node3D:
 	var root := Node3D.new()
-	root.position = Vector3(0.13, HEAD_Y + 0.17, -0.02)
-	root.rotation = Vector3(0.0, 0.3, -0.55)
+	# 頭の右の横(帽子のつばの下)に、少し前を向けて
+	root.position = Vector3(0.2, HEAD_Y + 0.1, -0.03)
+	root.rotation = Vector3(0.0, 0.5, -0.9)
+	root.scale = Vector3.ONE * 1.25
 	for side in [-1.0, 1.0]:
 		var loop := SphereMesh.new()
 		loop.radius = 0.06

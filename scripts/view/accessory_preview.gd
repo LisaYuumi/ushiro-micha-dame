@@ -20,7 +20,7 @@ func _init() -> void:
 	add_child(_vp)
 	var cam := Camera3D.new()
 	cam.fov = 30.0
-	cam.look_at_from_position(Vector3(0, 1.25, -3.3), Vector3(0, 1.05, 0))
+	cam.look_at_from_position(Vector3(0, 1.45, -4.3), Vector3(0, 1.12, 0))
 	_vp.add_child(cam)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-40, 160, 0)

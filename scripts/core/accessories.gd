@@ -25,8 +25,8 @@ const COLORS := [
 	Color("E5483B"), Color("F2AA4C"), Color("EDC94B"), Color("7CC576"), Color("4D96FF"),
 	Color("B07CF0"), Color("F4A3B6"), Color("2E2B28"), Color("FFFFFF"),
 ]
-## はじめの色(帽子は青、メガネは黒、リボンは赤、鼻はピンク)
-const DEFAULT_COLOR := {"hat": 4, "glasses": 7, "ribbon": 0, "nose": 6}
+## はじめの色(帽子は赤、メガネは黒、リボンと鼻はピンク。帽子は黄色にしない: 鬼の黄色い帽子とまちがえないように)
+const DEFAULT_COLOR := {"hat": 0, "glasses": 7, "ribbon": 6, "nose": 6}
 
 
 ## 何もつけていない形
