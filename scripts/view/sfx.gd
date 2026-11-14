@@ -64,8 +64,9 @@ static func player_2d(parent: Node, vol_db: float = 0.0) -> AudioStreamPlayer:
 	var p := AudioStreamPlayer.new()
 	p.bus = BUS_SFX
 	p.volume_db = vol_db
-	# スマホのブラウザでも鳴るように、PC と同じ方式で再生する
-	p.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
+	# 再生のしかたは指定しない(Web ではブラウザの音の仕組みで直接鳴らす「サンプル再生」が標準)。
+	# Godot が自分で混ぜる方式(STREAM)だと、スレッドなしの Web 版では描画がつまるたびに音がとぎれ、
+	# 一部の Android で音が震えて聞こえた
 	parent.add_child(p)
 	return p
 
@@ -76,6 +77,5 @@ static func player_3d(parent: Node, vol_db: float = 0.0, unit: float = 2.0) -> A
 	p.bus = BUS_SFX
 	p.volume_db = vol_db
 	p.unit_size = unit
-	p.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	parent.add_child(p)
 	return p
