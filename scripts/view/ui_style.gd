@@ -144,17 +144,45 @@ static func _apply_fit(ctrl: Control, base: int, max_w: float, min_size: int) ->
 	elif ctrl is Label:
 		text = (ctrl as Label).text
 	text = String(TranslationServer.translate(text))
-	var font := HudFont.get_font()
-	var size := base
-	while size > min_size:
-		var widest := 0.0
-		for line in text.split("\n"):
-			widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x)
-		if widest <= max_w:
-			break
-		size -= 1
+	var size := fit_size(text, base, max_w, min_size)
+	# 大きさが変わらなければ何もしない(並べ直しを起こさない。ボタンを押すたびに重くならないように)
+	if ctrl.has_theme_font_size_override("font_size") and ctrl.get_theme_font_size("font_size") == size:
+		return
 	ctrl.add_theme_font_size_override("font_size", size)
 
+
+## はみ出さない文字の大きさ。一度測った文字と幅は覚えておく。測るときは半分ずつしぼりこむ
+static var _size_cache := {}
+
+
+static func fit_size(text: String, base: int, max_w: float, min_size: int) -> int:
+	var key := "%s|%d|%d|%d" % [text, base, int(max_w), min_size]
+	if _size_cache.has(key):
+		return _size_cache[key]
+	var font := HudFont.get_font()
+	var lines := text.split("\n")
+	var fits := func(sz: int) -> bool:
+		for line in lines:
+			if font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, sz).x > max_w:
+				return false
+		return true
+	var size := base
+	if not fits.call(base):
+		# min_size〜base の間で、入るいちばん大きい大きさ
+		var lo := min_size
+		var hi := base - 1
+		size = min_size
+		while lo <= hi:
+			var mid := (lo + hi) / 2
+			if fits.call(mid):
+				size = mid
+				lo = mid + 1
+			else:
+				hi = mid - 1
+	if _size_cache.size() > 2000:
+		_size_cache.clear()
+	_size_cache[key] = size
+	return size
 
 
 ## 文字の色を変える(同じ色なら何もしない。毎フレーム呼んでも、並べ直しが起きないように)

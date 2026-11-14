@@ -19,6 +19,8 @@ var _pool: Array[AudioStreamPlayer] = []
 var _next := 0
 ## BGM の切りかえの途中のフェード(すぐ次に切りかえたら止めて、音が消えたままにならないように)
 var _fade: Tween
+## ボタンの「ポッ」専用(ほかの効果音のプレイヤーを横取りして、鳴っている音を切らないように)
+var _click_player: AudioStreamPlayer
 
 
 func _ready() -> void:
@@ -33,6 +35,8 @@ func _ready() -> void:
 		_bgm.append(p)
 	for i in 6:
 		_pool.append(Sfx.player_2d(self))
+	_click_player = Sfx.player_2d(self)
+	_click_player.stream = Sfx.get_stream("ui_click")
 
 
 ## BGM を切りかえる(同じ曲なら何もしない。"" で止める)
@@ -79,8 +83,11 @@ func play(sound_name: String, vol_db: float = 0.0, pitch: float = 1.0) -> void:
 
 ## ボタンを押したときの「ポッ」(どこからでも)
 static func click() -> void:
-	if instance:
-		instance.play("ui_click", -8.0, randf_range(0.95, 1.05))
+	if instance and instance._click_player:
+		var p := instance._click_player
+		p.volume_db = -8.0
+		p.pitch_scale = randf_range(0.95, 1.05)
+		p.play()
 
 
 ## どこからでも効果音を鳴らす
