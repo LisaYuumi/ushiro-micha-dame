@@ -1241,7 +1241,10 @@ func _run(a: Actor, delta: float, is_oni: bool) -> void:
 		side = clampf(want - a.run_r, -GameConfig.LANE_CHANGE_SPEED * delta, GameConfig.LANE_CHANGE_SPEED * delta)
 	a.run_r += side
 	var ang := oni_angle if is_oni else runner_angle(a)
-	var step := GameConfig.CHASE_SPEED * delta / maxf(a.run_r, 0.5)
+	# 内側の近道は、少しだけ効く(LANE_SHORTCUT)。回る速さは「まん中の列に近づけた半径」で決める
+	var mid: float = GameConfig.LANE_RADII[1]
+	var eff_r := mid + (a.run_r - mid) * GameConfig.LANE_SHORTCUT
+	var step := GameConfig.CHASE_SPEED * delta / maxf(eff_r, 0.5)
 	ang += step
 	if is_oni:
 		ang = minf(ang, oni_seat_angle)

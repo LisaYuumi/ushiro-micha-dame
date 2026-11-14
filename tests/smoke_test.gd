@@ -362,8 +362,14 @@ func _test_chase_lanes_and_speed() -> void:
 	s.tick(STEP)
 	var cs := c.position.distance_to(p0) / STEP
 	var os := oni.position.distance_to(o0) / STEP
-	_check(absf(cs - GameConfig.CHASE_SPEED) < 0.05 and absf(os - GameConfig.CHASE_SPEED) < 0.05,
-			"鬼も追いかける人も同じ速さ(%.2f / %.2f)" % [cs, os])
+	# 同じ速さで走る。内側の近道は少しだけ効く(回る速さは、まん中の列に近づけた半径で決まる)
+	var mid: float = GameConfig.LANE_RADII[1]
+	var expect_c := GameConfig.CHASE_SPEED * c.run_r / (mid + (c.run_r - mid) * GameConfig.LANE_SHORTCUT)
+	var expect_o := GameConfig.CHASE_SPEED * oni.run_r / (mid + (oni.run_r - mid) * GameConfig.LANE_SHORTCUT)
+	_check(absf(cs - expect_c) < 0.05 and absf(os - expect_o) < 0.05,
+			"鬼も追いかける人も同じ速さで走る(%.2f / %.2f)" % [cs, os])
+	var inner_gain := (mid / (mid + (float(GameConfig.LANE_RADII[0]) - mid) * GameConfig.LANE_SHORTCUT)) - 1.0
+	_check(inner_gain < 0.08, "内側の近道は効きすぎない(まん中より %.1f%% 速いだけ)" % (inner_gain * 100.0))
 	# 座っている人は走れない
 	var seated := s.get_actor_at_seat((s.vacant_seat + 2) % GameConfig.SEAT_COUNT)
 	var lane0 := seated.lane
