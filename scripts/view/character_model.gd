@@ -130,6 +130,12 @@ var _lean := 0.0
 var _slump := 0.0
 var _time := 0.0
 var _slip := 0.0
+## 転んでいる(前にばったり倒れている)度合い 0〜1。物理演算は使わず、決まった動きで倒れて起き上がる
+## (画面のコマが遅くても速くても同じように動く。前は物理演算で、コマが遅いと体が飛んだりした)
+var _down := false
+var _down_hold := false
+var _down_timer := 0.0
+var _down_w := 0.0
 ## まばたき: 次のまばたきまでの時間と、目を閉じている残り時間
 var _blink_wait := randf_range(1.5, 4.0)
 var _blink_left := 0.0
@@ -216,7 +222,7 @@ func build(color: Color, display_name: String, font: Font) -> void:
 		_x_eyes.append(xe)
 
 	_build_name_tag(display_name, font)
-	_build_ragdoll()
+	# (物理演算で倒れる仕組みは使わない: コマが遅いと体が飛ぶので。転ぶ動きは animate で決まった動きにする)
 
 	set_expression(NORMAL)
 	set_pose("sit")
@@ -847,29 +853,15 @@ func hop() -> void:
 ## hold = true なら倒れたまま(撮影モード用。stop_ragdoll で元に戻す)
 func slip(hold: bool = false) -> void:
 	_slip = 1.0
-	_ragdoll_hold = hold
-	if _sim == null or not is_inside_tree() or _pbones.is_empty():
-		return
-	_sim.influence = 1.0
-	_sim.physical_bones_start_simulation()
-	_ragdoll_t = 0.0
-	_ragdoll_w = 1.0
-	# 走っていた向きへ、上半身を前に投げ出し、足をすくう
-	var fwd := -global_transform.basis.z
-	fwd.y = 0.0
-	fwd = fwd.normalized()
-	for pb in _pbones:
-		var b := String(pb.bone_name)
-		if b.begins_with("DEF-thigh") or b.begins_with("DEF-shin"):
-			pb.apply_central_impulse(-fwd * 1.6 * pb.mass)
-		elif b == "DEF-hips":
-			pb.apply_central_impulse((fwd * 0.5 + Vector3.DOWN * 1.5) * pb.mass)
-		else:
-			pb.apply_central_impulse((fwd * 3.0 + Vector3.DOWN * 1.0) * pb.mass)
+	_down_hold = hold
+	_down_timer = GameConfig.SLIP_TIME
 
 
 ## 倒れているのをやめて、ふつうの動きに戻す
 func stop_ragdoll() -> void:
+	_down_hold = false
+	_down_timer = 0.0
+	_down = false
 	if _ragdoll_t < 0.0:
 		return
 	_sim.physical_bones_stop_simulation()
@@ -894,6 +886,11 @@ func _update_ragdoll(delta: float) -> void:
 		_ragdoll_w = 0.0
 
 
+## 転んでいるか(状態の「転んで止まっている残り時間」から、毎フレーム渡す)
+func set_down(v: bool) -> void:
+	_down = v
+
+
 ## 毎フレームの動き。running: 走っている(大げさに揺れる)
 func animate(delta: float, running: bool) -> void:
 	_time += delta
@@ -909,10 +906,7 @@ func animate(delta: float, running: bool) -> void:
 	var bob := sin(_time * 18.0) * 0.04 * _lean
 	_pivot.position = Vector3(0, hop_y + bob, 0)
 	_slip = maxf(_slip - delta / GameConfig.SLIP_TIME, 0.0)
-	# 転ぶ: 物理演算が使えないとき(画面に出ていないときなど)だけ、横にばったり倒れる動きで代わりにする
 	_pivot.rotation.z = 0.0
-	if _ragdoll_t < 0.0:
-		_pivot.rotation.z = sin(minf(_slip * 3.0, 1.0) * PI / 2.0) * 1.3 * minf(_slip * 1.5, 1.0)
 	# お手つきが重なるほど落ち着きがなくなる: 2回でふるえ、放心でふらふら
 	if _fluster == 2:
 		_pivot.position.x = sin(_time * 45.0) * 0.012
@@ -927,6 +921,15 @@ func animate(delta: float, running: bool) -> void:
 	# 走る動きは素材が前のめりなので、ここでは少しだけ足す
 	_pivot.rotation.x = -0.1 * _lean * (1.0 - _slip) - 0.25 * _slump
 	_pivot.scale = Vector3(1.0, 1.0 - 0.08 * _slump, 1.0)
+	# 転ぶ: 足もとを中心に、前(-Z)へばったり倒れる(すばやく倒れて、ゆっくり起き上がる)
+	_down_timer = maxf(_down_timer - delta, 0.0)
+	var want_down := _down or _down_hold or _down_timer > 0.0
+	_down_w = move_toward(_down_w, 1.0 if want_down else 0.0, delta / (0.22 if want_down else 0.4))
+	if _down_w > 0.0:
+		var e := _ease(_down_w)
+		_pivot.rotation.x += -1.38 * e
+		_pivot.rotation.z += sin(_time * 7.0) * 0.06 * e if want_down else 0.0
+		_pivot.position.y += 0.16 * e
 	# 体育座り: 腰を中心に後ろへ傾ける(ひざが立つ)。腰が床の上に来るように下げる
 	_floor_w = move_toward(_floor_w, 1.0 if _pose == "floor" else 0.0, delta * 2.5)
 	if _floor_w > 0.0:

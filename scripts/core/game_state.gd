@@ -1052,6 +1052,7 @@ func snapshot(viewer: int = -1) -> Dictionary:
 			"seat": a.seat_index,
 			"pos": a.position,
 			"yaw": a.yaw,
+			"slip": a.slip_left,
 			"looking_back": a.looking_back,
 			"otetsuki": a.otetsuki_count,
 			"stamps_left": a.stamps_left,
@@ -1122,6 +1123,7 @@ func apply_snapshot(s: Dictionary) -> void:
 		a.seat_index = d["seat"]
 		a.position = d["pos"]
 		a.yaw = d["yaw"]
+		a.slip_left = float(d.get("slip", 0.0))
 		a.looking_back = d["looking_back"]
 		a.otetsuki_count = d["otetsuki"]
 		a.stamps_left = d["stamps_left"]

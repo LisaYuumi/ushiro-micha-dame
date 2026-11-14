@@ -179,15 +179,14 @@ func _check_fall(delta: float) -> void:
 		return
 	var before := _fall_clock
 	_fall_clock += delta
-	if _fall_clock <= CharacterModel.RAGDOLL_FALL_TIME:
+	if _fall_clock <= GameConfig.SLIP_TIME:
 		_faller_min_head_y = minf(_faller_min_head_y, y)
 	if int(before * 10.0) != int(_fall_clock * 10.0):
-		var pb_y := _faller._pbones[0].global_position.y if not _faller._pbones.is_empty() else -1.0
-		print("fall %.1fs: head y %.2f / hips body y %.2f / w %.2f" % [_fall_clock, y, pb_y, _faller._ragdoll_w])
-	if _fall_clock > CharacterModel.RAGDOLL_FALL_TIME + CharacterModel.RAGDOLL_RISE_TIME + 0.3:
+		print("fall %.1fs: head y %.2f / down %.2f" % [_fall_clock, y, _faller._down_w])
+	if _fall_clock > GameConfig.SLIP_TIME + 0.4 + 0.3:
 		_fall_done = true
 		_check(_faller_min_head_y < _faller_head_y - 0.5, "転ぶと頭が下がる(%.2f → %.2f)" % [_faller_head_y, _faller_min_head_y])
-		_check(absf(y - _faller_head_y) < 0.25 and _faller._ragdoll_w == 0.0, "少しすると起き上がる(頭 %.2f)" % y)
+		_check(absf(y - _faller_head_y) < 0.25 and _faller._down_w == 0.0, "少しすると起き上がる(頭 %.2f)" % y)
 
 
 # --- テスト ---
