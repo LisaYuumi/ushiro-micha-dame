@@ -17,7 +17,7 @@ const JS := """
   var title = document.createElement('div'); title.textContent = q;
   title.style.cssText = 'font-size:20px;font-weight:bold;margin-bottom:12px;color:#1E1B18;';
   var input = document.createElement('input'); input.value = v; if (m > 0) input.maxLength = m;
-  input.style.cssText = 'width:100%;box-sizing:border-box;font-size:22px;padding:10px;border:3px solid #1E1B18;border-radius:12px;';
+  input.style.cssText = 'width:100%%;box-sizing:border-box;font-size:22px;padding:10px;border:3px solid #1E1B18;border-radius:12px;';
   var row = document.createElement('div'); row.style.cssText = 'display:flex;gap:12px;margin-top:14px;';
   var mk = function(text, bg, fg){ var b = document.createElement('button'); b.textContent = text;
     b.style.cssText = 'flex:1;font-size:20px;padding:10px;border:3px solid #1E1B18;border-radius:12px;background:' + bg + ';color:' + fg + ';'; return b; };
