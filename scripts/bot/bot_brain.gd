@@ -16,6 +16,8 @@ var _banana_left := {}
 var _stamp_pending := {}
 ## 走るボットが、その障害物をよけるか(「走る人の id|障害物の id」 -> true/false。気づかずにぶつかることがある)
 var _dodge := {}
+## ボットが投票するまでの残り時間(id -> 秒)
+var _vote_left := {}
 
 
 func reset(seed_value: int = -1) -> void:
@@ -25,6 +27,7 @@ func reset(seed_value: int = -1) -> void:
 	_banana_left.clear()
 	_stamp_pending.clear()
 	_dodge.clear()
+	_vote_left.clear()
 	if seed_value >= 0:
 		rng.seed = seed_value
 	else:
@@ -32,6 +35,8 @@ func reset(seed_value: int = -1) -> void:
 
 
 func update(state: GameState, delta: float) -> void:
+	if state.voting_open:
+		_update_votes(state, delta)
 	for a in state.actors:
 		if not a.is_bot:
 			continue
@@ -53,6 +58,33 @@ func update(state: GameState, delta: float) -> void:
 				# お手つきで抜けたボット: 全員の後ろが見えるので、スタンプとバナナだけ
 				_update_stamp(state, a, delta)
 				_update_banana(state, a, delta)
+
+
+## 勝敗のあとの投票: ボットも、少し考えてから手下だと思う人に投票する。
+## このラウンドで嘘のスタンプをたくさん送った人(鬼をのぞく)を選びやすい。手がかりがなければ当てずっぽう
+func _update_votes(state: GameState, delta: float) -> void:
+	for a in state.actors:
+		if not a.is_bot or not state.can_vote(a.id):
+			continue
+		if not _vote_left.has(a.id):
+			_vote_left[a.id] = rng.randf_range(GameConfig.BOT_VOTE_DELAY_MIN, GameConfig.BOT_VOTE_DELAY_MAX)
+		_vote_left[a.id] -= delta
+		if _vote_left[a.id] > 0.0:
+			continue
+		_vote_left.erase(a.id)
+		var cands: Array = state.vote_candidates(a.id)
+		if cands.is_empty():
+			continue
+		var best := -1
+		var best_lies := 0
+		for c in cands:
+			var n: int = int(state.lie_counts.get(c, 0))
+			if n > best_lies or (n == best_lies and n > 0 and rng.randf() < 0.5):
+				best = c
+				best_lies = n
+		if best < 0 or rng.randf() < 0.25:
+			best = cands[rng.randi_range(0, cands.size() - 1)]
+		state.cast_vote(a.id, best)
 
 
 ## GameState からのお知らせを見て反応する(届いたスタンプ・鬼の「ふり」の物音)
@@ -93,7 +125,7 @@ func _consider_stamps(state: GameState, me: GameState.Actor) -> void:
 	var vote := 0.0
 	for st in state.active_stamps.get(me.id, []):
 		var w := 1.0
-		if st["sender"] == state.last_minion_id:
+		if st["sender"] in state.last_minion_ids:
 			w = GameConfig.BOT_PREV_MINION_WEIGHT
 		vote += w if Stamps.says_look(st["kind"]) else -w
 	var p := Personalities.params(me.personality)

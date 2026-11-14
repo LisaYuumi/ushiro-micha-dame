@@ -161,15 +161,34 @@ var _round_start_oni: int = -1
 ## [{"kind", "sender", "sender_role", "born_angle", "truthful", "looked", "scorable", "credited"}]
 var active_stamps: Dictionary = {}
 
-## 鬼の手下(このラウンド。いなければ -1)。本人以外には勝敗が出るまで知らせない
-## (ホストは snapshot(見る人) で、ほかの人の分からは消して送る)
-var minion_id: int = -1
+## 鬼の手下(このラウンド。8人のときは2人になることがある)。本人以外には勝敗が出るまで知らせない
+## (ホストは snapshot(見る人) で、ほかの人の分からは消して送る)。手下どうしもお互いを知らない
+var minion_ids: Array = []
+## 1人目の手下(いなければ -1)。古い呼び出しのため。代入すると手下はその1人になる
+var minion_id: int:
+	get:
+		return minion_ids[0] if not minion_ids.is_empty() else -1
+	set(v):
+		minion_ids = [v] if v >= 0 else []
+## このラウンドの手下の人数(鬼だけが知る。ほかの人には勝敗が出るまで -1)
+var minion_count: int = 0
+## 手下を当てる投票(勝敗が出たあと): 受けつけ中か・残り時間・だれがだれに投票したか
+var voting_open: bool = false
+var vote_left: float = 0.0
+var votes: Dictionary = {}
+## このラウンドで、人ごとの嘘のスタンプの数(ボットが投票の参考にする)
+var lie_counts: Dictionary = {}
 ## 人ごとの、自分で決めたスタンプの言葉(id -> {種類: 言葉})。ない人・ない種類は初期の言葉
 var stamp_words: Dictionary = {}
 ## 人ごとの言語(id -> "ja" / "en")。自作の言葉は、受け取った人と言語が同じときだけ出す
 var stamp_langs: Dictionary = {}
 ## 前のラウンドの手下(発表ずみなので、全員が知っている。ボットの信用に使う)
-var last_minion_id: int = -1
+var last_minion_ids: Array = []
+var last_minion_id: int:
+	get:
+		return last_minion_ids[0] if not last_minion_ids.is_empty() else -1
+	set(v):
+		last_minion_ids = [v] if v >= 0 else []
 
 ## 表示側へのお知らせ(Dictionary の配列)
 var events: Array = []
@@ -283,6 +302,8 @@ func start_round(seed_value: int = -1, player_is_oni: bool = false) -> void:
 func next_round() -> bool:
 	if phase != Phase.RESULT or match_over:
 		return false
+	# 投票中なら、ここで締めきる(投票した分は点になる)
+	close_vote()
 	if round_index + 1 >= GameConfig.ROUNDS_PER_MATCH:
 		match_over = true
 		events.append({"type": "match_over", "scores": scores.duplicate()})
@@ -397,13 +418,32 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 		_plan_drop()
 		_plan_bot_milk()
 	events.append({"type": "round_start", "round": round_index, "item": item_name()})
-	# 座っている人(ボットも)から1人を手下にする。本人にだけ知らせる
-	minion_id = seat_ids[rng.randi_range(0, seat_ids.size() - 1)]
-	events.append({"type": "minion", "actor": minion_id, "private_to": minion_id})
+	# 座っている人(ボットも)から手下を選ぶ。8人のときは、ときどき2人。本人にだけ知らせる(手下どうしも知らない)
+	var count := 1
+	if seat_count >= GameConfig.MINION_TWO_MIN_SEATS and rng.randf() < GameConfig.MINION_TWO_CHANCE:
+		count = 2
+	var pool := seat_ids.duplicate()
+	minion_ids = []
+	for k in count:
+		var pick: int = pool[rng.randi_range(0, pool.size() - 1)]
+		pool.erase(pick)
+		minion_ids.append(pick)
+	minion_count = count
+	for m in minion_ids:
+		events.append({"type": "minion", "actor": m, "private_to": m})
+	# 鬼には、手下の人数だけ知らせる(だれかは知らない)
+	events.append({"type": "minion_count", "count": count, "private_to": oni})
+	voting_open = false
+	votes = {}
+	lie_counts = {}
 
 
 ## 時間を delta 秒すすめる。
 func tick(delta: float) -> void:
+	if voting_open:
+		vote_left -= delta
+		if vote_left <= 0.0:
+			close_vote()
 	_tick_stamps(delta)
 	for i in seat_pass_age.size():
 		seat_pass_age[i] += delta
@@ -643,6 +683,8 @@ func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
 	sender.stamped_targets.append(target_id)
 	# 本当のことを言ったか(あとで点数に使う)。「信じて!」は「見ろ」の意味として扱う
 	var truthful := Stamps.says_look(kind) == has_handkerchief_behind(target)
+	if not truthful:
+		lie_counts[sender_id] = int(lie_counts.get(sender_id, 0)) + 1
 	if not active_stamps.has(target_id):
 		active_stamps[target_id] = []
 	active_stamps[target_id].append({
@@ -666,7 +708,7 @@ func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
 func stamp_role_of(actor_id: int) -> String:
 	if actor_id == oni_id:
 		return "oni"
-	if actor_id == minion_id:
+	if is_minion(actor_id):
 		return "minion"
 	return "normal"
 
@@ -964,9 +1006,14 @@ func sees_behind(viewer_id: int, to_seat: int) -> bool:
 		return true
 	if v.role != Role.SEATED or v.seat_index == to_seat:
 		return false
-	if viewer_id == minion_id:
+	if is_minion(viewer_id):
 		return true
 	return can_see_behind(v.seat_index, to_seat)
+
+
+## この人は手下か
+func is_minion(actor_id: int) -> bool:
+	return actor_id in minion_ids
 
 
 ## 席に座っている人(いなければ null)
@@ -981,9 +1028,13 @@ func get_actor_at_seat(seat: int) -> Actor:
 ## viewer: この状態を受け取る人の id。手下がだれかは、手下本人と、勝敗が出たあとだけ入れる
 ## (-1 = 全部入れる。ホスト自身やテスト用)
 func snapshot(viewer: int = -1) -> Dictionary:
-	var minion_shown := minion_id
-	if viewer >= 0 and viewer != minion_id and phase != Phase.RESULT:
-		minion_shown = -1
+	# 手下は、本人(自分のことだけ)と、勝敗が出たあとだけ。人数は鬼と、勝敗が出たあとだけ
+	var minions_shown: Array = minion_ids.duplicate()
+	var count_shown := minion_count
+	if viewer >= 0 and phase != Phase.RESULT:
+		minions_shown = [viewer] if is_minion(viewer) else []
+		if viewer != oni_id:
+			count_shown = -1
 	var list := []
 	for a in actors:
 		list.append({
@@ -1031,8 +1082,12 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"stamp_langs": stamp_langs,
 		"round_serial": round_serial,
 		"seat_count": seat_count,
-		"minion_id": minion_shown,
-		"last_minion_id": last_minion_id,
+		"minion_ids": minions_shown,
+		"minion_count": count_shown,
+		"last_minion_ids": last_minion_ids,
+		"voting_open": voting_open,
+		"vote_left": vote_left,
+		"voted": votes.keys(),
 	}
 
 
@@ -1091,8 +1146,14 @@ func apply_snapshot(s: Dictionary) -> void:
 	stamp_words = s.get("stamp_words", {})
 	stamp_langs = s.get("stamp_langs", {})
 	round_serial = s["round_serial"]
-	minion_id = s.get("minion_id", -1)
-	last_minion_id = s.get("last_minion_id", -1)
+	minion_ids = s.get("minion_ids", [])
+	minion_count = s.get("minion_count", -1)
+	last_minion_ids = s.get("last_minion_ids", [])
+	voting_open = s.get("voting_open", false)
+	vote_left = s.get("vote_left", 0.0)
+	votes = {}
+	for v in s.get("voted", []):
+		votes[v] = -1
 
 
 # --- 内部の処理 ---
@@ -1321,6 +1382,53 @@ func _check_obstacles(a: Actor) -> void:
 		return
 
 
+## 手下を当てる投票ができる人(手下以外の全員。鬼も)
+func can_vote(actor_id: int) -> bool:
+	return voting_open and get_actor(actor_id) != null and not is_minion(actor_id) and not votes.has(actor_id)
+
+
+## 投票の相手にできる人(自分と鬼以外。鬼は手下ではないので)
+func vote_candidates(voter_id: int) -> Array:
+	var out := []
+	for a in actors:
+		if a.id != voter_id and a.id != oni_id:
+			out.append(a.id)
+	return out
+
+
+## 手下だと思う人に投票する(1人だけ)。全員が投票したら発表。投票できたら true
+func cast_vote(voter_id: int, target_id: int) -> bool:
+	if not can_vote(voter_id) or not (target_id in vote_candidates(voter_id)):
+		return false
+	votes[voter_id] = target_id
+	events.append({"type": "voted", "voter": voter_id})
+	var waiting := false
+	for a in actors:
+		if not is_minion(a.id) and not votes.has(a.id):
+			waiting = true
+	if not waiting:
+		close_vote()
+	return true
+
+
+## 投票を締めきって発表する: 手下に当てた人(手下が2人なら、どちらかに当てた人)に +SCORE_VOTE_CORRECT
+func close_vote() -> void:
+	if not voting_open:
+		return
+	voting_open = false
+	var correct := []
+	for voter in votes:
+		if is_minion(votes[voter]):
+			correct.append(voter)
+			scores[voter] = scores.get(voter, 0) + GameConfig.SCORE_VOTE_CORRECT
+	result["voting"] = false
+	result["votes"] = votes.duplicate()
+	result["vote_correct"] = correct
+	result["scores"] = scores.duplicate()
+	events.append({"type": "vote_result", "votes": votes.duplicate(), "correct": correct,
+			"minions": minion_ids.duplicate(), "scores": scores.duplicate()})
+
+
 ## 停電が終わって電気がつく(停電中でなければ何もしない)
 func _lights_on() -> void:
 	_blackout_angle = INF
@@ -1343,15 +1451,25 @@ func _finish(winner_id: int, loser_id: int, reason: String) -> void:
 		scores[loser_id] += GameConfig.SCORE_LOSE
 	# 表示中のスタンプは、ここで消える(「まだ平気」の点もここで決まる)
 	_clear_stamps(true)
-	# 鬼が勝ったら、手下にも点(手下が負けた本人のときはもらえない)
+	# 鬼が勝ったら、手下にも点(手下が負けた本人のとき・お手つきで抜けたときはもらえない)
 	var minion_bonus := false
-	if minion_id >= 0 and (reason == "sat" or reason == "missed" or reason == "all_out") and minion_id != loser_id \
-			and not _is_out(minion_id):
-		scores[minion_id] += GameConfig.SCORE_MINION_ONI_WIN
-		minion_bonus = true
+	var bonuses := {}
+	for m in minion_ids:
+		var got: bool = (reason == "sat" or reason == "missed" or reason == "all_out") and m != loser_id and not _is_out(m)
+		if got:
+			scores[m] += GameConfig.SCORE_MINION_ONI_WIN
+			minion_bonus = true
+		bonuses[m] = got
 	result["minion"] = minion_id
+	result["minions"] = minion_ids.duplicate()
 	result["minion_bonus"] = minion_bonus
-	last_minion_id = minion_id
+	result["minion_bonuses"] = bonuses
+	last_minion_ids = minion_ids.duplicate()
+	# 手下を当てる投票を始める(手下以外の全員。鬼も)。全員が投票するか、時間が来たら発表
+	votes = {}
+	voting_open = true
+	vote_left = GameConfig.VOTE_TIME
+	result["voting"] = true
 	result["scores"] = scores.duplicate()
 	for a in actors:
 		a.move_dir = Vector3.ZERO

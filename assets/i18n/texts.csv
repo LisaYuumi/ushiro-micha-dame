@@ -197,6 +197,27 @@ Push the stick left/right to dodge"
 鬼の手下は…,鬼の手下は…,The oni's helper was…
 だったよ!,だったよ!, 
 鬼がかって +%d点,鬼がかって +%d点,Oni won +%d
+今回の手下は%d人(だれかはひみつ),今回の手下は%d人(だれかはひみつ),Minions this round: %d (who is secret)
+"今回は手下が2人!
+(だれかはひみつ)","今回は手下が2人!
+(だれかはひみつ)","Two minions this round!
+(who is secret)"
+手下を当てた! +%d点,手下を当てた! +%d点,You found the minion! +%d
+2人だったよ!,2人だったよ!,were the minions!
+"手下だと思う人の札をタップ!
+当たれば +%d点","手下だと思う人の札をタップ!
+当たれば +%d点","Tap who you think is the minion!
+Correct: +%d"
+"投票した!
+みんなを待っています","投票した!
+みんなを待っています","Voted!
+Waiting for everyone"
+"みんなが手下を
+当てています…","みんなが手下を
+当てています…","Everyone is guessing
+the minion…"
+投票,投票,Vote
+当たり +%d,当たり +%d,Correct +%d
 %d点,%d点,%d pts
 ゴシゴシ!,ゴシゴシ!,Wipe wipe!
 停電!,停電!,Blackout!

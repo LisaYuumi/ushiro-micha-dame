@@ -60,6 +60,8 @@ func _ready() -> void:
 	# 後ろに見える教室だけ先に作っておく(ロビーの背景)
 	state.start_match(-1, false)
 	view.build(state)
+	# 結果カードで、手下だと思う人の札をタップした
+	hud.vote_pressed.connect(_on_vote_pressed)
 	lobby.solo_pressed.connect(_on_solo)
 	lobby.host_pressed.connect(_on_host)
 	lobby.join_pressed.connect(_on_join)
@@ -225,6 +227,8 @@ func _on_remote_command(peer_id: int, cmd: String, args: Array) -> void:
 			state.chase_steer(id, float(args[0]))
 		"send_stamp":
 			state.send_stamp(id, int(args[0]), str(args[1]))
+		"cast_vote":
+			state.cast_vote(id, int(args[0]))
 
 
 # --- 試合 ---
@@ -289,8 +293,14 @@ func _physics_process(delta: float) -> void:
 	if out and state.phase != GameState.Phase.RESULT:
 		hud.set_role_badge(tr("お手つきでお休み中(このラウンド0点)"), Color(0.35, 0.45, 0.6))
 	else:
-		hud.set_role_badge(tr("あなたは鬼の手下") if state.minion_id == me.id \
-				and state.phase != GameState.Phase.RESULT else "", Color(0.55, 0.2, 0.7))
+		var badge := ""
+		if state.phase != GameState.Phase.RESULT:
+			if state.is_minion(me.id):
+				badge = tr("あなたは鬼の手下")
+			elif _i_am_oni() and state.minion_count > 0:
+				# 鬼は、手下の人数だけ知っている(だれかは知らない)
+				badge = tr("今回の手下は%d人(だれかはひみつ)") % state.minion_count
+		hud.set_role_badge(badge, Color(0.55, 0.2, 0.7))
 	# 牛乳がかかっている間は、画面が白い
 	# 追いかけっこで走っている間は、手で牛乳をぬぐって下のほうが見える(すぐ転ばないように)
 	hud.set_milk(state.is_milked(me) and state.phase != GameState.Phase.RESULT, state.milk_left_ratio(me), state.is_runner(me))
@@ -643,6 +653,16 @@ func _show_event(e: Dictionary) -> void:
 			if e["actor"] == me:
 				hud.show_popup_card(tr("あなたは鬼の手下!"), [tr("だまして +1点"), tr("鬼が勝てば +2点")],
 						Color(0.55, 0.2, 0.7), tr("ほかの人にはないしょだよ"), 3.0)
+		"minion_count":
+			if int(e["count"]) >= 2:
+				hud.show_message(tr("今回は手下が2人!\n(だれかはひみつ)"), Color(0.55, 0.2, 0.7), 2.2)
+		"vote_result":
+			var correct: Array = e.get("correct", [])
+			hud.apply_vote_result(correct, e.get("scores", {}))
+			if me in correct:
+				hud.show_message(tr("手下を当てた! +%d点") % GameConfig.SCORE_VOTE_CORRECT, Color(0.1, 0.6, 0.4), 1.6)
+				audio.play("win", -8.0)
+			_update_help()
 		"stamp":
 			if e["target"] == me:
 				hud.flash_stamp(WorldView.STAMP_COLORS[e["kind"]])
@@ -800,32 +820,54 @@ func _show_result(r: Dictionary) -> void:
 				sub = tr("鬼のかち! みんな振り向きすぎ!")
 	var notes := []
 	# 手下は「手下はだれ?」のカードをめくると見られる
-	var minion: int = r.get("minion", -1)
+	# 手下が2人のときは、2人とも出る
+	var minions: Array = r.get("minions", [])
+	if minions.is_empty() and int(r.get("minion", -1)) >= 0:
+		minions = [int(r["minion"])]
+	var bonuses: Dictionary = r.get("minion_bonuses", {})
 	var reveal := {}
-	if minion >= 0:
-		var ma := state.get_actor(minion)
-		reveal = {
-			"name": _short_name(minion),
-			"color": ma.color if ma else Color.WHITE,
-			"is_me": minion == me,
-			"bonus": r.get("minion_bonus", false),
-		}
+	if not minions.is_empty():
+		var people := []
+		for m in minions:
+			var ma := state.get_actor(m)
+			people.append({
+				"name": _short_name(m),
+				"color": ma.color if ma else Color.WHITE,
+				"is_me": m == me,
+				"bonus": bool(bonuses.get(m, r.get("minion_bonus", false))),
+			})
+		reveal = {"people": people}
+	# 手下を当てる投票(手下以外の全員。鬼も)。自分と鬼以外の札をタップできる
+	var voting: bool = bool(r.get("voting", false))
+	var can_vote := voting and not (me in minions)
 	# 全員の点数(この試合の合計。点の多い順、このラウンドで増えた分つき)
 	var scores: Dictionary = r.get("scores", state.scores)
 	var ids := scores.keys()
 	ids.sort_custom(func(a, b): return scores[a] > scores[b])
 	var rows := []
 	for id in ids:
-		rows.append(_score_row_for(id, scores, true))
+		var row := _score_row_for(id, scores, true)
+		if can_vote and id != me and id != state.oni_id:
+			row["id"] = id
+		rows.append(row)
+	var vote := {"open": voting, "can_vote": can_vote}
 	var last := state.round_index + 1 >= GameConfig.ROUNDS_PER_MATCH
 	var next_text := tr("さいごの結果へ") if last else tr("次のラウンド(%s)へ") % Items.name_of(state.round_index + 1)
 	hud.hide_message()
 	if r["winner"] == me:
 		hud.confetti()
 	if mode == Mode.GUEST:
-		hud.show_result_card(title, sub, notes, color, rows, tr("ホストが「次へ」を押すと") + next_text, "", reveal)
+		hud.show_result_card(title, sub, notes, color, rows, tr("ホストが「次へ」を押すと") + next_text, "", reveal, vote)
 	else:
-		hud.show_result_card(title, sub, notes, color, rows, "", tr("次へ ▶ ") + next_text, reveal)
+		hud.show_result_card(title, sub, notes, color, rows, "", tr("次へ ▶ ") + next_text, reveal, vote)
+
+
+## 結果カードで、手下だと思う人に投票した
+func _on_vote_pressed(target_id: int) -> void:
+	if state.phase != GameState.Phase.RESULT:
+		return
+	hud.mark_my_vote(target_id)
+	cmds.cast_vote(state.local_player_id, target_id)
 
 
 ## 札に出す短い名前(「ボット2(せっかち)」→「ボット2」、鬼は「鬼」)

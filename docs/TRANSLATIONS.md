@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(219)
+## 一覧(228)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -174,6 +174,15 @@
 | 鬼の手下は… | The oni's helper was… |
 | だったよ! |   |
 | 鬼がかって +%d点 | Oni won +%d |
+| 今回の手下は%d人(だれかはひみつ) | Minions this round: %d (who is secret) |
+| 今回は手下が2人!<br>(だれかはひみつ) | Two minions this round!<br>(who is secret) |
+| 手下を当てた! +%d点 | You found the minion! +%d |
+| 2人だったよ! | were the minions! |
+| 手下だと思う人の札をタップ!<br>当たれば +%d点 | Tap who you think is the minion!<br>Correct: +%d |
+| 投票した!<br>みんなを待っています | Voted!<br>Waiting for everyone |
+| みんなが手下を<br>当てています… | Everyone is guessing<br>the minion… |
+| 投票 | Vote |
+| 当たり +%d | Correct +%d |
 | %d点 | %d pts |
 | ゴシゴシ! | Wipe wipe! |
 | 停電! | Blackout! |

@@ -193,6 +193,15 @@ const SCORE_HELP_MINION := 0
 const SCORE_DECEIVE_MINION := 1
 const SCORE_HELP_ONI := 0
 const SCORE_DECEIVE_ONI := 1
+## 8人のとき(席がこの数以上)、手下が2人になる確率
+const MINION_TWO_MIN_SEATS := 7
+const MINION_TWO_CHANCE := 0.33
+## 勝敗のあとの、手下を当てる投票: 当たった人の点数と、投票の時間(秒。全員が投票したらすぐ発表)
+const SCORE_VOTE_CORRECT := 2
+const VOTE_TIME := 20.0
+## ボットが投票するまでの時間(秒。この範囲でランダム)
+const BOT_VOTE_DELAY_MIN := 1.0
+const BOT_VOTE_DELAY_MAX := 4.0
 ## 鬼が勝った(席に座れた・最後まで気づかれなかった)とき、手下の点数(手下が負けた本人のときはもらえない)
 const SCORE_MINION_ONI_WIN := 2
 ## 1ラウンドに振り向ける回数(「拾う」も1回使う)。追いかけっこ中・勝敗が出た後は数えない

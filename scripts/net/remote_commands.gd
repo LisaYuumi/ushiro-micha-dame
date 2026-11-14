@@ -51,6 +51,10 @@ func send_stamp(_id: int, target_id: int, kind: String) -> void:
 	_net.send_command("send_stamp", [target_id, kind])
 
 
+func cast_vote(_id: int, target_id: int) -> void:
+	_net.send_command("cast_vote", [target_id])
+
+
 func _send_if_changed(cmd: String, args: Array) -> void:
 	if _last.get(cmd) == args:
 		return

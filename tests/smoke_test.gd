@@ -63,6 +63,8 @@ func _initialize() -> void:
 	_test_milk()
 	_test_deceiving_scores()
 	_test_minion()
+	_test_two_minions()
+	_test_minion_vote()
 	_test_bot_personalities()
 	_test_look_limit_and_patience()
 	_test_online_match_setup()
@@ -1233,7 +1235,7 @@ func _test_miss_goes_out() -> void:
 			s5.set_looking_back(a.id, true)
 	_check(s5.phase == GameState.Phase.RESULT and s5.result["reason"] == "all_out", "全員お手つきで抜けたら鬼の勝ち")
 	for a in s5.actors:
-		if a.id != oni5 and a.id != s5.minion_id:
+		if a.id != oni5 and not s5.is_minion(a.id):
 			_check(s5.scores[a.id] == before5[a.id], "%s: 全員抜けたときは、だれも減点されない" % a.display_name)
 	s5.next_round()
 	_check(s5.oni_id == oni5, "全員抜けたときは、次も同じ鬼")
@@ -1411,17 +1413,20 @@ func _test_minion() -> void:
 		var ev := s.take_events()
 		var told := false
 		for e in ev:
-			if e["type"] == "minion":
-				told = e["actor"] == m.id and e["private_to"] == m.id
+			if e["type"] == "minion" and e["actor"] == m.id:
+				told = e["private_to"] == m.id
 		_check(told, "手下は本人にだけ知らされる")
 		var other := s.get_actor_at_seat((m.seat_index + 2) % GameConfig.SEAT_COUNT)
-		_check(s.snapshot(other.id)["minion_id"] == -1, "ほかの人に送る状態には、手下がだれかは入らない")
-		_check(s.snapshot(m.id)["minion_id"] == m.id, "手下本人に送る状態には入る")
+		if s.is_minion(other.id):
+			other = s.get_actor_at_seat((m.seat_index + 3) % GameConfig.SEAT_COUNT)
+		_check(s.snapshot(other.id)["minion_ids"] == [] or s.is_minion(other.id), "ほかの人に送る状態には、手下がだれかは入らない")
+		_check(s.snapshot(m.id)["minion_ids"] == [m.id], "手下本人に送る状態には、自分だけ入る")
 		var right := (m.seat_index + 1) % GameConfig.SEAT_COUNT
 		_check(s.sees_behind(m.id, right), "手下は両どなりの後ろも見える")
 		_check(not s.sees_behind(m.id, m.seat_index), "手下も自分の後ろは見えない")
 		var n := s.get_actor_at_seat(right)
-		_check(not s.sees_behind(n.id, (right + 1) % GameConfig.SEAT_COUNT), "普通の人は両どなりの後ろが見えない")
+		if not s.is_minion(n.id):
+			_check(not s.sees_behind(n.id, (right + 1) % GameConfig.SEAT_COUNT), "普通の人は両どなりの後ろが見えない")
 
 	# 鬼が見逃しで勝つ → 手下は +2(負けた本人でなければ)。勝敗のあとは全員に発表
 	var s2 := GameState.new()
@@ -1434,7 +1439,7 @@ func _test_minion() -> void:
 	_check(s2.scores[minion.id] == before + GameConfig.SCORE_MINION_ONI_WIN, "鬼が勝ったら手下は +%d" % GameConfig.SCORE_MINION_ONI_WIN)
 	_check(e2["minion"] == minion.id and e2["minion_bonus"], "勝敗のお知らせで手下を発表する")
 	var other2 := s2.get_actor_at_seat((minion.seat_index + 2) % GameConfig.SEAT_COUNT)
-	_check(s2.snapshot(other2.id)["minion_id"] == minion.id, "勝敗のあとは、だれにでも手下がわかる")
+	_check(s2.snapshot(other2.id)["minion_ids"] == [minion.id], "勝敗のあとは、だれにでも手下がわかる")
 	s2.next_round()
 	_check(s2.last_minion_id == minion.id, "前のラウンドの手下を覚えている")
 
@@ -1721,3 +1726,110 @@ func _press(action: String, pressed: bool) -> void:
 	ev.action = action
 	ev.pressed = pressed
 	Input.parse_input_event(ev)
+
+
+## 8人(7席)のときは、ときどき手下が2人。鬼は人数だけ知る。手下どうしはおたがいを知らない
+func _test_two_minions() -> void:
+	var twos := 0
+	var tries := 60
+	for seed_value in tries:
+		var s := GameState.new()
+		s.start_match(500 + seed_value)
+		var ev := s.take_events()
+		var counts := []
+		for e in ev:
+			if e["type"] == "minion_count":
+				counts.append(e)
+		_check(counts.size() == 1 and counts[0]["private_to"] == s.oni_id and counts[0]["count"] == s.minion_ids.size(),
+				"鬼にだけ、手下の人数が知らされる")
+		_check(s.snapshot(s.oni_id)["minion_count"] == s.minion_ids.size() and s.snapshot(s.oni_id)["minion_ids"] == [],
+				"鬼に送る状態には、人数だけ入る(だれかは入らない)")
+		for a in s.actors:
+			if a.id != s.oni_id:
+				_check(s.snapshot(a.id)["minion_count"] == -1, "鬼以外には、手下の人数は入らない")
+		if s.minion_ids.size() == 2:
+			twos += 1
+			var m1: int = s.minion_ids[0]
+			var m2: int = s.minion_ids[1]
+			_check(m1 != m2 and m1 != s.oni_id and m2 != s.oni_id, "2人の手下は別の人で、鬼ではない")
+			_check(s.snapshot(m1)["minion_ids"] == [m1], "手下は、もう1人の手下を知らない")
+	_check(twos >= 8 and twos <= 35, "手下が2人になるのは、3回に1回くらい(%d/%d)" % [twos, tries])
+	# 少ない人数では、いつも1人
+	for seed_value in 30:
+		var s5 := GameState.new()
+		s5.start_match(700 + seed_value, false, 5)
+		_check(s5.minion_ids.size() == 1, "6人以下なら手下は1人")
+
+
+## ラウンドのあと、手下以外の全員(鬼も)で手下を当てる投票。当たれば +2
+func _test_minion_vote() -> void:
+	var s := GameState.new()
+	s.start_match(63)
+	var minion := s.get_actor_at_seat((s.drop_target_seat + 2) % GameConfig.SEAT_COUNT)
+	s.minion_ids = [minion.id]
+	var e := _run_until(s, "result", 200.0)
+	_check(e.get("voting", false) and s.voting_open, "ラウンドのあとに投票が始まる")
+	_check(not s.can_vote(minion.id), "手下は投票できない")
+	_check(s.can_vote(s.oni_id), "鬼も投票できる")
+	_check(not (s.oni_id in s.vote_candidates(minion.id)) and not (minion.id in s.vote_candidates(minion.id)),
+			"投票の相手に、鬼と自分は入らない")
+	var before: Dictionary = s.scores.duplicate()
+	var voters := []
+	for a in s.actors:
+		if not s.is_minion(a.id):
+			voters.append(a.id)
+	# 1人目は手下に当てる、ほかははずす
+	_check(s.cast_vote(voters[0], minion.id if voters[0] != minion.id else voters[1]), "投票できる")
+	_check(not s.cast_vote(voters[0], minion.id), "2回は投票できない")
+	_check(s.snapshot(voters[1])["voted"].has(voters[0]), "だれが投票したかは状態で届く(だれに入れたかは届かない)")
+	_check(not s.snapshot(voters[1]).has("votes"), "だれに入れたかは、発表まで届かない")
+	var result_ev := {}
+	for i in range(1, voters.size()):
+		var wrong := -1
+		for c in s.vote_candidates(voters[i]):
+			if c != minion.id:
+				wrong = c
+				break
+		s.cast_vote(voters[i], wrong)
+	for ev in s.take_events():
+		if ev["type"] == "vote_result":
+			result_ev = ev
+	_check(not result_ev.is_empty() and not s.voting_open, "全員が投票したら発表")
+	_check(result_ev.get("correct", []) == [voters[0]], "当てた人だけが当たり")
+	_check(s.scores[voters[0]] == before[voters[0]] + GameConfig.SCORE_VOTE_CORRECT, "当てたら +%d" % GameConfig.SCORE_VOTE_CORRECT)
+	_check(s.scores[voters[1]] == before[voters[1]], "はずれは 0 点")
+
+	# 手下が2人: どちらかに当たれば +2。時間が来たら締めきる
+	var s2 := GameState.new()
+	s2.start_match(63)
+	var ma := s2.get_actor_at_seat((s2.drop_target_seat + 2) % GameConfig.SEAT_COUNT)
+	var mb := s2.get_actor_at_seat((s2.drop_target_seat + 4) % GameConfig.SEAT_COUNT)
+	s2.minion_ids = [ma.id, mb.id]
+	_run_until(s2, "result", 200.0)
+	var b2: Dictionary = s2.scores.duplicate()
+	s2.cast_vote(s2.oni_id, mb.id)
+	_check(s2.voting_open, "まだ投票していない人がいれば、発表しない")
+	var r2 := _run_until(s2, "vote_result", GameConfig.VOTE_TIME + 1.0)
+	_check(not r2.is_empty(), "時間が来たら発表")
+	_check(s2.scores[s2.oni_id] == b2[s2.oni_id] + GameConfig.SCORE_VOTE_CORRECT, "手下が2人なら、どちらに当てても +%d" % GameConfig.SCORE_VOTE_CORRECT)
+
+	# 次のラウンドへ進むと、投票は締めきられる
+	var s3 := GameState.new()
+	s3.start_match(63)
+	_run_until(s3, "result", 200.0)
+	s3.next_round()
+	_check(not s3.voting_open, "次のラウンドで投票は終わる")
+
+	# ボットも投票する
+	var s4 := GameState.new()
+	s4.start_match(63)
+	var brain := BotBrain.new()
+	_run_until(s4, "result", 200.0)
+	# 人(ボットでない人)は先に投票しておく
+	for a in s4.actors:
+		if not a.is_bot and s4.can_vote(a.id):
+			s4.cast_vote(a.id, s4.vote_candidates(a.id)[0])
+	for i in int(6.0 / STEP):
+		brain.update(s4, STEP)
+		s4.tick(STEP)
+	_check(not s4.voting_open, "ボットだけなら、ボットが全員投票して発表される")

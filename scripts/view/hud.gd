@@ -39,6 +39,13 @@ var _minion_card: Control
 var _card_front: Control
 var _card_back: Control
 var _flipping := false
+## 手下を当てる投票: 得点の札(id -> {"panel", "style", "score", "delta", "col", "base"})・投票中か・自分が投票できるか・自分の投票・案内の札
+signal vote_pressed(target_id: int)
+var _chips := {}
+var _vote_open := false
+var _can_vote := false
+var _my_vote := -1
+var _card_hint_label: Label
 ## 役のお知らせカード(手下になったときなど)。しばらくすると消える
 var _popup: PanelContainer
 ## 牛乳がかかったときの白い画面(いちばん下に置く。札やスタンプはその上に見える)
@@ -124,11 +131,17 @@ func set_round_info(round_text: String, item_text: String, extra_text: String, s
 ## title: 大きい見出し / sub: その下の一言 / notes: 小さい札(がまん・手下の発表など)/ color: 見出しの色 /
 ## rows: [{"name", "color", "score", "delta", "me", "mark"}](この順に並べる)/ footer: いちばん下の案内
 ## next_label: 「次へ」ボタンの文字("" なら出さない。ホストとひとりのときだけ出す)
-## minion: {"name", "color", "is_me", "bonus"}。あれば、左に得点表、右に裏向きの手下のカードを出す。
-## 手下のカードをタップすると、そのカードだけ裏返って手下(左にキャラの絵、右に名前)が出る
+## rows の札に "id" があれば、投票のときにタップできる
+## minion: {"people": [{"name", "color", "is_me", "bonus"}]}(手下が2人なら2つ)。あれば、左に得点表、右に裏向きの手下のカードを出す。
+## 手下のカードをタップすると、そのカードだけ裏返って手下(キャラの絵と名前)が出る
+## vote: {"open": 投票中か, "can_vote": 自分が投票できるか}。投票中は、得点の札をタップして手下だと思う人に投票する。
+## 投票が終わるまでは、手下のカードはめくれない
 func show_result_card(title: String, sub: String, notes: Array, color: Color, rows: Array, footer: String,
-		next_label: String = "", minion: Dictionary = {}) -> void:
+		next_label: String = "", minion: Dictionary = {}, vote: Dictionary = {}) -> void:
 	hide_result_card()
+	_vote_open = bool(vote.get("open", false))
+	_can_vote = bool(vote.get("can_vote", false))
+	_my_vote = -1
 	_result_card = PanelContainer.new()
 	_result_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 28, 5)
@@ -177,6 +190,7 @@ func show_result_card(title: String, sub: String, notes: Array, color: Color, ro
 		grid.add_child(_score_chip(r))
 	if not minion.is_empty():
 		_build_minion_card(body, minion)
+	_update_vote_hint()
 	if footer != "":
 		var f := UiStyle.label(footer, 20, GameConfig.COLOR_INK.lightened(0.35))
 		f.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -265,6 +279,9 @@ func hide_result_card() -> void:
 		_card_front = null
 		_card_back = null
 		_flipping = false
+	_chips.clear()
+	_vote_open = false
+	_card_hint_label = null
 
 
 ## 手下のカード: 裏(紫に「手下はだれ?」と「?」)と表(左にキャラの絵、右に名前)。タップで裏返る
@@ -272,7 +289,9 @@ func _build_minion_card(parent: Container, minion: Dictionary) -> void:
 	var purple := Color(0.55, 0.2, 0.7)
 	var holder := Control.new()
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	holder.custom_minimum_size = Vector2(360, 236)
+	var people: Array = minion.get("people", [])
+	var two := people.size() >= 2
+	holder.custom_minimum_size = Vector2(420 if two else 360, 236)
 	holder.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	parent.add_child(holder)
 	_minion_card = holder
@@ -299,6 +318,8 @@ func _build_minion_card(parent: Container, minion: Dictionary) -> void:
 	(hint.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = Color("F2E6FA")
 	hint.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	bcol.add_child(hint)
+	_card_hint_label = hint.get_child(0) as Label
+	_card_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var tw := hint.create_tween().set_loops()
 	tw.tween_property(hint, "scale", Vector2(1.06, 1.06), 0.45)
 	tw.tween_property(hint, "scale", Vector2.ONE, 0.45)
@@ -319,19 +340,26 @@ func _build_minion_card(parent: Container, minion: Dictionary) -> void:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 10)
 	front.add_child(row)
-	row.add_child(MinionPortrait.new(minion["color"]))
+	for p in people:
+		var pic := MinionPortrait.new(p["color"])
+		if two:
+			pic.custom_minimum_size = Vector2(100, 190)
+		row.add_child(pic)
 	var info := VBoxContainer.new()
 	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	info.alignment = BoxContainer.ALIGNMENT_CENTER
-	info.add_theme_constant_override("separation", 6)
+	info.add_theme_constant_override("separation", 4 if two else 6)
 	row.add_child(info)
-	info.add_child(UiStyle.label("鬼の手下は…", 22, GameConfig.COLOR_INK.lightened(0.3)))
-	var nm := UiStyle.label("あなた!" if minion["is_me"] else "%s!" % minion["name"], 38, purple)
-	nm.add_theme_color_override("font_outline_color", GameConfig.COLOR_INK)
-	nm.add_theme_constant_override("outline_size", 8)
-	info.add_child(nm)
-	info.add_child(UiStyle.label("だったよ!", 24, GameConfig.COLOR_INK))
-	if minion["bonus"]:
+	info.add_child(UiStyle.label("鬼の手下は…", 20 if two else 22, GameConfig.COLOR_INK.lightened(0.3)))
+	var any_bonus := false
+	for p in people:
+		var nm := UiStyle.label("あなた!" if p["is_me"] else "%s!" % p["name"], 26 if two else 38, purple)
+		nm.add_theme_color_override("font_outline_color", GameConfig.COLOR_INK)
+		nm.add_theme_constant_override("outline_size", 8)
+		info.add_child(nm)
+		any_bonus = any_bonus or bool(p["bonus"])
+	info.add_child(UiStyle.label("2人だったよ!" if two else "だったよ!", 22 if two else 24, GameConfig.COLOR_INK))
+	if any_bonus:
 		var bp := UiStyle.pill(tr("鬼がかって +%d点") % GameConfig.SCORE_MINION_ONI_WIN, 18)
 		(bp.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = purple.lightened(0.75)
 		info.add_child(bp)
@@ -340,7 +368,8 @@ func _build_minion_card(parent: Container, minion: Dictionary) -> void:
 
 ## 手下のカードだけを、くるっと裏返す(横につぶれて、表と裏を入れかえて、また広がる)
 func _flip_minion_card() -> void:
-	if _flipping or _minion_card == null:
+	# 投票が終わるまでは、めくれない
+	if _flipping or _minion_card == null or _vote_open:
 		return
 	_flipping = true
 	# 鬼の手下の正体発表「ジャジャーン」
@@ -419,6 +448,14 @@ func _input(event: InputEvent) -> void:
 			_press_next()
 			get_viewport().set_input_as_handled()
 		return
+	# 投票中: 得点の札をタップすると、その人に投票する
+	if _vote_open and _can_vote and _my_vote < 0:
+		for id in _chips:
+			if (_chips[id]["panel"] as Control).get_global_rect().has_point(pos):
+				AudioDirector.click()
+				vote_pressed.emit(int(id))
+				get_viewport().set_input_as_handled()
+				return
 	# 手下のカードをタップしたら裏返す
 	if _minion_card and _minion_card.get_global_rect().has_point(pos):
 		_flip_minion_card()
@@ -463,7 +500,65 @@ func _score_chip(r: Dictionary) -> PanelContainer:
 	var dl := UiStyle.label(("%+d" % d) if d != 0 else " ", 18, Color("2E9E5B") if d > 0 else Color("D9483B"))
 	dl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(dl)
+	if r.has("id"):
+		_chips[int(r["id"])] = {"panel": panel, "style": st, "score": sc, "delta": dl, "col": col, "base": r}
 	return panel
+
+
+## 投票の案内: 手下のカードの裏の札に出す
+func _update_vote_hint() -> void:
+	if _card_hint_label == null or not is_instance_valid(_card_hint_label):
+		return
+	if _vote_open:
+		if _can_vote and _my_vote < 0:
+			_card_hint_label.text = tr("手下だと思う人の札をタップ!\n当たれば +%d点") % GameConfig.SCORE_VOTE_CORRECT
+		elif _can_vote:
+			_card_hint_label.text = tr("投票した!\nみんなを待っています")
+		else:
+			_card_hint_label.text = tr("みんなが手下を\n当てています…")
+	else:
+		_card_hint_label.text = tr("タップでめくってね")
+	_recenter_result()
+
+
+## 投票中か(main が、押された札を命令にするかを決めるのに使う)
+func is_vote_open() -> bool:
+	return _vote_open
+
+
+## 自分が投票した: その人の札に「投票」の印をつける
+func mark_my_vote(target_id: int) -> void:
+	_my_vote = target_id
+	if _chips.has(target_id):
+		var st: StyleBoxFlat = _chips[target_id]["style"]
+		st.border_color = Color(0.55, 0.2, 0.7)
+		st.set_border_width_all(6)
+		var tag := UiStyle.pill("投票", 16)
+		(tag.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = Color("F2E6FA")
+		tag.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		(_chips[target_id]["col"] as VBoxContainer).add_child(tag)
+	_update_vote_hint()
+
+
+## 投票の発表: 当てた人の札に「当たり +2」、点数を新しくする。手下のカードがめくれるようになる
+func apply_vote_result(correct: Array, scores: Dictionary) -> void:
+	if not _vote_open and _chips.is_empty():
+		return
+	_vote_open = false
+	for id in _chips:
+		var c: Dictionary = _chips[id]
+		if scores.has(id):
+			(c["score"] as Label).text = tr("%d点") % int(scores[id])
+		if id in correct:
+			var base: Dictionary = c["base"]
+			var dl: Label = c["delta"]
+			dl.text = "%+d" % (int(base.get("delta", 0)) + GameConfig.SCORE_VOTE_CORRECT)
+			dl.add_theme_color_override("font_color", Color("2E9E5B"))
+			var tag := UiStyle.pill(tr("当たり +%d") % GameConfig.SCORE_VOTE_CORRECT, 16)
+			(tag.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = Color("DDF5E4")
+			tag.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			(c["col"] as VBoxContainer).add_child(tag)
+	_update_vote_hint()
 
 
 func _score_row(r: Dictionary) -> PanelContainer:
