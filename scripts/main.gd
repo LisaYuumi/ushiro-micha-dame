@@ -404,8 +404,17 @@ func _log_perf(delta: float) -> void:
 	_perf_left -= delta
 	if _perf_left > 0.0:
 		return
-	print("perf fps=%d worst=%.0fms sync=%.1fms game=%.1fms process=%.1fms physics=%.1fms draws=%d objects=%d prims=%dk nodes=%d" % [
-		Engine.get_frames_per_second(), _perf_worst * 1000.0,
+	# いまの場面(重くなったときに、何をしていたかわかるように)
+	var scene := "lobby"
+	if not lobby.visible:
+		scene = str(GameState.Phase.keys()[state.phase]).to_lower()
+		if state.blackout:
+			scene += "+blackout"
+		var me := state.get_local_player()
+		if me and state.is_milked(me):
+			scene += "+milk"
+	print("perf [%s] fps=%d worst=%.0fms sync=%.1fms game=%.1fms process=%.1fms physics=%.1fms draws=%d objects=%d prims=%dk nodes=%d" % [
+		scene, Engine.get_frames_per_second(), _perf_worst * 1000.0,
 		float(_perf_sync_us) / 1000.0 / maxf(_perf_frames, 1),
 		float(_perf_phys_us) / 1000.0 / maxf(_perf_phys_n, 1),
 		Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,

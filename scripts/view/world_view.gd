@@ -120,7 +120,27 @@ var _last_pos := {}
 var _still_time := {}
 
 
+## ラウンドが変わっても同じ人のキャラは使い回す(作り直すと重く、ラウンドの始まりにガタッと止まるので)
+## 名前・色・小物・自分かどうか が同じなら同じキャラ
+var _model_cache := {}
+
+
+func _model_key(a: GameState.Actor, is_self: bool) -> String:
+	return "%d|%s|%s|%s|%s" % [a.id, a.color.to_html(), a.display_name, JSON.stringify(a.accessories), is_self]
+
+
 func build(state: GameState) -> void:
+	# 前のラウンドのキャラは取っておく(鬼の体についていた足音のプレイヤーは外す)
+	if is_instance_valid(_step_player):
+		_step_player.get_parent().remove_child(_step_player)
+		_step_player.queue_free()
+	_step_player = null
+	_model_cache.clear()
+	for id in _actor_nodes:
+		var old: Node3D = _actor_nodes[id]
+		if is_instance_valid(old) and old.get_meta("model_key", "") != "":
+			remove_child(old)
+			_model_cache[old.get_meta("model_key")] = old
 	for c in get_children():
 		c.queue_free()
 	_actor_nodes.clear()
@@ -148,7 +168,16 @@ func build(state: GameState) -> void:
 		for i in state.seat_positions.size():
 			_build_chair(state.seat_positions[i], state.seat_yaws[i])
 	for a in state.actors:
-		var node := _build_character(a, a.id == state.local_player_id)
+		var is_self := a.id == state.local_player_id
+		var key := _model_key(a, is_self)
+		var node: Node3D
+		if _model_cache.has(key):
+			node = _model_cache[key]
+			_model_cache.erase(key)
+			(node as CharacterModel).stop_ragdoll()
+		else:
+			node = _build_character(a, is_self)
+			node.set_meta("model_key", key)
 		add_child(node)
 		_actor_nodes[a.id] = node
 		var blob := _make_blob(Vector2(0.95, 0.95))
@@ -161,6 +190,10 @@ func build(state: GameState) -> void:
 				(c as VisualInstance3D).layers = 1 << (SELF_LAYER - 1)
 		add_child(milk)
 		_milk_nodes[a.id] = milk
+	# 使わなかったキャラ(抜けた人など)は消す
+	for k in _model_cache:
+		(_model_cache[k] as Node).queue_free()
+	_model_cache.clear()
 	_build_handkerchief(state)
 	_build_oni_shadow()
 	_milk_rings.clear()
