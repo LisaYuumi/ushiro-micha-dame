@@ -221,7 +221,7 @@ EN = {
     "%s に水鉄砲!": "Squirted %s!",
     "舞台: %s ▶": "Stage: %s ▶",
     "人数: %d人 ▶": "Players: %d ▶",
-    "小物 ▶": "Extras ▶",
+    "きせかえ ▶": "Dress up ▶",
     "帽子": "Hat",
     "メガネ": "Glasses",
     "リボン": "Ribbon",

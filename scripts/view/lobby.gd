@@ -91,7 +91,7 @@ func _ready() -> void:
 	_menu = VBoxContainer.new()
 	_menu.add_theme_constant_override("separation", 12)
 	root.add_child(_menu)
-	_build_profile_rows(_menu)
+	_build_menu_summary(_menu)
 	var row2 := HBoxContainer.new()
 	row2.add_theme_constant_override("separation", 12)
 	_menu.add_child(row2)
@@ -169,25 +169,44 @@ func _ready() -> void:
 	UiStyle.refit_all()
 
 
-## 名前(タップで入力)と、体の色(10色+カラーコード)
+## ロビーのいちばん上: 自分の色の丸と名前(見るだけ)と、「きせかえ」のボタン
+var _menu_dot: Panel
+var _menu_name: Label
+
+
+func _build_menu_summary(parent: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	parent.add_child(row)
+	_menu_dot = UiStyle.dot(Profile.color, 56)
+	row.add_child(_menu_dot)
+	_menu_name = _label("", 30)
+	_menu_name.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_menu_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_menu_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(_menu_name)
+	var dress := _button("きせかえ ▶", func() -> void: _show_acc(), Vector2(260, 64), true)
+	row.add_child(dress)
+
+
+## 名前(タップで入力)と、体の色(10色+カラーコード)。「きせかえ」の画面の上に出す
 func _build_profile_rows(parent: VBoxContainer) -> void:
 	var name_row := HBoxContainer.new()
 	name_row.add_theme_constant_override("separation", 12)
 	parent.add_child(name_row)
-	_preview = UiStyle.dot(Profile.color, 56)
+	_preview = UiStyle.dot(Profile.color, 44)
 	name_row.add_child(_preview)
 	if OS.has_feature("web"):
-		# スマホのブラウザ: 入力欄より確実なので、ブラウザの入力ダイアログで聞く
-		_name_button = _button("", func() -> void: _ask_name(), Vector2(0, 64))
+		# ブラウザ: 画面に重ねる入力の窓で聞く(WebInput)
+		_name_button = _button("", func() -> void: _ask_name(), Vector2(0, 52))
 		_name_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		name_row.add_child(_name_button)
-		name_row.add_child(_button("小物 ▶", func() -> void: _show_acc(), Vector2(170, 64)))
 	else:
 		_name_edit = LineEdit.new()
 		_name_edit.text = Profile.player_name
 		_name_edit.max_length = Profile.NAME_MAX
 		_name_edit.placeholder_text = "なまえ"
-		_name_edit.custom_minimum_size = Vector2(0, 64)
+		_name_edit.custom_minimum_size = Vector2(0, 52)
 		_name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_name_edit.add_theme_font_override("font", HudFont.get_font())
 		_name_edit.add_theme_font_size_override("font_size", 30)
@@ -196,27 +215,26 @@ func _build_profile_rows(parent: VBoxContainer) -> void:
 		_name_edit.add_theme_color_override("font_color", GameConfig.COLOR_INK)
 		_name_edit.text_changed.connect(func(t: String) -> void: _set_name(t))
 		name_row.add_child(_name_edit)
-		name_row.add_child(_button("小物 ▶", func() -> void: _show_acc(), Vector2(170, 64)))
 
 	var color_row := HBoxContainer.new()
-	color_row.add_theme_constant_override("separation", 8)
-	color_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	color_row.add_theme_constant_override("separation", 6)
+	color_row.alignment = BoxContainer.ALIGNMENT_END
 	parent.add_child(color_row)
 	for c in Profile.COLORS:
 		var col: Color = c
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(48, 48)
+		b.custom_minimum_size = Vector2(38, 38)
 		b.focus_mode = Control.FOCUS_NONE
 		b.pressed.connect(func() -> void: _set_color(col))
 		color_row.add_child(b)
 		_buttons.append(b)
 		_color_buttons.append(b)
 	if OS.has_feature("web"):
-		color_row.add_child(_button("#", func() -> void: _ask_color(), Vector2(64, 48)))
+		color_row.add_child(_button("#", func() -> void: _ask_color(), Vector2(56, 38)))
 	else:
 		_code_edit = LineEdit.new()
 		_code_edit.placeholder_text = "#4D96FF"
-		_code_edit.custom_minimum_size = Vector2(130, 48)
+		_code_edit.custom_minimum_size = Vector2(110, 38)
 		_code_edit.add_theme_font_override("font", HudFont.get_font())
 		_code_edit.add_theme_font_size_override("font_size", 22)
 		_code_edit.text_submitted.connect(func(t: String) -> void: _set_color(Profile.parse_color(t, Profile.color)))
@@ -224,7 +242,7 @@ func _build_profile_rows(parent: VBoxContainer) -> void:
 	_update_profile()
 
 
-## 小物の画面: 左に見本のキャラ、右に小物ごとの「なし/形」のボタンと色のボタン(全部同時につけられる)
+## きせかえの画面: 左に見本のキャラ、右に名前・体の色と、小物ごとの「なし/形」のボタンと色のボタン(全部同時につけられる)
 func _build_acc_box(root: VBoxContainer) -> void:
 	_acc_box = VBoxContainer.new()
 	_acc_box.add_theme_constant_override("separation", 10)
@@ -239,6 +257,8 @@ func _build_acc_box(root: VBoxContainer) -> void:
 	col.add_theme_constant_override("separation", 6)
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_child(col)
+	# 名前と体の色も、ここで変える
+	_build_profile_rows(col)
 	for sl in Accessories.SLOTS:
 		var slot: String = sl
 		# 1行目: 小物の名前と色のボタン/2行目: 「なし」と形のボタン
@@ -484,10 +504,16 @@ func _set_color(c: Color) -> void:
 	Profile.color = c
 	Profile.save()
 	_update_profile()
+	# きせかえの見本のキャラも、新しい色にする
+	if _acc_box and _acc_box.visible:
+		_acc_preview.prepare(Profile.color, Profile.accessories)
 
 
 func _update_profile() -> void:
 	(_preview.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = Profile.color
+	if _menu_dot:
+		(_menu_dot.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = Profile.color
+		_menu_name.text = Locale.actor_name(Profile.player_name)
 	if _name_button:
 		_name_button.text = tr("%s(タップで名前を変える)") % Locale.actor_name(Profile.player_name)
 	for i in _color_buttons.size():
