@@ -41,6 +41,12 @@ var _lang_button: Button
 var _volume_box: VBoxContainer
 var _volume_panel: VolumePanel
 var _preview: Panel
+## 小物の画面(見本のキャラと、小物ごとの形・色のボタン)
+var _acc_box: VBoxContainer
+var _acc_preview: AccessoryPreview
+## 小物の形のボタン(slot -> {kind("" = なし) -> Button})と色のボタン(slot -> [Button])
+var _acc_kind_buttons := {}
+var _acc_color_buttons := {}
 
 
 func _ready() -> void:
@@ -130,6 +136,7 @@ func _ready() -> void:
 	_join_box.add_child(_button("もどる", func() -> void: show_menu(), Vector2(0, 70)))
 
 	_build_words_box(root)
+	_build_acc_box(root)
 	# 音量の画面(全体・BGM・効果音)
 	_volume_box = VBoxContainer.new()
 	_volume_box.add_theme_constant_override("separation", 14)
@@ -162,6 +169,7 @@ func _build_profile_rows(parent: VBoxContainer) -> void:
 		_name_button = _button("", func() -> void: _ask_name(), Vector2(0, 64))
 		_name_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		name_row.add_child(_name_button)
+		name_row.add_child(_button("小物 ▶", func() -> void: _show_acc(), Vector2(170, 64)))
 	else:
 		_name_edit = LineEdit.new()
 		_name_edit.text = Profile.player_name
@@ -176,6 +184,7 @@ func _build_profile_rows(parent: VBoxContainer) -> void:
 		_name_edit.add_theme_color_override("font_color", GameConfig.COLOR_INK)
 		_name_edit.text_changed.connect(func(t: String) -> void: _set_name(t))
 		name_row.add_child(_name_edit)
+		name_row.add_child(_button("小物 ▶", func() -> void: _show_acc(), Vector2(170, 64)))
 
 	var color_row := HBoxContainer.new()
 	color_row.add_theme_constant_override("separation", 8)
@@ -201,6 +210,112 @@ func _build_profile_rows(parent: VBoxContainer) -> void:
 		_code_edit.text_submitted.connect(func(t: String) -> void: _set_color(Profile.parse_color(t, Profile.color)))
 		color_row.add_child(_code_edit)
 	_update_profile()
+
+
+## 小物の画面: 左に見本のキャラ、右に小物ごとの「なし/形」のボタンと色のボタン(全部同時につけられる)
+func _build_acc_box(root: VBoxContainer) -> void:
+	_acc_box = VBoxContainer.new()
+	_acc_box.add_theme_constant_override("separation", 10)
+	_acc_box.visible = false
+	root.add_child(_acc_box)
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 16)
+	_acc_box.add_child(body)
+	_acc_preview = AccessoryPreview.new()
+	body.add_child(_acc_preview)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(col)
+	for sl in Accessories.SLOTS:
+		var slot: String = sl
+		# 1行目: 小物の名前と色のボタン/2行目: 「なし」と形のボタン
+		var crow := HBoxContainer.new()
+		crow.add_theme_constant_override("separation", 5)
+		col.add_child(crow)
+		var name_l := _label(Accessories.SLOT_NAMES[slot], 24)
+		name_l.autowrap_mode = TextServer.AUTOWRAP_OFF
+		name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		crow.add_child(name_l)
+		_acc_color_buttons[slot] = []
+		for i in Accessories.COLORS.size():
+			var idx: int = i
+			var cb := Button.new()
+			cb.custom_minimum_size = Vector2(34, 34)
+			cb.focus_mode = Control.FOCUS_NONE
+			cb.pressed.connect(func() -> void: AudioDirector.click())
+			cb.pressed.connect(func() -> void: _set_acc_color(slot, idx))
+			crow.add_child(cb)
+			_buttons.append(cb)
+			_acc_color_buttons[slot].append(cb)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		col.add_child(row)
+		_acc_kind_buttons[slot] = {}
+		var kinds: Array = [""] + Accessories.KINDS[slot]
+		for k in kinds:
+			var kind: String = k
+			var label: String = "なし" if kind == "" else Accessories.KIND_NAMES[kind]
+			var b := _button(label, func() -> void: _set_acc(slot, kind), Vector2(130, 50))
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(b)
+			_acc_kind_buttons[slot][kind] = b
+	_acc_box.add_child(_button("もどる", func() -> void: show_menu(), Vector2(0, 60), true))
+
+
+func _show_acc() -> void:
+	show_menu()
+	_menu.visible = false
+	_acc_box.visible = true
+	_acc_preview.rebuild(Profile.color, Profile.accessories)
+	_acc_preview.set_active(true)
+	_update_acc()
+
+
+func _hide_acc() -> void:
+	if _acc_box:
+		_acc_box.visible = false
+		_acc_preview.set_active(false)
+
+
+func _set_acc(slot: String, kind: String) -> void:
+	var a := Accessories.clean(Profile.accessories)
+	a[slot] = kind
+	Profile.accessories = a
+	Profile.save()
+	_acc_preview.set_accessories(a)
+	_update_acc()
+
+
+func _set_acc_color(slot: String, idx: int) -> void:
+	var a := Accessories.clean(Profile.accessories)
+	a[slot + "_c"] = idx
+	# 色を選んだら、つけていなければつける(いちばん目の形)
+	if a[slot] == "":
+		a[slot] = Accessories.KINDS[slot][0]
+	Profile.accessories = a
+	Profile.save()
+	_acc_preview.set_accessories(a)
+	_update_acc()
+
+
+## 選んでいる形のボタンはオレンジ、選んでいる色は太いふち
+func _update_acc() -> void:
+	var a := Accessories.clean(Profile.accessories)
+	for slot in _acc_kind_buttons:
+		for kind in _acc_kind_buttons[slot]:
+			var b: Button = _acc_kind_buttons[slot][kind]
+			UiStyle.button(b, a[slot] == kind, 28)
+		var list: Array = _acc_color_buttons[slot]
+		for i in list.size():
+			var c: Color = Accessories.COLORS[i]
+			var chosen := int(a[slot + "_c"]) == i
+			var st := UiStyle.box(c, false, 20, 5 if chosen else 2)
+			st.border_color = GameConfig.COLOR_ACCENT if chosen else GameConfig.COLOR_INK
+			for k in ["normal", "hover", "pressed", "hover_pressed"]:
+				(list[i] as Button).add_theme_stylebox_override(k, st)
+	UiStyle.refit_all()
 
 
 ## スタンプの言葉を変える画面: 絵文字は決まっていて、言葉だけ変えられる(6文字まで・使えない言葉はチェック)
@@ -254,6 +369,7 @@ func _build_words_box(root: VBoxContainer) -> void:
 
 func _show_volume() -> void:
 	_menu.visible = false
+	_hide_acc()
 	_words_box.visible = false
 	_join_box.visible = false
 	_host_box.visible = false
@@ -264,6 +380,7 @@ func _show_volume() -> void:
 
 func _show_words() -> void:
 	_menu.visible = false
+	_hide_acc()
 	_volume_box.visible = false
 	_words_box.visible = true
 	_join_box.visible = false
@@ -408,6 +525,7 @@ func _update_players_button() -> void:
 
 func show_menu() -> void:
 	_menu.visible = true
+	_hide_acc()
 	_words_box.visible = false
 	_volume_box.visible = false
 	_join_box.visible = false
@@ -418,6 +536,7 @@ func show_menu() -> void:
 ## ホスト: 合言葉と、入っている人数を出す
 func show_host(code: String, joined: int) -> void:
 	_menu.visible = false
+	_hide_acc()
 	_volume_box.visible = false
 	_words_box.visible = false
 	_join_box.visible = false
@@ -428,6 +547,7 @@ func show_host(code: String, joined: int) -> void:
 ## 参加者: ホストがスタートするのを待つ
 func show_waiting(text: String) -> void:
 	_menu.visible = false
+	_hide_acc()
 	_volume_box.visible = false
 	_words_box.visible = false
 	_join_box.visible = false
@@ -441,6 +561,7 @@ func set_status(text: String) -> void:
 
 func _show_join() -> void:
 	_menu.visible = false
+	_hide_acc()
 	_volume_box.visible = false
 	_words_box.visible = false
 	_join_box.visible = true

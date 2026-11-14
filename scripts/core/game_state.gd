@@ -31,6 +31,8 @@ class Actor:
 	var yaw: float = 0.0
 	## 仮の体の色
 	var color: Color = Color.WHITE
+	## 小物(Accessories の形。見た目だけ)
+	var accessories: Dictionary = {}
 	## 振り向いているか(全員から見える)
 	var looking_back: bool = false
 	## 外れの振り向きの回数(試合のあいだ数える。表情に使う)
@@ -203,12 +205,12 @@ var rng := RandomNumberGenerator.new()
 ## seats: 席の数(鬼は別に1人。8人で遊ぶなら7、5人なら4)
 ## me_name / me_color: この画面のプレイヤーの名前と体の色(色の a が 0 なら決まった色)
 func start_match(seed_value: int = -1, player_is_oni: bool = false, seats: int = GameConfig.SEAT_COUNT,
-		me_name: String = "あなた", me_color: Color = Color(0, 0, 0, 0)) -> void:
+		me_name: String = "あなた", me_color: Color = Color(0, 0, 0, 0), me_acc: Dictionary = {}) -> void:
 	var me := seats if player_is_oni else 0
 	var colors := {}
 	if me_color.a > 0.0:
 		colors[me] = me_color
-	start_match_custom(seed_value, [me], me if player_is_oni else seats, {me: me_name}, false, seats, colors)
+	start_match_custom(seed_value, [me], me if player_is_oni else seats, {me: me_name}, false, seats, colors, {me: me_acc})
 	local_player_id = me
 
 
@@ -217,7 +219,7 @@ func start_match(seed_value: int = -1, player_is_oni: bool = false, seats: int =
 ## names: id -> 表示名(書かれていない人はボット名)/humans_only_oni: 鬼は人だけにする/
 ## colors: id -> 体の色(人が選んだ色。書かれていない人は決まった色から、人の色と重ならないように)
 func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names: Dictionary, humans_only: bool,
-		seats: int = GameConfig.SEAT_COUNT, colors: Dictionary = {}) -> void:
+		seats: int = GameConfig.SEAT_COUNT, colors: Dictionary = {}, accessories: Dictionary = {}) -> void:
 	seat_count = seats
 	if seed_value >= 0:
 		rng.seed = seed_value
@@ -263,6 +265,7 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 			actor.personality = Personalities.ALL[rng.randi_range(0, Personalities.ALL.size() - 1)]
 			actor.display_name = "ボット%d(%s)" % [bot_no, Personalities.label(actor.personality)]
 			bot_no += 1
+		actor.accessories = Accessories.clean(accessories.get(i, {}))
 		if colors.has(i):
 			actor.color = colors[i]
 		else:
@@ -1044,6 +1047,7 @@ func snapshot(viewer: int = -1) -> Dictionary:
 			"name": a.display_name,
 			"is_bot": a.is_bot,
 			"color": a.color,
+			"acc": a.accessories,
 			"role": a.role,
 			"seat": a.seat_index,
 			"pos": a.position,
@@ -1113,6 +1117,7 @@ func apply_snapshot(s: Dictionary) -> void:
 		a.display_name = d["name"]
 		a.is_bot = d["is_bot"]
 		a.color = d["color"]
+		a.accessories = Accessories.clean(d.get("acc", {}))
 		a.role = d["role"]
 		a.seat_index = d["seat"]
 		a.position = d["pos"]

@@ -29,6 +29,8 @@ static var vol_bgm := 0.7
 static var vol_sfx := 1.0
 ## ロビーで選んだ舞台(Items.STAGES)
 static var stage := "classroom"
+## 小物(Accessories の形)
+static var accessories := {}
 static var _loaded := false
 
 
@@ -49,6 +51,7 @@ static func load_saved() -> void:
 	vol_sfx = clampf(float(cfg.get_value("profile", "vol_sfx", 1.0)), 0.0, 1.0)
 	stamp_words = clean_words(cfg.get_value("profile", "stamp_words", {}))
 	stage = Items.clean_stage(str(cfg.get_value("profile", "stage", "classroom")))
+	accessories = Accessories.clean(cfg.get_value("profile", "accessories", {}))
 
 
 static func save() -> void:
@@ -63,6 +66,7 @@ static func save() -> void:
 	cfg.set_value("profile", "vol_sfx", vol_sfx)
 	cfg.set_value("profile", "stamp_words", stamp_words)
 	cfg.set_value("profile", "stage", stage)
+	cfg.set_value("profile", "accessories", accessories)
 	cfg.save(PATH)
 
 
@@ -122,4 +126,5 @@ static func set_volume(key: String, v: float) -> void:
 
 ## 通信で送れる形
 static func to_dict() -> Dictionary:
-	return {"name": player_name, "color": "#" + color.to_html(false), "words": stamp_words, "lang": Locale.current()}
+	return {"name": player_name, "color": "#" + color.to_html(false), "words": stamp_words, "lang": Locale.current(),
+			"acc": accessories}

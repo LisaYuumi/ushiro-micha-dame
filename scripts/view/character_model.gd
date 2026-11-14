@@ -137,6 +137,12 @@ var _blink_left := 0.0
 var _hat: Node3D
 ## 海辺の鬼がかぶる麦わら帽子(ふだんは作らない。はじめてかぶるときに作る)
 var _straw_hat: Node3D
+## 小物(帽子・メガネ・リボン・豚の鼻)を置く場所と、小物の帽子(鬼の帽子をかぶる間は隠す)
+var _acc_root: Node3D
+var _acc_hat: Node3D
+var _oni_hat_on := false
+## 体の表示レイヤー(あとから作る部品にも同じレイヤーをつける)
+var _layer_bits := 1
 const COLOR_HAT := Color("FFD43B")
 const COLOR_HAT_BAND := Color("F2B705")
 
@@ -152,6 +158,8 @@ func build(color: Color, display_name: String, font: Font) -> void:
 	_face = Node3D.new()
 	_attach("DEF-head", _face, _head_transform())
 	_build_hat()
+	_acc_root = Node3D.new()
+	_attach("DEF-head", _acc_root, _head_transform())
 
 	# 点の目
 	for x in [-0.08, 0.08]:
@@ -393,6 +401,196 @@ func set_hat(v: bool, straw: bool = false) -> void:
 		_hat.visible = v and not straw
 	if _straw_hat:
 		_straw_hat.visible = v and straw
+	# 鬼の帽子をかぶっている間は、小物の帽子は隠す
+	_oni_hat_on = v
+	if _acc_hat:
+		_acc_hat.visible = not v
+
+
+## 小物をつける(Accessories の形。前につけていた物は外す)
+func set_accessories(acc: Dictionary) -> void:
+	if _acc_root == null:
+		return
+	for c in _acc_root.get_children():
+		_acc_root.remove_child(c)
+		c.queue_free()
+	_acc_hat = null
+	var a := Accessories.clean(acc)
+	var line := GameConfig.OUTLINE_WIDTH / BODY_SCALE
+	if a["hat"] != "":
+		_acc_hat = _build_acc_hat(str(a["hat"]), Accessories.color_of(a, "hat"), line)
+		_acc_hat.visible = not _oni_hat_on
+		_acc_root.add_child(_acc_hat)
+	if a["glasses"] != "":
+		_acc_root.add_child(_build_glasses(str(a["glasses"]), Accessories.color_of(a, "glasses"), line))
+	if a["ribbon"] != "":
+		_acc_root.add_child(_build_ribbon(Accessories.color_of(a, "ribbon"), line))
+	if a["nose"] != "":
+		_acc_root.add_child(_build_pig_nose(Accessories.color_of(a, "nose"), line))
+	_set_layers_rec(_acc_root, _layer_bits)
+
+
+## 小物の帽子: キャップ(つばが前)・ニット帽(折り返しとぼんぼり)・シルクハット(高い筒と帯)
+func _build_acc_hat(kind: String, col: Color, line: float) -> Node3D:
+	var root := Node3D.new()
+	match kind:
+		"cap":
+			var crown := SphereMesh.new()
+			crown.radius = 0.228
+			crown.height = 0.228
+			crown.is_hemisphere = true
+			var cm := _mesh(crown, col, line)
+			cm.position = Vector3(0, HEAD_Y + 0.08, 0)
+			cm.scale = Vector3(1.0, 0.85, 1.0)
+			root.add_child(cm)
+			var visor := _mesh(StaticBatch.chamfer_mesh(Vector3(0.3, 0.025, 0.2), 0.012), col.darkened(0.12), line)
+			visor.position = Vector3(0, HEAD_Y + 0.09, -0.27)
+			visor.rotation.x = -0.12
+			root.add_child(visor)
+			var button := SphereMesh.new()
+			button.radius = 0.025
+			button.height = 0.03
+			var bm := _mesh(button, col.darkened(0.12), 0.0)
+			bm.position = Vector3(0, HEAD_Y + 0.275, 0)
+			root.add_child(bm)
+		"beanie":
+			var crown := SphereMesh.new()
+			crown.radius = 0.235
+			crown.height = 0.235
+			crown.is_hemisphere = true
+			var cm := _mesh(crown, col, line)
+			cm.position = Vector3(0, HEAD_Y + 0.06, 0)
+			cm.scale = Vector3(1.0, 1.05, 1.0)
+			root.add_child(cm)
+			var rim := CylinderMesh.new()
+			rim.top_radius = 0.236
+			rim.bottom_radius = 0.24
+			rim.height = 0.08
+			rim.radial_segments = 24
+			var rm := _mesh(rim, col.darkened(0.15), line)
+			rm.position = Vector3(0, HEAD_Y + 0.09, 0)
+			root.add_child(rm)
+			var pom := SphereMesh.new()
+			pom.radius = 0.065
+			pom.height = 0.13
+			var pm := _mesh(pom, col.lightened(0.35), line)
+			pm.position = Vector3(0, HEAD_Y + 0.32, 0)
+			root.add_child(pm)
+		_:
+			var brim := CylinderMesh.new()
+			brim.top_radius = 0.3
+			brim.bottom_radius = 0.3
+			brim.height = 0.025
+			brim.radial_segments = 28
+			var bm := _mesh(brim, col, line)
+			bm.position = Vector3(0, HEAD_Y + 0.17, 0)
+			root.add_child(bm)
+			var tube := CylinderMesh.new()
+			tube.top_radius = 0.17
+			tube.bottom_radius = 0.165
+			tube.height = 0.3
+			tube.radial_segments = 24
+			var tm := _mesh(tube, col, line)
+			tm.position = Vector3(0, HEAD_Y + 0.33, 0)
+			root.add_child(tm)
+			var band := CylinderMesh.new()
+			band.top_radius = 0.169
+			band.bottom_radius = 0.169
+			band.height = 0.05
+			band.radial_segments = 24
+			var dark := col.get_luminance() < 0.3
+			var bdm := _mesh(band, Color("E5483B") if dark else Color("2E2B28"), 0.0)
+			bdm.scale = Vector3(1.02, 1.0, 1.02)
+			bdm.position = Vector3(0, HEAD_Y + 0.21, 0)
+			root.add_child(bdm)
+	return root
+
+
+## メガネ: 目のまわりのふち(丸か四角)・まん中のブリッジ・耳へのつる
+func _build_glasses(kind: String, col: Color, line: float) -> Node3D:
+	var root := Node3D.new()
+	var z := FACE_Z - 0.02
+	var y := HEAD_Y + 0.04
+	var w := 0.012
+	for x in [-0.085, 0.085]:
+		if kind == "round":
+			var ring := TorusMesh.new()
+			ring.inner_radius = 0.048
+			ring.outer_radius = 0.048 + w * 1.3
+			ring.rings = 20
+			ring.ring_segments = 6
+			var rm := _mesh(ring, col, line * 0.5)
+			rm.rotation.x = PI / 2.0
+			rm.position = Vector3(x, y, z)
+			root.add_child(rm)
+		else:
+			var half := Vector2(0.06, 0.045)
+			for side in [-1.0, 1.0]:
+				var hb := _mesh(StaticBatch.chamfer_mesh(Vector3(half.x * 2.0 + w, w, w), 0.003), col, line * 0.5)
+				hb.position = Vector3(x, y + side * half.y, z)
+				root.add_child(hb)
+				var vb := _mesh(StaticBatch.chamfer_mesh(Vector3(w, half.y * 2.0 + w, w), 0.003), col, line * 0.5)
+				vb.position = Vector3(x + side * half.x, y, z)
+				root.add_child(vb)
+	var bridge := _mesh(StaticBatch.chamfer_mesh(Vector3(0.05, w, w), 0.003), col, line * 0.5)
+	bridge.position = Vector3(0, y + 0.01, z - 0.005)
+	root.add_child(bridge)
+	for side in [-1.0, 1.0]:
+		var temple := _mesh(StaticBatch.chamfer_mesh(Vector3(w, w, 0.2), 0.003), col, line * 0.5)
+		temple.position = Vector3(side * 0.19, y + 0.01, z + 0.1)
+		temple.rotation.y = side * 0.35
+		root.add_child(temple)
+	return root
+
+
+## リボン: 頭の右上に、2つの輪と結び目と、たれる2本の端
+func _build_ribbon(col: Color, line: float) -> Node3D:
+	var root := Node3D.new()
+	root.position = Vector3(0.13, HEAD_Y + 0.17, -0.02)
+	root.rotation = Vector3(0.0, 0.3, -0.55)
+	for side in [-1.0, 1.0]:
+		var loop := SphereMesh.new()
+		loop.radius = 0.06
+		loop.height = 0.12
+		var lm := _mesh(loop, col, line * 0.6)
+		lm.scale = Vector3(1.1, 0.75, 0.45)
+		lm.position = Vector3(side * 0.065, 0, 0)
+		lm.rotation.z = side * 0.25
+		root.add_child(lm)
+		var tail := _mesh(StaticBatch.chamfer_mesh(Vector3(0.03, 0.09, 0.02), 0.006), col.darkened(0.08), line * 0.5)
+		tail.position = Vector3(side * 0.025, -0.06, 0.005)
+		tail.rotation.z = side * 0.35
+		root.add_child(tail)
+	var knot := SphereMesh.new()
+	knot.radius = 0.028
+	knot.height = 0.056
+	var km := _mesh(knot, col.darkened(0.12), line * 0.6)
+	root.add_child(km)
+	return root
+
+
+## 豚の鼻: 顔のまん中に、平たい円柱と2つの鼻の穴
+func _build_pig_nose(col: Color, line: float) -> Node3D:
+	var root := Node3D.new()
+	var snout := CylinderMesh.new()
+	snout.top_radius = 0.055
+	snout.bottom_radius = 0.058
+	snout.height = 0.045
+	snout.radial_segments = 20
+	var sm := _mesh(snout, col, line * 0.6)
+	sm.rotation.x = PI / 2.0
+	sm.scale = Vector3(1.15, 1.0, 0.85)
+	sm.position = Vector3(0, HEAD_Y - 0.02, FACE_Z - 0.012)
+	root.add_child(sm)
+	for x in [-0.022, 0.022]:
+		var hole := SphereMesh.new()
+		hole.radius = 0.013
+		hole.height = 0.026
+		var hm := _mesh(hole, col.darkened(0.55), 0.0)
+		hm.scale = Vector3(0.8, 1.2, 0.4)
+		hm.position = Vector3(x, HEAD_Y - 0.02, FACE_Z - 0.036)
+		root.add_child(hm)
+	return root
 
 
 ## 麦わら帽子: 低い山と、広いつば、赤いリボン
@@ -425,6 +623,7 @@ func _build_straw_hat() -> void:
 	brim_mi.position = Vector3(0, HEAD_Y + 0.15, 0)
 	brim_mi.rotation.x = -0.06
 	_straw_hat.add_child(brim_mi)
+	_set_layers_rec(_straw_hat, _layer_bits)
 
 
 ## 頭の球の位置と向き(骨組みの座標で)。顔の -Z が体の正面(素材の +Z)を向く
@@ -566,6 +765,7 @@ func set_name_visible(v: bool) -> void:
 
 ## 自分のカメラから隠すときなどに、すべての見た目のレイヤーをまとめて変える
 func set_layers(layer_bits: int) -> void:
+	_layer_bits = layer_bits
 	_set_layers_rec(self, layer_bits)
 
 

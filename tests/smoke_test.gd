@@ -66,6 +66,7 @@ func _initialize() -> void:
 	_test_two_minions()
 	_test_minion_vote()
 	_test_beach_stage()
+	_test_accessories()
 	_test_bot_personalities()
 	_test_look_limit_and_patience()
 	_test_online_match_setup()
@@ -1853,3 +1854,25 @@ func _test_beach_stage() -> void:
 	var c := GameState.new()
 	c.start_match(91)
 	_check(c.stage == "classroom", "はじめの舞台は教室")
+
+
+## 小物: 正しい形に直す・試合の登場人物につく・状態で届く
+func _test_accessories() -> void:
+	var bad := Accessories.clean({"hat": "crown", "hat_c": 99, "nose": "pig", "nose_c": 2, "glasses": 5})
+	_check(bad["hat"] == "" and bad["hat_c"] == Accessories.DEFAULT_COLOR["hat"], "知らない形・色は、つけない・はじめの色")
+	_check(bad["nose"] == "pig" and bad["nose_c"] == 2 and bad["glasses"] == "", "正しい形と色はそのまま")
+	_check(Accessories.clean("x") == Accessories.empty(), "形がおかしければ何もつけない")
+	var acc := {"hat": "tophat", "hat_c": 7, "glasses": "round", "glasses_c": 0, "ribbon": "ribbon", "ribbon_c": 5, "nose": "pig", "nose_c": 6}
+	var s := GameState.new()
+	s.start_match(95, false, GameConfig.SEAT_COUNT, "あなた", Color(0, 0, 0, 0), acc)
+	var me := s.get_local_player()
+	_check(me.accessories == Accessories.clean(acc), "自分の小物が登場人物につく")
+	var bot: GameState.Actor = null
+	for a in s.actors:
+		if a.is_bot:
+			bot = a
+			break
+	_check(bot.accessories == Accessories.empty(), "ボットは小物なし")
+	var g := GameState.new()
+	g.apply_snapshot(s.snapshot(1))
+	_check(g.get_actor(me.id).accessories == me.accessories, "小物は参加した人にも届く")

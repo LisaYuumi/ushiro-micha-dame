@@ -989,6 +989,7 @@ func _build_character(a: GameState.Actor, is_self: bool) -> Node3D:
 	# ボットの性格は、⚙メニューでオンにしたときだけ名前の横に出す
 	var shown_name := Locale.actor_name(a.display_name, Profile.show_personality)
 	model.build(a.color, shown_name, HudFont.get_font())
+	model.set_accessories(a.accessories)
 	if is_self:
 		# 自分の体は、座っているときの自分のカメラには映さない。自分の名前は出さない
 		model.set_layers(1 << (SELF_LAYER - 1))

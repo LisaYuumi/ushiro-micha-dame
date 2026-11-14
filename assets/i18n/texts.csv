@@ -230,6 +230,18 @@ the minion…"
 %s に水鉄砲!,%s に水鉄砲!,Squirted %s!
 舞台: %s ▶,舞台: %s ▶,Stage: %s ▶
 人数: %d人 ▶,人数: %d人 ▶,Players: %d ▶
+小物 ▶,小物 ▶,Extras ▶
+帽子,帽子,Hat
+メガネ,メガネ,Glasses
+リボン,リボン,Ribbon
+豚の鼻,豚の鼻,Pig nose
+キャップ,キャップ,Cap
+ニット帽,ニット帽,Beanie
+シルクハット,シルクハット,Top hat
+丸メガネ,丸メガネ,Round
+四角メガネ,四角メガネ,Square
+つける,つける,Wear
+なし,なし,None
 %d点,%d点,%d pts
 ゴシゴシ!,ゴシゴシ!,Wipe wipe!
 停電!,停電!,Blackout!

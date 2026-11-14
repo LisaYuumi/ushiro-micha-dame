@@ -140,6 +140,7 @@ func _on_host_start() -> void:
 	var humans := [0]
 	var names := {0: Profile.player_name}
 	var colors := {0: Profile.color}
+	var accs := {0: Profile.accessories}
 	var next_id := 1
 	for pid in peers:
 		if next_id >= max_humans:
@@ -152,10 +153,11 @@ func _on_host_start() -> void:
 		var c := Profile.parse_color(str(prof.get("color", "")), Color(0, 0, 0, 0))
 		if c.a > 0.0:
 			colors[next_id] = c
+		accs[next_id] = Accessories.clean(prof.get("acc", {}))
 		next_id += 1
 	var first_oni: int = humans[randi_range(0, humans.size() - 1)]
 	state.stage = Profile.stage
-	state.start_match_custom(-1, humans, first_oni, names, true, _seats, colors)
+	state.start_match_custom(-1, humans, first_oni, names, true, _seats, colors, accs)
 	state.local_player_id = 0
 	mode = Mode.HOST
 	cmds = state
@@ -246,7 +248,7 @@ func _start_round() -> void:
 		_on_host_start()
 		return
 	state.stage = Profile.stage
-	state.start_match(-1, _player_is_oni, _seats, Profile.player_name, Profile.color)
+	state.start_match(-1, _player_is_oni, _seats, Profile.player_name, Profile.color, Profile.accessories)
 	_refresh_round()
 
 
