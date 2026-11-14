@@ -731,8 +731,8 @@ func _draw_milk() -> void:
 	var band := sz.y * MilkArt.BAND
 	for i in 7:
 		var x := sz.x * (0.08 + 0.135 * float(i)) + sin(float(i) * 4.1) * 20.0
-		var start := band + sz.y * 0.3
-		var fall := fmod(t * (40.0 + 12.0 * float(i % 3)) + float(i) * 97.0, sz.y * 0.55)
+		var start := band + sz.y * 0.12
+		var fall := fmod(t * (40.0 + 12.0 * float(i % 3)) + float(i) * 97.0, sz.y * 0.3)
 		var y := start + fall
 		var rr := 7.0 + 3.0 * float(i % 2)
 		_milk.draw_set_transform(Vector2(x, y), 0.0, Vector2(1.0, 1.35))
