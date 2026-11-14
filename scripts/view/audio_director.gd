@@ -9,7 +9,7 @@ extends Node
 static var instance: AudioDirector
 
 ## BGM の大きさ(dB)。ラウンド中は、落とし物の音や足音が聞こえるように小さめ
-const BGM_DB := {"bgm_lobby": -10.0, "bgm_round_1": -21.0, "bgm_round_2": -21.0, "bgm_round_3": -20.0, "bgm_chase": -11.0}
+const BGM_DB := {"bgm_lobby": -10.0, "bgm_round_1": -15.0, "bgm_round_2": -15.0, "bgm_round_3": -14.0, "bgm_chase": -11.0}
 const FADE_TIME := 0.8
 
 var _bgm: Array[AudioStreamPlayer] = []
@@ -17,6 +17,8 @@ var _bgm_now := ""
 var _active := 0
 var _pool: Array[AudioStreamPlayer] = []
 var _next := 0
+## BGM の切りかえの途中のフェード(すぐ次に切りかえたら止めて、音が消えたままにならないように)
+var _fade: Tween
 
 
 func _ready() -> void:
@@ -38,11 +40,16 @@ func play_bgm(bgm_name: String) -> void:
 	if bgm_name == _bgm_now:
 		return
 	_bgm_now = bgm_name
-	var old := _bgm[_active]
 	_active = 1 - _active
 	var nw := _bgm[_active]
+	if _fade and _fade.is_valid():
+		_fade.kill()
 	var tw := create_tween().set_parallel(true)
-	tw.tween_property(old, "volume_db", -80.0, FADE_TIME)
+	_fade = tw
+	# 新しい曲を鳴らすプレイヤー以外は、小さくして消す(途中で止めたフェードの曲も残さない)
+	for p in _bgm:
+		if p != nw or bgm_name == "":
+			tw.tween_property(p, "volume_db", -80.0, FADE_TIME)
 	if bgm_name == "":
 		return
 	nw.stream = Sfx.get_stream(bgm_name)

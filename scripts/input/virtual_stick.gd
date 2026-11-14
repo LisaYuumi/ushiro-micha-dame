@@ -1,10 +1,13 @@
 class_name VirtualStick
 extends Control
 ## スマホ用のスティック。指でなぞった向きを、矢印キーと同じ操作として送る。
+## PC ではマウスでドラッグしても動かせる(キーボードの WASD・矢印キーでも動く)。
 
 const RADIUS := 90.0
 
 var _touch_index := -1
+## マウスでドラッグしているとき(指の番号のかわり)
+const MOUSE := -2
 var _knob := Vector2.ZERO # -1〜1
 
 
@@ -31,6 +34,17 @@ func _input(event: InputEvent) -> void:
 		var d := event as InputEventScreenDrag
 		if d.index == _touch_index:
 			_update_knob(d.position)
+	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and _touch_index == -1 and is_visible_in_tree() and get_global_rect().has_point(mb.position):
+			_touch_index = MOUSE
+			_update_knob(mb.position)
+			get_viewport().set_input_as_handled()
+		elif not mb.pressed and _touch_index == MOUSE:
+			_touch_index = -1
+			_set_knob(Vector2.ZERO)
+	elif event is InputEventMouseMotion and _touch_index == MOUSE:
+		_update_knob((event as InputEventMouseMotion).position)
 
 
 func _update_knob(pos: Vector2) -> void:
