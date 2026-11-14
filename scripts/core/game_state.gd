@@ -134,6 +134,11 @@ var _last_lap_told: bool = false
 ## 追う人が輪の上をどこまで進んだか(oni_angle と同じく、周を重ねて増えていく角度)。
 ## 列がちがっても、鬼に追いついた・追い越したらタッチにするため
 var chaser_progress: float = 0.0
+## 停電イベント: 停電するラウンド(1試合に1回。2〜4ラウンド目のどれか。-1 = なし)と、いま停電中か。
+## 停電は見た目だけのイベント(ルールは変わらない)。追いかけっこが始まったら電気がつく
+var blackout_round: int = -1
+var blackout: bool = false
+var _blackout_angle: float = INF
 var _next_obstacle_id: int = 0
 
 ## 席の数(この試合。鬼は別に1人)
@@ -247,6 +252,8 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 	round_index = 0
 	match_over = false
 	last_minion_id = -1
+	# 停電するラウンドを決めておく(2〜4ラウンド目のどれか1回)
+	blackout_round = rng.randi_range(GameConfig.BLACKOUT_ROUND_MIN, GameConfig.BLACKOUT_ROUND_MAX)
 	var lineup := []
 	for i in seat_count + 1:
 		if i != first_oni:
@@ -373,6 +380,11 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	obstacles = []
 	milk_left = GameConfig.MILK_PER_ROUND
 	_round_base_scores = scores.duplicate()
+	# 停電するラウンドなら、鬼が歩きはじめてから少しして、とつぜん停電する
+	blackout = false
+	_blackout_angle = INF
+	if round_index == blackout_round:
+		_blackout_angle = oni_angle + TAU * rng.randf_range(GameConfig.BLACKOUT_START_LAPS_MIN, GameConfig.BLACKOUT_START_LAPS_MAX)
 	var step := TAU / seat_count
 	next_seat_crossing = ceilf(oni_angle / step) * step
 	if oni_is_player:
@@ -393,6 +405,10 @@ func tick(delta: float) -> void:
 	_tick_stamps(delta)
 	for i in seat_pass_age.size():
 		seat_pass_age[i] += delta
+	if not blackout and (phase == Phase.WALKING or phase == Phase.DROPPED) and oni_angle >= _blackout_angle:
+		_blackout_angle = INF
+		blackout = true
+		events.append({"type": "blackout"})
 	match phase:
 		Phase.WALKING, Phase.DROPPED:
 			_tick_walking(delta)
@@ -566,6 +582,8 @@ func pick_up(actor_id: int) -> void:
 	chaser_progress = oni_angle - fposmod(oni_angle - runner_angle(a), TAU)
 	_last_lap_told = false
 	_build_obstacles()
+	# 追いかけっこが始まったら、電気がつく
+	_lights_on()
 	events.append({"type": "picked_up", "actor": a.id})
 
 
@@ -1002,6 +1020,7 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"match_over": match_over,
 		"obstacles": obstacles,
 		"milk_left": milk_left,
+		"blackout": blackout,
 		"stamp_words": stamp_words,
 		"stamp_langs": stamp_langs,
 		"round_serial": round_serial,
@@ -1062,6 +1081,7 @@ func apply_snapshot(s: Dictionary) -> void:
 	match_over = s["match_over"]
 	obstacles = s.get("obstacles", [])
 	milk_left = s.get("milk_left", 0)
+	blackout = s.get("blackout", false)
 	stamp_words = s.get("stamp_words", {})
 	stamp_langs = s.get("stamp_langs", {})
 	round_serial = s["round_serial"]
@@ -1295,7 +1315,16 @@ func _check_obstacles(a: Actor) -> void:
 		return
 
 
+## 停電が終わって電気がつく(停電中でなければ何もしない)
+func _lights_on() -> void:
+	_blackout_angle = INF
+	if blackout:
+		blackout = false
+		events.append({"type": "lights_on"})
+
+
 func _finish(winner_id: int, loser_id: int, reason: String) -> void:
+	_lights_on()
 	phase = Phase.RESULT
 	result = {"winner": winner_id, "loser": loser_id, "reason": reason}
 	match reason:

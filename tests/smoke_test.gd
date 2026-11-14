@@ -42,6 +42,7 @@ func _initialize() -> void:
 	_test_stamp_truthfulness()
 	_test_stamp_words()
 	_test_milk_art()
+	_test_blackout()
 	_test_sounds()
 	_test_languages()
 	_test_custom_stamp_words()
@@ -654,6 +655,39 @@ func _test_sounds() -> void:
 		if told or s.phase != GameState.Phase.CHASE:
 			break
 	_check(told or s.phase != GameState.Phase.CHASE, "鬼が最後の1周に入ると合図のお知らせ")
+
+
+func _test_blackout() -> void:
+	# 1試合に1回、2〜4ラウンド目のどれかで停電する
+	for seed_value in 10:
+		var s0 := GameState.new()
+		s0.start_match(seed_value)
+		_check(s0.blackout_round >= GameConfig.BLACKOUT_ROUND_MIN and s0.blackout_round <= GameConfig.BLACKOUT_ROUND_MAX,
+				"停電するのは2〜4ラウンド目のどれか(%d)" % (s0.blackout_round + 1))
+	# 停電するラウンドでは、ラウンドの途中でとつぜん停電する。拾って追いかけっこになったら電気がつく
+	var s := GameState.new()
+	s.start_match(7)
+	s.blackout_round = 0
+	s.restart_round()
+	_check(not s.blackout, "ラウンドの最初は停電していない")
+	var got := _run_until(s, "blackout", 120.0)
+	_check(not got.is_empty() and s.blackout, "ラウンドの途中で停電する")
+	var g := GameState.new()
+	g.apply_snapshot(s.snapshot())
+	_check(g.blackout, "停電しているかは通信で届く")
+	_run_until(s, "dropped", 120.0)
+	if s.phase == GameState.Phase.DROPPED:
+		var target := s.get_actor_at_seat(s.drop_target_seat)
+		s.take_events()
+		s.pick_up(target.id)
+		_check(not s.blackout and _has(s.take_events(), "lights_on"), "追いかけっこが始まったら電気がつく")
+	# 停電しないラウンドでは停電しない
+	var s2 := GameState.new()
+	s2.start_match(7)
+	s2.blackout_round = 3
+	s2.restart_round()
+	_check(_run_until(s2, "blackout", 60.0).is_empty(), "停電するラウンド以外は停電しない")
+	_check(Sfx.get_stream("power_off") != null and Sfx.get_stream("power_on") != null, "停電の音がある")
 
 
 func _test_milk_art() -> void:

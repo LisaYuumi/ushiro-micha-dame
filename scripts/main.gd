@@ -405,6 +405,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				state._finish(state.oni_id, loser.id, "missed")
 	elif event.is_action_pressed("toggle_language"):
 		set_language(Locale.next_language())
+	elif event.is_action_pressed("debug_blackout_next"):
+		# 開発用: 次のラウンドを停電にする(ひとり・ホストのとき)
+		if mode == Mode.SOLO or mode == Mode.HOST:
+			state.blackout_round = state.round_index + 1
+			hud.show_message(tr("次のラウンドは停電"), Color(0.15, 0.15, 0.35), 1.5)
 	elif event.is_action_pressed("debug_milk"):
 		# 確認用(ひとりのときだけ): 自分に牛乳をかけて、白い画面を見る
 		var me := state.get_local_player()
@@ -714,6 +719,9 @@ func _show_event(e: Dictionary) -> void:
 		"round_start":
 			# ラウンド開始: 学校のチャイムのような音
 			audio.play("chime", -6.0)
+		"blackout":
+			# 停電イベント(音は WorldView が鳴らす)
+			hud.show_message(tr("停電!"), Color(0.15, 0.15, 0.35), 1.8)
 		"last_lap":
 			# 鬼が最後の1周に入った合図
 			audio.play("lap", -4.0)

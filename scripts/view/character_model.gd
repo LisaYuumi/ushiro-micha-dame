@@ -369,6 +369,16 @@ func _build_hat() -> void:
 	_hat.visible = false
 
 
+## 目の位置(世界の座標)。停電のとき、暗い中で目だけ光らせるのに使う。目を閉じている表情のときは、目の真ん中
+func eye_points() -> PackedVector3Array:
+	var out := PackedVector3Array()
+	if _face == null or not _face.is_inside_tree():
+		return out
+	for e in _eyes:
+		out.append(e.global_position)
+	return out
+
+
 ## 帽子をかぶる/ぬぐ(鬼だけがかぶる)
 func set_hat(v: bool) -> void:
 	if _hat:

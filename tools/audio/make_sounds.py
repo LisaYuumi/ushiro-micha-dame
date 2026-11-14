@@ -391,6 +391,27 @@ def ui_click():
     return norm(tone(glide(700, 1100, 0.06, 0.5), 0.06) * env_exp(0.06, 0.018), 0.7)
 
 
+# --- 停電イベント ---
+
+def power_off():
+    # 停電「ブツッ」: 電気が切れるにぶい音と、蛍光灯のブーンがすっと消える
+    zap = mix(bandpass(noise(0.06), 300, 3000) * env_exp(0.06, 0.012), thud(140, 60, 0.12, 0.03) * 0.8)
+    d = 0.5
+    t = t_of(d)
+    hum = (np.sin(2 * np.pi * 100 * t) + 0.4 * np.sin(2 * np.pi * 200 * t)) * np.exp(-t / 0.08) * 0.35
+    return norm(mix(zap, hum))
+
+
+def power_on():
+    # 電気がつく「パッ」: 明るいカチッと、蛍光灯がチカッとつく音
+    snap = mix(highpass(noise(0.03), 2000) * env_exp(0.03, 0.006), tone(glide(900, 1600, 0.05, 0.5), 0.05) * env_exp(0.05, 0.015) * 0.6)
+    flick = mix(*[at(highpass(noise(0.02), 3000) * env_exp(0.02, 0.005) * 0.4, s) for s in [0.08, 0.14]])
+    d = 0.6
+    t = t_of(d)
+    buzz = (np.sin(2 * np.pi * 120 * t) * 0.3 + np.sin(2 * np.pi * 2400 * t) * 0.05) * np.minimum(t / 0.05, 1.0) * np.exp(-t / 0.25)
+    return norm(mix(snap, flick, at(buzz, 0.05)))
+
+
 # --- 7. BGM(オリジナルの曲。ループする) ---
 
 def _render_song(bpm, bars, parts, beats_per_bar=4):
@@ -556,6 +577,7 @@ SOUNDS = {
     "look": look, "oops": oops, "trudge": trudge, "pickup": pickup,
     "fall": fall, "banana": banana, "lap": lap, "touch": touch, "sit": sit,
     "stamp_dropped": stamp_dropped, "stamp_safe": stamp_safe, "stamp_trust": stamp_trust,
+    "power_off": power_off, "power_on": power_on,
     "chime": chime, "reveal": reveal, "win": win, "lose": lose, "match_end": match_end, "ui_click": ui_click,
     "bgm_lobby": bgm_lobby, "bgm_round_1": bgm_round_1, "bgm_round_2": bgm_round_2, "bgm_round_3": bgm_round_3,
     "bgm_chase": bgm_chase,

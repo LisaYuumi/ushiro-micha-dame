@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(215)
+## 一覧(218)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -175,6 +175,9 @@
 | だったよ! |   |
 | 鬼がかって +%d点 | Oni won +%d |
 | %d点 | %d pts |
+| 停電! | Blackout! |
+| 次のラウンドは停電 | Next round: blackout |
+| 次のラウンドを停電にする(開発用) | Blackout next round (dev) |
 | 🎧 イヤホン推奨 | 🎧 Headphones recommended |
 | 🔊 音の大きさ | 🔊 Volume |
 | 全体 | Master |

@@ -29,6 +29,7 @@ const KEYS := {
 	"photo_mode": [KEY_P],
 	"debug_finish": [KEY_J],
 	"debug_milk": [KEY_L],
+	"debug_blackout_next": [KEY_G],
 	"toggle_personality": [],
 	"toggle_language": [],
 	"quit": [KEY_ESCAPE],

@@ -48,6 +48,8 @@ var _oni_shadow: MeshInstance3D
 var _oni_shadow_mat: StandardMaterial3D
 ## 頭の上の名札(2D で重ねる)
 var _overlay: HeadOverlay
+## 停電イベントの暗い幕
+var _blackout: BlackoutLayer
 ## 教室を作っている間だけ使う、背景の箱のまとめ役
 var _batch: StaticBatch
 ## 教室を作るときに見る状態(ラウンドで変わる黒板の落書き・時計・日直)
@@ -158,6 +160,8 @@ func build(state: GameState) -> void:
 	_build_sounds(state)
 	_build_cameras(state)
 	# 名札(送れない相手は薄く出る)
+	_blackout = BlackoutLayer.new()
+	add_child(_blackout)
 	_overlay = HeadOverlay.new()
 	add_child(_overlay)
 	_overlay.build(state, _actor_nodes, Profile.show_personality)
@@ -190,6 +194,11 @@ func sync(state: GameState, delta: float) -> void:
 	_update_seat_camera(state, delta)
 	if _overlay:
 		_overlay.update(state, get_viewport().get_camera_3d())
+	if _blackout:
+		# 座っている自分の目は、自分のカメラのすぐ前にあるので描かない
+		var me := state.get_local_player()
+		var skip := me.id if me != null and me.role == GameState.Role.SEATED else -1
+		_blackout.update(state, get_viewport().get_camera_3d(), _actor_nodes, delta, skip)
 	_update_obstacles(state)
 	_update_oni_shadow(state)
 	_update_milk_ring(state, delta)
@@ -387,6 +396,10 @@ func on_event(e: Dictionary) -> void:
 			_oops_until[e["actor"]] = _clock + GameConfig.SLIP_TIME
 			# バナナは「つるっ」、障害物は「ずでーん」
 			_play_actor(e["actor"], "banana" if e.get("kind", "") == "banana" else "fall", -2.0, -6.0)
+		"blackout":
+			AudioDirector.sfx("power_off", -2.0)
+		"lights_on":
+			AudioDirector.sfx("power_on", -3.0)
 		"out":
 			_pop(e["actor"], tr("お手つき!"), Color("6EA8F0"))
 			# 体育座りに移る「とぼとぼ」(「シーン…」のあと)

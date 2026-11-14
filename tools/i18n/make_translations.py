@@ -27,7 +27,7 @@ HOW_TO_PLAY_JA = """・振り向く(長押し): 押している間だけ後ろ�
 ・鬼: 自動で前に歩く。スティックを歩く向きに倒すと速く、反対に倒すと止まり、倒し続けると少し戻れる(3歩分まで)。落とす・フェイク(落とす音だけ)・牛乳(牛乳ボタン→「えいっ」になったら、座っている人をタップしてかける。もう一度押すとやめる。画面が半周のあいだ白くなる。1ラウンド1回)
 ・追いかけっこ: 鬼が輪の外側を2周して空いた席に座れば鬼の勝ち、それまでにタッチすれば追いかけた人の勝ち。走るのは自動(2人とも同じ速さ)。スティックを左右に倒すと、内側・外側へ動く。バケツ・椅子・机・バナナは、左右に動いてよける(ジャンプはない)。ぶつかると転ぶ。座っている人はバナナを投げられる
 キーボード: スペース=振り向く 1〜3=スタンプ M=牛乳 Z X C=鬼のスタンプ 走るとき: A/D=左右によける 鬼が歩くとき: A/D=速く/止まる・戻る
- E=落とす F=フェイク B/N=バナナ R=やり直し O=役を変える F1=上から見る K=転ぶ L=牛乳をかぶる(確認用) Tab=メニュー"""
+ E=落とす F=フェイク B/N=バナナ R=やり直し O=役を変える F1=上から見る K=転ぶ L=牛乳をかぶる G=次のラウンドを停電に(確認用) Tab=メニュー"""
 
 HOW_TO_PLAY_EN = """- Look back (hold): look behind you while held. If something was dropped there, you pick it up and run
 - Wrong look (nothing behind you): you leave the ring and rest in the middle. 0 points this round. You can see behind everyone and send stamps to anyone
@@ -35,7 +35,7 @@ HOW_TO_PLAY_EN = """- Look back (hold): look behind you while held. If something
 - Oni: walks forward on its own. Push the stick the way you walk to go faster, the other way to stop, and keep holding to step back (up to 3 steps). Drop / Fake (only the drop sound) / Milk (press Milk, then when it says "Splash!" tap a seated person. Press again to cancel. Their screen goes white for half a lap. Once per round)
 - Chase: the oni wins by running 2 laps outside the ring and sitting in the empty seat; the chaser wins by touching the oni first. Running is automatic (both run at the same speed). Push the stick left/right to move inward/outward. Dodge buckets, chairs, desks and bananas by moving sideways (no jumping). Bumping into one makes you fall. Seated players can throw bananas
 Keyboard: Space=look back 1-3=stamps M=milk Z X C=oni stamps  While running: A/D=dodge left/right  Oni walking: A/D=faster/stop & step back
- E=drop F=fake B/N=banana R=restart O=switch role F1=top view K=fall L=get milk (test) Tab=menu"""
+ E=drop F=fake B/N=banana R=restart O=switch role F1=top view K=fall L=get milk G=blackout next round (test) Tab=menu"""
 
 # 日本語の元の文 -> 英語。言葉が長くなりすぎないように(ボタンや吹き出しに収まるように)短めにする
 EN = {
@@ -201,6 +201,10 @@ EN = {
     "だったよ!": " ",
     "鬼がかって +%d点": "Oni won +%d",
     "%d点": "%d pts",
+    # 停電イベント
+    "停電!": "Blackout!",
+    "次のラウンドは停電": "Next round: blackout",
+    "次のラウンドを停電にする(開発用)": "Blackout next round (dev)",
     # 音
     "🎧 イヤホン推奨": "🎧 Headphones recommended",
     "🔊 音の大きさ": "🔊 Volume",
