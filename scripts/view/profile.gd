@@ -39,9 +39,8 @@ static var _loaded := false
 
 ## 音を「なめらか」で鳴らすか(おまかせなら、GPU を使えていない PC のブラウザだけ)
 static func smooth_audio() -> bool:
-	if smooth_mode >= 0:
-		return smooth_mode == 1
-	return Device.light_mode() and not Device.is_mobile()
+	# おまかせは、いまは「ふつう」(自動でなめらかにしたら、かえって割れたという声があったため)
+	return smooth_mode == 1
 
 
 static func load_saved() -> void:
