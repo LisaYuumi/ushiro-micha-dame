@@ -246,7 +246,8 @@ func _refresh_round() -> void:
 	_round_start_scores = state.scores.duplicate()
 	touch.set_oni_mode(_i_am_oni())
 	_last_sound = ""
-	_stamp_target = -1
+	# 前のラウンドで開いていた「◯◯に送る」は閉じる
+	_close_picker()
 	_milk_aiming = false
 	_apply_stamp_words()
 	hud.show_my_stamps([])
