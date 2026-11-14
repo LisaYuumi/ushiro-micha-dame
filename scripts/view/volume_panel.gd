@@ -52,6 +52,39 @@ func _ready() -> void:
 	_update_labels()
 
 
+## スマホの指: このゲームは指ごとにボタンを扱うため「指をマウスとして扱う」をオフにしている。
+## そのままではスライダーが指で動かないので、指が触れた・動いた位置から値を決める
+var _drag := {}  # 指の番号 -> つまんでいるスライダーの名前
+
+
+func _input(event: InputEvent) -> void:
+	if not is_visible_in_tree():
+		return
+	if event is InputEventScreenTouch:
+		var t := event as InputEventScreenTouch
+		if t.pressed:
+			for key in _sliders:
+				var sl: HSlider = _sliders[key][0]
+				if sl.get_global_rect().grow(12.0).has_point(t.position):
+					_drag[t.index] = key
+					_set_from_x(key, t.position.x)
+					get_viewport().set_input_as_handled()
+					return
+		else:
+			_drag.erase(t.index)
+	elif event is InputEventScreenDrag:
+		var d := event as InputEventScreenDrag
+		if _drag.has(d.index):
+			_set_from_x(_drag[d.index], d.position.x)
+			get_viewport().set_input_as_handled()
+
+
+func _set_from_x(key: String, x: float) -> void:
+	var sl: HSlider = _sliders[key][0]
+	var r := sl.get_global_rect()
+	sl.value = clampf((x - r.position.x) / maxf(r.size.x, 1.0), 0.0, 1.0)
+
+
 func _changed(key: String, v: float) -> void:
 	Profile.set_volume(key, v)
 	Sfx.apply_volumes()

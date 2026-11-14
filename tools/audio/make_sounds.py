@@ -210,8 +210,11 @@ def drop_4():
 # --- 2. 足音 ---
 
 def step():
-    # 鬼の足音: やわらかい上履きで、床をトッ
-    return norm(mix(lowpass(noise(0.07), 900) * env_exp(0.07, 0.018), thud(150, 100, 0.06, 0.02) * 0.6), 0.8)
+    # 鬼の足音: 上履きで床をトッ。スマホのスピーカーやイヤホンでも聞こえるように、少し高めでくっきり
+    tap = bandpass(noise(0.08), 700, 3200) * env_exp(0.08, 0.016)
+    body = thud(220, 140, 0.07, 0.022) * 0.7
+    squeak = tone(glide(1700, 1500, 0.04), 0.04) * env_exp(0.04, 0.01) * 0.12
+    return norm(mix(tap, body, squeak), 0.9)
 
 
 def run_step():
