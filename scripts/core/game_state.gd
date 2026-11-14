@@ -791,23 +791,29 @@ func _add_obstacle(angle: float, lane: int, kind: String) -> Dictionary:
 	return ob
 
 
-## コースに障害物を置く(後ろに寄せた机・椅子・バケツ)。だいたい同じ間かくで、1か所に1つ。
-## 走りはじめた2人のすぐ前には置かない
+## コースに障害物を置く(後ろに寄せた机・椅子・バケツ)。数・場所・列・種類は毎回ランダム。
+## ただし近すぎないように間をあけ(OBSTACLE_MIN_GAP)、走りはじめた2人のすぐ前には置かない
 func _build_obstacles() -> void:
 	obstacles = []
 	var mid: float = GameConfig.LANE_RADII[1]
-	var n := maxi(int(TAU * mid / GameConfig.OBSTACLE_SPACING), 3)
+	var n := rng.randi_range(GameConfig.OBSTACLE_COUNT_MIN, GameConfig.OBSTACLE_COUNT_MAX)
 	var starts := [runner_angle(get_actor(chaser_id)), runner_angle(get_actor(oni_id))]
-	var base := rng.randf() * TAU
-	for k in n:
-		var ang := fposmod(base + TAU * float(k) / float(n) + rng.randf_range(-0.15, 0.15) * TAU / float(n), TAU)
-		var near_start := false
+	var placed: Array[float] = []
+	var tries := 0
+	while placed.size() < n and tries < 200:
+		tries += 1
+		var ang := rng.randf() * TAU
+		var ok := true
 		for st in starts:
 			var ahead := fposmod(ang - float(st), TAU) * mid
 			if ahead < GameConfig.OBSTACLE_START_CLEAR or ahead > TAU * mid - 1.0:
-				near_start = true
-		if near_start:
+				ok = false
+		for p in placed:
+			if absf(wrapf(ang - p, -PI, PI)) * mid < GameConfig.OBSTACLE_MIN_GAP:
+				ok = false
+		if not ok:
 			continue
+		placed.append(ang)
 		var pick := rng.randf()
 		var kind := "bucket"
 		var acc := 0.0

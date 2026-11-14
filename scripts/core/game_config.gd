@@ -82,8 +82,11 @@ const LANE_CHANGE_SPEED := 3.0
 ## 障害物にぶつかる距離(通り道にそって・メートル)と、同じ列とみなす横のずれ(メートル)
 const OBSTACLE_HIT_ARC := 0.4
 const OBSTACLE_LANE_HALF := 0.38
-## 障害物のおおよその間かく(メートル、まん中の列で)。走りはじめの人の前、この距離には置かない
-const OBSTACLE_SPACING := 4.2
+## 障害物の数(毎回この範囲でランダム)と、障害物どうしの最低の間かく(メートル、まん中の列で)。
+## 走りはじめの人の前、OBSTACLE_START_CLEAR メートルには置かない
+const OBSTACLE_COUNT_MIN := 4
+const OBSTACLE_COUNT_MAX := 7
+const OBSTACLE_MIN_GAP := 2.2
 const OBSTACLE_START_CLEAR := 3.5
 ## 障害物の種類と、その割合(どれも左右に動いてよける。ジャンプはない)
 const OBSTACLE_KINDS := {"bucket": 0.5, "chair": 0.25, "desk": 0.25}

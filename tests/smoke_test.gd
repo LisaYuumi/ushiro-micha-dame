@@ -392,7 +392,20 @@ func _test_obstacles() -> void:
 	var target := s0.get_actor_at_seat(s0.drop_target_seat)
 	s0.set_looking_back(target.id, true)
 	s0.pick_up(target.id)
-	_check(s0.obstacles.size() >= 3, "コースに障害物がある(%d 個)" % s0.obstacles.size())
+	_check(s0.obstacles.size() >= GameConfig.OBSTACLE_COUNT_MIN - 1, "コースに障害物がある(%d 個)" % s0.obstacles.size())
+	# 毎回ランダム: 同じ場面でも、もう一度置くと場所がちがう
+	var first := []
+	for ob in s0.obstacles:
+		first.append(snappedf(float(ob["angle"]), 0.01))
+	s0._build_obstacles()
+	var second := []
+	for ob in s0.obstacles:
+		second.append(snappedf(float(ob["angle"]), 0.01))
+	_check(first != second, "障害物の場所は毎回ランダム")
+	for i in s0.obstacles.size():
+		for j in range(i + 1, s0.obstacles.size()):
+			var gap := absf(wrapf(float(s0.obstacles[i]["angle"]) - float(s0.obstacles[j]["angle"]), -PI, PI)) * float(GameConfig.LANE_RADII[1])
+			_check(gap >= GameConfig.OBSTACLE_MIN_GAP - 0.01, "障害物どうしは近すぎない")
 	var mid: float = GameConfig.LANE_RADII[1]
 	for ob in s0.obstacles:
 		for who in [s0.chaser_id, s0.oni_id]:
