@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(213)
+## 一覧(211)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -60,8 +60,6 @@
 | フェイク | Fake |
 | 鬼にバナナ | Banana the oni |
 | 追う人にバナナ | Banana the chaser |
-| ◀ 内側 | ◀ Inner |
-| 外側 ▶ | Outer ▶ |
 | 振り向く | Look back |
 | からっぽ | Empty |
 | えいっ | Splash! |
@@ -126,8 +124,8 @@
 | お手つき!<br>真ん中でお休み(このラウンド0点) | Wrong look!<br>Rest in the middle (0 pts this round) |
 | 4周したので<br>次の席で自動で落とす | 4 laps done<br>Dropping at the next seat |
 | あった! | Found it! |
-| 追いかけろ!<br>タップでジャンプ・左右にスワイプでよける | Chase!<br>Tap to jump, swipe left/right to dodge |
-| 気づかれた! 逃げろ!<br>タップでジャンプ・左右にスワイプでよける | Spotted! Run!<br>Tap to jump, swipe left/right to dodge |
+| 追いかけろ!<br>スティックを左右に倒してよける | Chase!<br>Push the stick left/right to dodge |
+| 気づかれた! 逃げろ!<br>スティックを左右に倒してよける | Spotted! Run!<br>Push the stick left/right to dodge |
 | %s が追いかけた! | %s gives chase! |
 | 鬼 %d周目(%d周で自動で落とす) | Oni lap %d (auto-drop at %d) |
 | 鬼が座るまで あと%d周 | Oni sits in %d lap(s) |

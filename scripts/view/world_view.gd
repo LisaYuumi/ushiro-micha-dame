@@ -157,9 +157,6 @@ func sync(state: GameState, delta: float) -> void:
 		var node: Node3D = _actor_nodes.get(a.id)
 		if node:
 			node.position = a.position
-			# ジャンプしている人は、ふわっと上に
-			if a.jump_left > 0.0:
-				node.position.y += sin(PI * (1.0 - a.jump_left / GameConfig.JUMP_TIME)) * GameConfig.JUMP_HEIGHT
 			node.rotation.y = a.yaw
 			var blob: MeshInstance3D = _blobs.get(a.id)
 			if blob:

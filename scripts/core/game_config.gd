@@ -76,20 +76,17 @@ const CHASE_SPEED := 3.2
 const TOUCH_DISTANCE := 1.0
 ## コースの3つの列(内・まん中・外)の、輪の中心からの距離(メートル)。内側ほど近道
 const LANE_RADII := [3.8, 4.4, 5.0]
-## 列を変える速さ(メートル/秒、横に動く速さ)
-const LANE_CHANGE_SPEED := 4.0
-## ジャンプしている時間(秒)と高さ(メートル)。低い障害物(バケツ・バナナ)はジャンプで越えられる
-const JUMP_TIME := 0.6
-const JUMP_HEIGHT := 0.55
+## 横に動く速さ(メートル/秒)。人はスティックを左右に倒している間だけ、この速さで内側・外側へ動く
+## (ボットは、ねらった列へこの速さで寄る)
+const LANE_CHANGE_SPEED := 3.0
 ## 障害物にぶつかる距離(通り道にそって・メートル)と、同じ列とみなす横のずれ(メートル)
 const OBSTACLE_HIT_ARC := 0.4
-const OBSTACLE_LANE_HALF := 0.3
+const OBSTACLE_LANE_HALF := 0.38
 ## 障害物のおおよその間かく(メートル、まん中の列で)。走りはじめの人の前、この距離には置かない
 const OBSTACLE_SPACING := 4.2
 const OBSTACLE_START_CLEAR := 3.5
-## 障害物の種類と、その割合(低い物はジャンプでも列を変えてもよけられる。高い物は列を変えるしかない)
+## 障害物の種類と、その割合(どれも左右に動いてよける。ジャンプはない)
 const OBSTACLE_KINDS := {"bucket": 0.5, "chair": 0.25, "desk": 0.25}
-const OBSTACLE_HIGH := ["chair", "desk"]
 ## 重い物を持って転ぶと、起き上がるまでがこの倍まで長くなる(教卓で最大)
 const SLIP_HEAVY_MULT := 2.2
 ## 転んだあと、この秒数は同じ障害物にもう一度ぶつからない

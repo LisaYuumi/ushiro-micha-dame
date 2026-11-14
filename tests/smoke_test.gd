@@ -367,8 +367,23 @@ func _test_chase_lanes_and_speed() -> void:
 	var seated := s.get_actor_at_seat((s.vacant_seat + 2) % GameConfig.SEAT_COUNT)
 	var lane0 := seated.lane
 	s.chase_lane(seated.id, 1)
-	s.chase_jump(seated.id)
-	_check(seated.lane == lane0 and seated.jump_left == 0.0, "座っている人は列を変えたりジャンプしたりできない")
+	s.chase_steer(seated.id, 1.0)
+	_check(seated.lane == lane0 and not seated.steer_by_stick, "座っている人は走れない(左右に動けない)")
+	# スティック: 倒している間だけ、なめらかに外側へ動く。離すと、その場の列のまま
+	var r0 := c.run_r
+	for i in int(0.2 / STEP):
+		s.chase_steer(c.id, 1.0)
+		s.tick(STEP)
+	_check(c.run_r > r0 + 0.3, "スティックを外側に倒すと外側へ動く")
+	var r1 := c.run_r
+	for i in int(0.3 / STEP):
+		s.chase_steer(c.id, 0.0)
+		s.tick(STEP)
+	_check(absf(c.run_r - r1) < 0.01, "スティックを離すと横には動かない")
+	for i in int(3.0 / STEP):
+		s.chase_steer(c.id, 1.0)
+		s.tick(STEP)
+	_check(c.run_r <= float(GameConfig.LANE_RADII[GameConfig.LANE_RADII.size() - 1]) + 0.001, "コースの外側の端より外には出ない")
 
 
 func _test_obstacles() -> void:
@@ -383,35 +398,31 @@ func _test_obstacles() -> void:
 		for who in [s0.chaser_id, s0.oni_id]:
 			var ahead := fposmod(float(ob["angle"]) - s0.runner_angle(s0.get_actor(who)), TAU) * mid
 			_check(ahead >= GameConfig.OBSTACLE_START_CLEAR - 0.01, "走りはじめの人のすぐ前には置かない")
-	# 高い物(椅子)は、ジャンプしても越えられずに転ぶ。鬼も同じ
-	for jump in [false, true]:
-		var s := _chasing_state(43)
-		var oni := s.get_actor(s.oni_id)
-		var r: float = GameConfig.LANE_RADII[oni.lane]
-		var ob := s._add_obstacle(fposmod(s.runner_angle(oni) + 1.0 / r, TAU), oni.lane, "chair")
-		var slipped := false
-		for i in int(1.0 / STEP):
-			if jump and i == int(0.15 / STEP):
-				s.chase_jump(oni.id)
-			s.tick(STEP)
-			for e in s.take_events():
-				if e["type"] == "slip" and e["actor"] == oni.id:
-					slipped = true
-		_check(slipped, "椅子にぶつかると鬼も転ぶ%s" % ("(ジャンプしても)" if jump else ""))
-		_check(s.obstacles.has(ob), "椅子はぶつかっても残る")
-	# 低い物(バケツ)は、ジャンプで越えられる。列を変えてもよけられる
-	for how in ["none", "jump", "lane"]:
+	# 椅子にぶつかると転ぶ。鬼も同じ。ぶつかっても椅子は残る
+	var s1 := _chasing_state(43)
+	var oni := s1.get_actor(s1.oni_id)
+	var r1: float = GameConfig.LANE_RADII[oni.lane]
+	var ob1 := s1._add_obstacle(fposmod(s1.runner_angle(oni) + 1.0 / r1, TAU), oni.lane, "chair")
+	var hit := false
+	for i in int(1.0 / STEP):
+		s1.tick(STEP)
+		for e in s1.take_events():
+			if e["type"] == "slip" and e["actor"] == oni.id:
+				hit = true
+	_check(hit, "椅子にぶつかると鬼も転ぶ")
+	_check(s1.obstacles.has(ob1), "椅子はぶつかっても残る")
+	# バケツ: よけないと転んで少し止まる。スティックを左右に倒して横に動けばよけられる(ジャンプはない)
+	for how in ["none", "steer"]:
 		var s := _chasing_state(45)
 		var c := s.get_actor(s.chaser_id)
 		var r: float = GameConfig.LANE_RADII[c.lane]
-		s._add_obstacle(fposmod(s.runner_angle(c) + 1.2 / r, TAU), c.lane, "bucket")
+		s._add_obstacle(fposmod(s.runner_angle(c) + 1.6 / r, TAU), c.lane, "bucket")
 		var slipped := false
 		var stopped_for := 0.0
+		var dir := 1.0 if c.lane == 0 else -1.0
 		for i in int(1.4 / STEP):
-			if how == "jump" and i == int(0.2 / STEP):
-				s.chase_jump(c.id)
-			if how == "lane" and i == 0:
-				s.chase_lane(c.id, 1 if c.lane == 0 else -1)
+			if how == "steer":
+				s.chase_steer(c.id, dir if i < int(0.3 / STEP) else 0.0)
 			var p0 := c.position
 			s.tick(STEP)
 			if c.position.distance_to(p0) < 0.0001:
@@ -421,14 +432,10 @@ func _test_obstacles() -> void:
 					slipped = true
 			if s.phase != GameState.Phase.CHASE:
 				break
-		match how:
-			"none":
-				_check(slipped and stopped_for > 0.5, "バケツをよけないと転んで少し止まる")
-			"jump":
-				_check(not slipped, "バケツはジャンプで越えられる")
-			"lane":
-				_check(not slipped, "バケツは列を変えてもよけられる")
-
+		if how == "none":
+			_check(slipped and stopped_for > 0.5, "バケツをよけないと転んで少し止まる")
+		else:
+			_check(not slipped, "スティックを倒して横に動けば、バケツをよけられる")
 
 func _test_no_otetsuki_during_chase() -> void:
 	var s := _chasing_state(29)

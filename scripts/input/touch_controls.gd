@@ -82,9 +82,6 @@ func _ready() -> void:
 	# 追いかけっこ中のバナナの皮(下のまん中)
 	_chase_buttons.append(_add_button("鬼にバナナ", "banana_oni", Vector2(0.5, 1), Rect2(-300, -110, 280, 90), 28))
 	_chase_buttons.append(_add_button("追う人にバナナ", "banana_chaser", Vector2(0.5, 1), Rect2(20, -110, 280, 90), 28))
-	# 走っているとき: 左下に「◀ 内側」、右下に「外側 ▶」(スワイプでも同じ)
-	_runner_buttons.append(_add_button("◀ 内側", "lane_in", Vector2(0, 1), Rect2(UiStyle.SAFE, -190, 200, 160), 32))
-	_runner_buttons.append(_add_button("外側 ▶", "lane_out", Vector2(1, 1), Rect2(-UiStyle.SAFE - 200, -190, 200, 160), 32))
 	# 左下: 走るためのスティック
 	var stick := VirtualStick.new()
 	add_child(stick)

@@ -38,12 +38,9 @@ func oni_milk(_id: int, target_id: int) -> void:
 	_net.send_command("oni_milk", [target_id])
 
 
-func chase_jump(_id: int) -> void:
-	_net.send_command("chase_jump", [])
-
-
-func chase_lane(_id: int, dir: int) -> void:
-	_net.send_command("chase_lane", [dir])
+func chase_steer(_id: int, x: float) -> void:
+	# 細かすぎる変化は送らない
+	_send_if_changed("chase_steer", [snappedf(x, 0.1)])
 
 
 func throw_banana(_id: int, target_id: int) -> void:

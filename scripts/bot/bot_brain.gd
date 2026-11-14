@@ -217,7 +217,7 @@ func _update_chaser(state: GameState, a: GameState.Actor) -> void:
 	_update_runner(state, a)
 
 
-## 走るボット(鬼も追いかける人も): 前の障害物を見て、低い物はジャンプ、高い物は列を変えてよける
+## 走るボット(鬼も追いかける人も): 前の障害物を見て、列を変えてよける
 ## (ときどき気づかずにぶつかる)。障害物がなければ内側(近道)を走る。
 ## 追いかける人は、鬼のすぐ後ろまで来たら鬼と同じ列に入る(タッチしやすいように)
 func _update_runner(state: GameState, a: GameState.Actor) -> void:
@@ -230,14 +230,10 @@ func _update_runner(state: GameState, a: GameState.Actor) -> void:
 		var key := "%d|%d" % [a.id, ob["id"]]
 		if not _dodge.has(key):
 			_dodge[key] = rng.randf() >= GameConfig.BOT_DODGE_MISS
-		if _dodge[key]:
-			if ob["high"]:
-				if d < 2.4:
-					var to := _free_lane(state, a)
-					if to != a.lane:
-						state.chase_lane(a.id, to - a.lane)
-			elif d < 0.9:
-				state.chase_jump(a.id)
+		if _dodge[key] and d < 2.4:
+			var to := _free_lane(state, a)
+			if to != a.lane:
+				state.chase_lane(a.id, to - a.lane)
 		return
 	if a.id == state.chaser_id:
 		var oni := state.get_actor(state.oni_id)
