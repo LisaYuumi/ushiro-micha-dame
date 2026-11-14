@@ -1003,6 +1003,8 @@ func _test_heavier_items_slow_the_chaser() -> void:
 
 func _test_banana_rules() -> void:
 	var s := _chasing_state(73)
+	# (鬼は外側の列を走らせる。内側だと、追う人の前のバナナを鬼が先に踏んでしまう)
+	s.get_actor(s.oni_id).lane = 2
 	var thrower := s.get_actor_at_seat((s.vacant_seat + 2) % GameConfig.SEAT_COUNT)
 	var s0 := _dropped_state(73)
 	_check(not s0.throw_banana(thrower.id, s0.oni_id), "追いかけっこの前は投げられない")
@@ -1044,6 +1046,7 @@ func _test_banana_rules() -> void:
 func _test_banana_can_be_dodged() -> void:
 	var s := _chasing_state(75)
 	var c := s.get_actor(s.chaser_id)
+	s.get_actor(s.oni_id).lane = 2
 	var thrower := s.get_actor_at_seat((s.vacant_seat + 2) % GameConfig.SEAT_COUNT)
 	s.throw_banana(thrower.id, c.id)
 	var slipped := false
@@ -1052,7 +1055,7 @@ func _test_banana_can_be_dodged() -> void:
 	for i in int(2.0 / STEP):
 		s.tick(STEP)
 		for e in s.take_events():
-			if e["type"] == "slip":
+			if e["type"] == "slip" and e["actor"] == c.id:
 				slipped = true
 	_check(not slipped, "列を変えればバナナをよけられる")
 
