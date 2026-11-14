@@ -265,6 +265,12 @@ func _build_view() -> void:
 
 ## ラウンドが変わったときに、画面とボットを作り直す
 func _refresh_round() -> void:
+	var t0 := Time.get_ticks_usec()
+	_refresh_round_inner()
+	print("round rebuild %dms" % ((Time.get_ticks_usec() - t0) / 1000))
+
+
+func _refresh_round_inner() -> void:
 	bots.reset()
 	_round_start_scores = state.scores.duplicate()
 	touch.set_oni_mode(_i_am_oni())
@@ -284,18 +290,27 @@ func _physics_process(delta: float) -> void:
 		return
 	if mode == Mode.GUEST and _built_serial < 0:
 		return # まだ最初の状態が届いていない
+	var t0 := Time.get_ticks_usec()
+	var slow := []
 	PlayerInput.apply(state, cmds, view.get_camera_basis())
 	_update_milk()
 	if mode != Mode.GUEST:
 		# ルールを動かすのは、ひとりのときとホストだけ
 		bots.update(state, delta)
 		state.tick(delta)
+		var t1 := Time.get_ticks_usec()
+		if t1 - t0 > 8000:
+			slow.append("tick %dms" % ((t1 - t0) / 1000))
 		var events := state.take_events()
 		for e in events:
+			var te := Time.get_ticks_usec()
 			view.on_event(e)
 			bots.on_event(state, e)
 			_show_event(e)
 			_update_help()
+			var ms := (Time.get_ticks_usec() - te) / 1000
+			if ms >= 8:
+				slow.append("%s %dms" % [e.get("type", "?"), ms])
 		if mode == Mode.HOST:
 			_send_to_guests(events, delta)
 	if _stamp_target >= 0 and (state.get_actor(_stamp_target) == null or state.get_actor(_stamp_target).role != GameState.Role.SEATED
@@ -339,6 +354,10 @@ func _physics_process(delta: float) -> void:
 		ov.set_tags_hidden(state.is_milked(me))
 	# 左上の札(鬼の周回・自分の点数)を毎回更新する(参加者の点数は状態といっしょに届く)
 	_update_help()
+	# 重かったときは、何をしていたかをコンソールに出す(調べる用)
+	var total := (Time.get_ticks_usec() - t0) / 1000
+	if total >= 25:
+		print("slow physics %dms: %s" % [total, ", ".join(slow)])
 
 
 ## BGM: ロビー・結果は明るい曲、ラウンド中は控えめな曲(ラウンドが進むほど楽器が増える)、追いかけっこは速い曲。
@@ -407,7 +426,11 @@ func _process(delta: float) -> void:
 	var show_3d := not lobby.visible
 	if view.visible != show_3d:
 		view.set_shown(show_3d)
+	var ts := Time.get_ticks_usec()
 	view.sync(state, delta)
+	var sync_ms := (Time.get_ticks_usec() - ts) / 1000
+	if sync_ms >= 25:
+		print("slow sync %dms" % sync_ms)
 
 
 ## ホスト: 参加者1人ずつに、その人が知ってよいお知らせと状態だけを送る
