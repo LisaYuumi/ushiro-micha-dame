@@ -168,8 +168,8 @@ func build(state: GameState) -> void:
 		for i in state.seat_positions.size():
 			_build_chair(state.seat_positions[i], state.seat_yaws[i])
 	for a in state.actors:
-		var is_self := a.id == state.local_player_id
-		var key := _model_key(a, is_self)
+		var is_self: bool = a.id == state.local_player_id
+		var key: String = _model_key(a, is_self)
 		var node: Node3D
 		if _model_cache.has(key):
 			node = _model_cache[key]
