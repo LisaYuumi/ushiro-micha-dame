@@ -556,6 +556,8 @@ func pick_up(actor_id: int) -> void:
 		runner.steer = 0.0
 		runner.steer_by_stick = false
 		runner.immune_left = 0.0
+	# 鬼も内側の列から走り出す(追う人だけが近道を走れないように。スティックを倒すまでは内側へ寄る)
+	oni.lane = 0
 	oni_radius = oni.run_r
 	_last_lap_told = false
 	_build_obstacles()

@@ -325,9 +325,10 @@ func _test_chaser_never_stops() -> void:
 
 
 func _test_touch_wins() -> void:
-	# 内側の列は近道。内側を走れば、まん中の列を走る鬼に追いつける
+	# 内側の列は近道。鬼がまん中の列に出たら、内側を走る追う人が追いつける
 	var s := _chasing_state(19)
 	var chaser := s.get_actor(s.chaser_id)
+	s.get_actor(s.oni_id).lane = 1
 	var e := {}
 	for i in int(90.0 / STEP):
 		s.chase_lane(chaser.id, -1)
@@ -337,7 +338,7 @@ func _test_touch_wins() -> void:
 				e = ev
 		if not e.is_empty():
 			break
-	_check(not e.is_empty() and e["reason"] == "touched", "内側(近道)を走ればタッチできる")
+	_check(not e.is_empty() and e["reason"] == "touched", "鬼がまん中の列なら、内側(近道)を走ってタッチできる")
 	if not e.is_empty():
 		_check(e["winner"] == chaser.id and e["loser"] == s.oni_id, "タッチしたら追いかけた人の勝ち")
 
@@ -346,6 +347,7 @@ func _test_chase_lanes_and_speed() -> void:
 	var s := _chasing_state(23)
 	var c := s.get_actor(s.chaser_id)
 	var oni := s.get_actor(s.oni_id)
+	_check(oni.lane == 0 and c.lane == 0, "鬼も追う人も、内側の列から走り出す")
 	# 列は3つ。端より外には行けない
 	for i in 5:
 		s.chase_lane(c.id, 1)
