@@ -355,6 +355,8 @@ func _physics_process(delta: float) -> void:
 	# 左上の札(鬼の周回・自分の点数)を毎回更新する(参加者の点数は状態といっしょに届く)
 	_update_help()
 	# 重かったときは、何をしていたかをコンソールに出す(調べる用)
+	_perf_phys_us += Time.get_ticks_usec() - t0
+	_perf_phys_n += 1
 	var total := (Time.get_ticks_usec() - t0) / 1000
 	if total >= 25:
 		print("slow physics %dms: %s" % [total, ", ".join(slow)])
@@ -387,6 +389,10 @@ func _round_level() -> int:
 var _perf_left := 5.0
 var _perf_frames := 0
 var _perf_worst := 0.0
+## 5秒の間の合計(マイクロ秒): 3D の動きの更新(sync)・ゲームの進行(physics)
+var _perf_sync_us := 0
+var _perf_phys_us := 0
+var _perf_phys_n := 0
 
 
 func _log_perf(delta: float) -> void:
@@ -395,8 +401,10 @@ func _log_perf(delta: float) -> void:
 	_perf_left -= delta
 	if _perf_left > 0.0:
 		return
-	print("perf fps=%d worst=%.0fms process=%.1fms physics=%.1fms draws=%d objects=%d prims=%dk nodes=%d" % [
+	print("perf fps=%d worst=%.0fms sync=%.1fms game=%.1fms process=%.1fms physics=%.1fms draws=%d objects=%d prims=%dk nodes=%d" % [
 		Engine.get_frames_per_second(), _perf_worst * 1000.0,
+		float(_perf_sync_us) / 1000.0 / maxf(_perf_frames, 1),
+		float(_perf_phys_us) / 1000.0 / maxf(_perf_phys_n, 1),
 		Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
 		Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
 		Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
@@ -406,6 +414,9 @@ func _log_perf(delta: float) -> void:
 	_perf_left = 5.0
 	_perf_frames = 0
 	_perf_worst = 0.0
+	_perf_sync_us = 0
+	_perf_phys_us = 0
+	_perf_phys_n = 0
 
 
 ## 3D を描く細かさ: 画面の縦の点の数が RENDER_3D_HEIGHT より多ければ、その分だけ小さく描いて引きのばす
@@ -428,6 +439,7 @@ func _process(delta: float) -> void:
 		view.set_shown(show_3d)
 	var ts := Time.get_ticks_usec()
 	view.sync(state, delta)
+	_perf_sync_us += Time.get_ticks_usec() - ts
 	var sync_ms := (Time.get_ticks_usec() - ts) / 1000
 	if sync_ms >= 25:
 		print("slow sync %dms" % sync_ms)
