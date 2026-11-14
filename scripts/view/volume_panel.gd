@@ -41,7 +41,7 @@ func _ready() -> void:
 		filled.content_margin_bottom = 8
 		sl.add_theme_stylebox_override("grabber_area", filled)
 		sl.add_theme_stylebox_override("grabber_area_highlight", filled)
-		sl.value = float(Profile.get(r[1]))
+		sl.value = Profile.get_volume(r[1])
 		var key: String = r[1]
 		sl.value_changed.connect(func(v: float) -> void: _changed(key, v))
 		row.add_child(sl)
@@ -53,7 +53,7 @@ func _ready() -> void:
 
 
 func _changed(key: String, v: float) -> void:
-	Profile.set(key, v)
+	Profile.set_volume(key, v)
 	Sfx.apply_volumes()
 	Profile.save()
 	_update_labels()
@@ -65,7 +65,7 @@ func _changed(key: String, v: float) -> void:
 ## 保存されている音量にそろえる(開くたびに)
 func refresh() -> void:
 	for key in _sliders:
-		(_sliders[key][0] as HSlider).set_value_no_signal(float(Profile.get(key)))
+		(_sliders[key][0] as HSlider).set_value_no_signal(Profile.get_volume(key))
 	_update_labels()
 
 

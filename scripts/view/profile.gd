@@ -96,6 +96,26 @@ static func clean_words(v: Variant) -> Dictionary:
 	return out
 
 
+## 音量を名前("vol_master" / "vol_bgm" / "vol_sfx")で読む・書く
+static func get_volume(key: String) -> float:
+	match key:
+		"vol_master":
+			return vol_master
+		"vol_bgm":
+			return vol_bgm
+	return vol_sfx
+
+
+static func set_volume(key: String, v: float) -> void:
+	match key:
+		"vol_master":
+			vol_master = clampf(v, 0.0, 1.0)
+		"vol_bgm":
+			vol_bgm = clampf(v, 0.0, 1.0)
+		_:
+			vol_sfx = clampf(v, 0.0, 1.0)
+
+
 ## 通信で送れる形
 static func to_dict() -> Dictionary:
 	return {"name": player_name, "color": "#" + color.to_html(false), "words": stamp_words, "lang": Locale.current()}
