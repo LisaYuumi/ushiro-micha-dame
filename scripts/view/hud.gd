@@ -22,6 +22,8 @@ var _send_buttons: Array[Button] = []
 var _shown_keys: Array = []
 ## 自分に届いたスタンプの間、画面のふちを光らせる枠
 var _frame: Array[ColorRect] = []
+## 手下の間ずっと出す、画面の四すみの紫のカギ形の枠(スタンプのふちの光とは形を変える)
+var _minion_corners: Array[ColorRect] = []
 var _frame_tween: Tween
 ## 役の表示(手下のとき)
 var _badge: PanelContainer
@@ -869,6 +871,40 @@ func _draw_milk() -> void:
 		_milk.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
+## 画面の四すみの紫のカギ形(手下のしるし)
+func _build_minion_corners() -> void:
+	var col := Color(0.55, 0.2, 0.7, 0.9)
+	var long := 110.0
+	var thick := 12.0
+	for corner in 4:
+		var right := corner % 2 == 1
+		var bottom := corner >= 2
+		for horizontal in [true, false]:
+			var r := ColorRect.new()
+			r.color = col
+			r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			r.anchor_left = 1.0 if right else 0.0
+			r.anchor_right = r.anchor_left
+			r.anchor_top = 1.0 if bottom else 0.0
+			r.anchor_bottom = r.anchor_top
+			var w := long if horizontal else thick
+			var h := thick if horizontal else long
+			r.offset_left = -w if right else 0.0
+			r.offset_right = 0.0 if right else w
+			r.offset_top = -h if bottom else 0.0
+			r.offset_bottom = 0.0 if bottom else h
+			r.visible = false
+			add_child(r)
+			_minion_corners.append(r)
+
+
+## 手下のしるし(四すみの紫のカギ形)を出す・消す
+func set_minion_mark(on: bool) -> void:
+	for r in _minion_corners:
+		if r.visible != on:
+			r.visible = on
+
+
 ## 画面の上のまん中に、役を出す(空文字で消す)。color の地に白い文字
 func set_role_badge(text: String, color: Color) -> void:
 	_pill_text(_badge, text)
@@ -947,7 +983,8 @@ func _build_stamp_display() -> void:
 
 	_build_send_panel()
 
-	_badge = UiStyle.pill("", 24, true)
+	_build_minion_corners()
+	_badge = UiStyle.pill("", 28, true)
 	(_badge.get_child(0) as Label).add_theme_color_override("font_color", GameConfig.COLOR_PAPER)
 	add_child(_badge)
 	_badge.position = Vector2(UiStyle.SAFE, 72)

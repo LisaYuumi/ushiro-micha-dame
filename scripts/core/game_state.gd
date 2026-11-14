@@ -781,11 +781,12 @@ func throw_banana(sender_id: int, target_id: int) -> bool:
 	var target := get_actor(target_id)
 	if sender == null or target == null or phase != Phase.CHASE:
 		return false
-	if (sender.role != Role.SEATED and sender.role != Role.OUT) or sender.bananas_left <= 0:
+	if (sender.role != Role.SEATED and sender.role != Role.OUT) or sender.bananas_left == 0:
 		return false
 	if target_id != oni_id and target_id != chaser_id:
 		return false
-	sender.bananas_left -= 1
+	if sender.bananas_left > 0:
+		sender.bananas_left -= 1
 	var r: float = GameConfig.LANE_RADII[target.lane]
 	var ang := fposmod(runner_angle(target) + GameConfig.BANANA_AHEAD / r, TAU)
 	var ob := _add_obstacle(ang, target.lane, "banana")

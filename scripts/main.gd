@@ -336,6 +336,8 @@ func _physics_process(delta: float) -> void:
 				# 鬼は、手下の人数だけ知っている(だれかは知らない)
 				badge = tr("今回の手下は%d人(だれかはひみつ)") % state.minion_count
 		hud.set_role_badge(badge, Color(0.55, 0.2, 0.7))
+	# 手下の間は、画面の四すみに紫のカギ形を出す(途中で自分が手下か忘れないように)
+	hud.set_minion_mark(state.is_minion(me.id) and state.phase != GameState.Phase.RESULT and not out)
 	# 牛乳がかかっている間は、画面が白い
 	# 追いかけっこで走っている間は、手で牛乳をぬぐって下のほうが見える(すぐ転ばないように)
 	hud.set_milk(state.is_milked(me) and state.phase != GameState.Phase.RESULT, state.milk_left_ratio(me), state.is_runner(me))

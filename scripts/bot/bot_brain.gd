@@ -230,7 +230,7 @@ func _update_stamp(state: GameState, a: GameState.Actor, delta: float) -> void:
 
 ## 追いかけっこ中、ときどき鬼か追いかける人にバナナの皮を投げる
 func _update_banana(state: GameState, a: GameState.Actor, delta: float) -> void:
-	if state.phase != GameState.Phase.CHASE or a.bananas_left <= 0:
+	if state.phase != GameState.Phase.CHASE or a.bananas_left == 0:
 		return
 	if not _banana_left.has(a.id):
 		var go := rng.randf() < GameConfig.BOT_BANANA_CHANCE

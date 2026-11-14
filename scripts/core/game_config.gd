@@ -277,8 +277,8 @@ const OUT_CAM_LOOK := Vector3(0, 0, -0.3)
 const OUT_CAM_FOV := 60.0
 
 # --- バナナの皮 ---
-## 1人が1ラウンドに投げられる数
-const BANANAS_PER_ROUND := 1
+## 1人が1ラウンドに投げられる数(-1 = 何回でも)。ボットは追いかけっこ1回につき1回まで
+const BANANAS_PER_ROUND := -1
 ## 狙った人の、どれだけ前(メートル、通り道にそって)に落ちるか(狙った人のいまの列に落ちる)
 const BANANA_AHEAD := 3.0
 ## 転んで止まる時間(秒)

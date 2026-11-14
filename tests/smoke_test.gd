@@ -1079,14 +1079,14 @@ func _test_banana_rules() -> void:
 	_check(not s.throw_banana(s.oni_id, s.chaser_id), "鬼は投げられない")
 	_check(not s.throw_banana(thrower.id, thrower.id), "座っている人には投げられない")
 	_check(s.throw_banana(thrower.id, s.chaser_id), "追いかける人に投げられる")
-	_check(not s.throw_banana(thrower.id, s.oni_id), "1ラウンド1個まで")
+	_check(s.throw_banana(thrower.id, s.oni_id), "バナナは何回でも投げられる")
 	var other := s.get_actor_at_seat((s.vacant_seat + 3) % GameConfig.SEAT_COUNT)
 	_check(s.throw_banana(other.id, s.oni_id), "鬼にも投げられる")
 	var n_banana := 0
 	for ob in s.obstacles:
 		if ob["kind"] == "banana":
 			n_banana += 1
-	_check(n_banana == 2, "コースにバナナが2つ")
+	_check(n_banana == 3, "コースにバナナが3つ")
 	# 追いかける人はまっすぐ走ると踏んで転ぶ
 	var c := s.get_actor(s.chaser_id)
 	var slipped := false
