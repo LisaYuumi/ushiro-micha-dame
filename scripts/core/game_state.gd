@@ -129,6 +129,8 @@ var _round_base_scores: Dictionary = {}
 ## 追いかけっこのコースの障害物: [{"id", "angle", "lane", "kind", "sender"}]
 ## kind: "bucket"(バケツ)/"chair"(椅子)/"desk"(机)/"banana"(バナナの皮。ぶつかると消える)。どれも左右に動いてよける
 var obstacles: Array = []
+## 鬼が最後の1周に入ったことを知らせたか(音の合図のため。ルールには関係しない)
+var _last_lap_told: bool = false
 var _next_obstacle_id: int = 0
 
 ## 席の数(この試合。鬼は別に1人)
@@ -565,6 +567,7 @@ func pick_up(actor_id: int) -> void:
 		runner.steer_by_stick = false
 		runner.immune_left = 0.0
 	oni_radius = oni.run_r
+	_last_lap_told = false
 	_build_obstacles()
 	events.append({"type": "picked_up", "actor": a.id})
 
@@ -1217,6 +1220,10 @@ func _tick_chase(delta: float) -> void:
 	else:
 		_run(oni, delta, true)
 		oni_entering = oni_angle >= oni_seat_angle
+		# 鬼が最後の1周に入った(2周目の合図の音のため)
+		if not _last_lap_told and GameConfig.CHASE_LAPS >= 2 and oni_angle >= oni_seat_angle - TAU:
+			_last_lap_told = true
+			events.append({"type": "last_lap"})
 
 	if _flat_distance(chaser.position, oni.position) <= GameConfig.TOUCH_DISTANCE:
 		_finish(chaser_id, oni_id, "touched")

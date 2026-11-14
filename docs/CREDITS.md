@@ -28,3 +28,9 @@
   - ライセンス: SIL Open Font License 1.1(商用利用・同梱できる。フォントだけを売るのは不可)
   - 使い方: スタンプで使う3つの絵文字(U+1F628・U+1F44D・U+1F97A)と、言語ボタンの 🌐(U+1F310)だけを切り出して小さくした(色は SVG のデータを使う)。切り出したものも同じライセンス
   - ファイル: `assets/fonts/NotoColorEmoji-stamps.ttf`、ライセンス全文: `assets/fonts/OFL-NotoColorEmoji.txt`
+- **ゲームの音・BGM**(落とし物の音・足音・振り向き・スタンプの声・チャイム・ジングル・BGM・環境音など、`assets/sounds/` の全部)
+  - 作者: このプロジェクト。録音や既存の曲・音素材は使っていない。音の並び(チャイム・曲のメロディ)もオリジナル
+  - 作り方: `tools/audio/make_sounds.py`(Python と numpy で波形を合成し、ffmpeg で OGG Vorbis にした)
+  - **AI で生成した素材**: このスクリプトは AI(Anthropic の Claude)が書いたもので、音と曲はそのプログラムで作った。**Steam に出すときは「AI で生成したコンテンツ」として申告する**(ストアの「AI 生成コンテンツの開示」で、事前に生成した素材として音と BGM を書く)
+  - 差しかえ: 同じ名前のファイル(`.ogg` / `.wav` / `.mp3`)を `assets/sounds/` に置けば、ゲームはその音を使う。Kenney の CC0 素材などに差しかえたら、ここに出どころとライセンスを書き、AI の申告から外す
+

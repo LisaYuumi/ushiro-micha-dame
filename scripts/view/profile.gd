@@ -23,6 +23,10 @@ static var stamp_words := {}
 static var hide_custom_words := false
 ## 自分で選んだ言語("" なら端末の言語に合わせる。Locale)
 static var lang := ""
+## 音量(0〜1): 全体・BGM・効果音
+static var vol_master := 1.0
+static var vol_bgm := 0.7
+static var vol_sfx := 1.0
 static var _loaded := false
 
 
@@ -38,6 +42,9 @@ static func load_saved() -> void:
 	show_personality = bool(cfg.get_value("profile", "show_personality", false))
 	hide_custom_words = bool(cfg.get_value("profile", "hide_custom_words", false))
 	lang = str(cfg.get_value("profile", "lang", ""))
+	vol_master = clampf(float(cfg.get_value("profile", "vol_master", 1.0)), 0.0, 1.0)
+	vol_bgm = clampf(float(cfg.get_value("profile", "vol_bgm", 0.7)), 0.0, 1.0)
+	vol_sfx = clampf(float(cfg.get_value("profile", "vol_sfx", 1.0)), 0.0, 1.0)
 	stamp_words = clean_words(cfg.get_value("profile", "stamp_words", {}))
 
 
@@ -48,6 +55,9 @@ static func save() -> void:
 	cfg.set_value("profile", "show_personality", show_personality)
 	cfg.set_value("profile", "hide_custom_words", hide_custom_words)
 	cfg.set_value("profile", "lang", lang)
+	cfg.set_value("profile", "vol_master", vol_master)
+	cfg.set_value("profile", "vol_bgm", vol_bgm)
+	cfg.set_value("profile", "vol_sfx", vol_sfx)
 	cfg.set_value("profile", "stamp_words", stamp_words)
 	cfg.save(PATH)
 

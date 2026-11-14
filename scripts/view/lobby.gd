@@ -36,6 +36,8 @@ var _word_buttons := {}
 var _word_edits := {}
 var _hide_words_button: Button
 var _lang_button: Button
+var _volume_box: VBoxContainer
+var _volume_panel: VolumePanel
 var _preview: Panel
 
 
@@ -64,6 +66,8 @@ func _ready() -> void:
 
 	_title = _label("うしろ見ちゃダメ!", 56)
 	root.add_child(_title)
+	# 音が手がかりになるゲームなので、イヤホンをすすめる
+	root.add_child(_label("🎧 イヤホン推奨", 22))
 	_status = _label("", 22)
 	root.add_child(_status)
 
@@ -80,6 +84,7 @@ func _ready() -> void:
 	# 言語の切りかえ(どの言語の人にもわかるように、地球の印と言語の名前で)
 	_lang_button = _button("", func() -> void: language_pressed.emit(), Vector2(250, 58))
 	row2.add_child(_lang_button)
+	row2.add_child(_button("🔊", func() -> void: _show_volume(), Vector2(90, 58)))
 	_update_language_button()
 	# 大きいボタンを2列に(押しやすいように)
 	var menu_grid := GridContainer.new()
@@ -115,6 +120,13 @@ func _ready() -> void:
 	_join_box.add_child(_button("もどる", func() -> void: show_menu(), Vector2(0, 70)))
 
 	_build_words_box(root)
+	# 音量の画面(全体・BGM・効果音)
+	_volume_box = VBoxContainer.new()
+	_volume_box.add_theme_constant_override("separation", 14)
+	root.add_child(_volume_box)
+	_volume_panel = VolumePanel.new()
+	_volume_box.add_child(_volume_panel)
+	_volume_box.add_child(_button("もどる", func() -> void: show_menu(), Vector2(0, 64), true))
 
 	_host_box = VBoxContainer.new()
 	_host_box.add_theme_constant_override("separation", 12)
@@ -230,8 +242,19 @@ func _build_words_box(root: VBoxContainer) -> void:
 	_update_words()
 
 
+func _show_volume() -> void:
+	_menu.visible = false
+	_words_box.visible = false
+	_join_box.visible = false
+	_host_box.visible = false
+	_volume_box.visible = true
+	_volume_panel.refresh()
+	set_status("")
+
+
 func _show_words() -> void:
 	_menu.visible = false
+	_volume_box.visible = false
 	_words_box.visible = true
 	_join_box.visible = false
 	_host_box.visible = false
@@ -364,6 +387,7 @@ func _update_players_button() -> void:
 func show_menu() -> void:
 	_menu.visible = true
 	_words_box.visible = false
+	_volume_box.visible = false
 	_join_box.visible = false
 	_host_box.visible = false
 	set_status("")
@@ -372,6 +396,7 @@ func show_menu() -> void:
 ## ホスト: 合言葉と、入っている人数を出す
 func show_host(code: String, joined: int) -> void:
 	_menu.visible = false
+	_volume_box.visible = false
 	_words_box.visible = false
 	_join_box.visible = false
 	_host_box.visible = true
@@ -381,6 +406,7 @@ func show_host(code: String, joined: int) -> void:
 ## 参加者: ホストがスタートするのを待つ
 func show_waiting(text: String) -> void:
 	_menu.visible = false
+	_volume_box.visible = false
 	_words_box.visible = false
 	_join_box.visible = false
 	_host_box.visible = false
@@ -393,6 +419,7 @@ func set_status(text: String) -> void:
 
 func _show_join() -> void:
 	_menu.visible = false
+	_volume_box.visible = false
 	_words_box.visible = false
 	_join_box.visible = true
 	_host_box.visible = false
@@ -439,6 +466,7 @@ func _button(text: String, on_press: Callable, min_size := Vector2(0, 66), accen
 	b.text = text
 	b.custom_minimum_size = min_size
 	UiStyle.button(b, accent, 28)
+	b.pressed.connect(func() -> void: AudioDirector.click())
 	b.pressed.connect(on_press)
 	_buttons.append(b)
 	# 英語など言葉が長くても、ボタンからはみ出さないように(広がるボタンは、半分の幅を目安に)

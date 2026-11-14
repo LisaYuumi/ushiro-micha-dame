@@ -25,6 +25,8 @@ var _out := false
 ## ⚙ボタンで開くメニューと、その中の「あそびかた」
 var _menu: PanelContainer
 var _help_panel: PanelContainer
+var _volume_panel: PanelContainer
+var _volume_sliders: VolumePanel
 var _personality_button: Button
 var _language_button: Button
 var _stick: VirtualStick
@@ -311,11 +313,19 @@ func _build_menu() -> void:
 	_menu_button(col, "上から見る(確認用)", _menu_action.bind("debug_top_camera"))
 	_personality_button = _menu_button(col, "", _toggle_personality)
 	_language_button = _menu_button(col, "", _menu_action.bind("toggle_language"))
+	_menu_button(col, "🔊 音の大きさ", _show_volume)
 	_menu_button(col, "あそびかた", _show_help)
 	if GameConfig.SHOW_PHOTO_MODE:
 		_menu_button(col, "撮影モード(開発用)", _menu_action.bind("photo_mode"))
 	_menu_button(col, "とじる", close_menu, true)
 	_update_menu_texts()
+
+	# 音量(全体・BGM・効果音)
+	_volume_panel = _panel(Vector2(560, 0))
+	var vcol: VBoxContainer = _volume_panel.get_child(0)
+	_volume_sliders = VolumePanel.new()
+	vcol.add_child(_volume_sliders)
+	_menu_button(vcol, "とじる", close_menu, true)
 
 	_help_panel = _panel(Vector2(760, 0))
 	var hcol: VBoxContainer = _help_panel.get_child(0)
@@ -341,6 +351,13 @@ func _menu_action(action: String) -> void:
 func _toggle_personality() -> void:
 	_tap_action("toggle_personality")
 	_update_menu_texts()
+
+
+func _show_volume() -> void:
+	_menu.visible = false
+	_volume_panel.visible = true
+	_volume_sliders.refresh()
+	UiStyle.center(_volume_panel)
 
 
 func _show_help() -> void:
@@ -383,6 +400,7 @@ func _menu_button(parent: Container, text: String, on_press: Callable, accent :=
 	b.custom_minimum_size = Vector2(0, 56)
 	UiStyle.button(b, accent, 24)
 	parent.add_child(b)
+	b.pressed.connect(func() -> void: AudioDirector.click())
 	b.pressed.connect(on_press)
 	_buttons.append({"button": b, "action": "", "call": on_press})
 	UiStyle.fit(b, 24, 370.0)
@@ -413,10 +431,11 @@ func toggle_menu() -> void:
 func close_menu() -> void:
 	_menu.visible = false
 	_help_panel.visible = false
+	_volume_panel.visible = false
 
 
 func is_menu_open() -> bool:
-	return _menu.visible or _help_panel.visible
+	return _menu.visible or _help_panel.visible or _volume_panel.visible
 
 
 ## 操作を1回押して離す(メニューから)
@@ -469,10 +488,11 @@ func _input(event: InputEvent) -> void:
 			var b: Button = entry["button"]
 			if not b.is_visible_in_tree() or b.disabled or not b.get_global_rect().has_point(t.position):
 				continue
-			if is_menu_open() and not (_menu.is_ancestor_of(b) or _help_panel.is_ancestor_of(b)):
+			if is_menu_open() and not (_menu.is_ancestor_of(b) or _help_panel.is_ancestor_of(b) or _volume_panel.is_ancestor_of(b)):
 				continue
 			var call: Callable = entry.get("call", Callable())
 			if call.is_valid():
+				AudioDirector.click()
 				call.call()
 				get_viewport().set_input_as_handled()
 				return

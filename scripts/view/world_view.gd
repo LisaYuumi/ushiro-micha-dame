@@ -14,10 +14,23 @@ var _seat_cam: Camera3D
 var _seat_fov := 100.0
 var _top_cam: Camera3D
 var _handkerchief: Node3D
+## 音: 落とし物(本物もフェイクも同じ音)・鬼の足音・追いかける人の足音・場所のある効果音・スタンプ・環境音
 var _drop_player: AudioStreamPlayer3D
 var _step_player: AudioStreamPlayer3D
+var _chaser_step_player: AudioStreamPlayer3D
+var _fx3d: Array[AudioStreamPlayer3D] = []
+var _fx3d_next := 0
 var _beep_player: AudioStreamPlayer
 var _stamp_player: AudioStreamPlayer
+var _amb_player: AudioStreamPlayer
+var _clock_player: AudioStreamPlayer3D
+var _curtain_player: AudioStreamPlayer3D
+var _curtain_left := 8.0
+## 時計とカーテン(環境音を鳴らす場所)
+var _clock_node: Node3D
+var _curtain_node: Node3D
+var _chaser_last_pos := Vector3.ZERO
+var _chaser_walked := 0.0
 ## 牛乳がかかった人の頭の上の白い牛乳(id -> Node3D)
 var _milk_nodes := {}
 ## 鬼が牛乳の相手を選んでいる間、かけられる人の足もとに出す青い点線の丸(人ごと)
@@ -104,6 +117,8 @@ func build(state: GameState) -> void:
 	for c in get_children():
 		c.queue_free()
 	_actor_nodes.clear()
+	_clock_node = null
+	_curtain_node = null
 	_turn.clear()
 	_oops_until.clear()
 	_surprise_until.clear()
@@ -189,6 +204,7 @@ func sync(state: GameState, delta: float) -> void:
 		_handkerchief.transform = Transform3D(Basis.IDENTITY, state.handkerchief_position)
 	_hide_item_if_not_visible_to_me(state)
 	_update_footsteps(state)
+	_update_ambience(delta)
 
 
 ## 姿勢: 座っている人は座る、追いかけっこ中は走る、鬼は歩く(止まっていれば立つ)
@@ -238,6 +254,8 @@ func _update_expression(state: GameState, a: GameState.Actor, model: CharacterMo
 	# 振り向いた瞬間にピョンと跳ねる
 	if a.looking_back and not _was_looking.get(a.id, false):
 		model.hop()
+		# 振り向く「バッ!」(自分は大きく、ほかの人はその場所から小さく)
+		_play_at(a, "look", -2.0 if a.id == state.local_player_id else -12.0)
 	_was_looking[a.id] = a.looking_back
 	model.animate(delta, running and state.phase == GameState.Phase.CHASE)
 
@@ -349,6 +367,7 @@ func on_event(e: Dictionary) -> void:
 	match e.get("type"):
 		"otetsuki":
 			_oops_until[e["actor"]] = _clock + 1.5
+			_play_actor(e["actor"], "oops", -4.0, -14.0)
 			_pop(e["actor"], "?", Color("6EA8F0"))
 		"stamp":
 			# スタンプが届いた人は、びっくり顔になる
@@ -358,38 +377,101 @@ func on_event(e: Dictionary) -> void:
 			if m:
 				m.hop()
 			_pop(e["actor"], "!", GameConfig.COLOR_ACCENT)
+			_play_actor(e["actor"], "pickup", -3.0, -8.0)
 		"slip":
 			var m := _actor_nodes.get(e["actor"]) as CharacterModel
 			if m:
 				m.slip()
 			_pop(e["actor"], "★", Color("F2C14E"))
 			_oops_until[e["actor"]] = _clock + GameConfig.SLIP_TIME
+			# バナナは「つるっ」、障害物は「ずでーん」
+			_play_actor(e["actor"], "banana" if e.get("kind", "") == "banana" else "fall", -2.0, -6.0)
 		"out":
 			_pop(e["actor"], tr("お手つき!"), Color("6EA8F0"))
+			# 体育座りに移る「とぼとぼ」(「シーン…」のあと)
+			var who: int = e["actor"]
+			get_tree().create_timer(1.1).timeout.connect(func() -> void: _play_actor(who, "trudge", -6.0, -16.0))
 		"milk":
 			_surprise_until[e["target"]] = _clock + 1.2
 			_pop(e["target"], tr("ばしゃっ"), Color.WHITE)
 		"dropped", "rustle":
-			# 本物もニセの物音も、まったく同じ音。重い物ほど大きく、低く、遠くまで聞こえる
+			# 本物もフェイクも、まったく同じ音(落とし物ごとの音。同じ大きさ・同じゆらぎ)。
+			# 落とした場所から聞こえる(後ろの左右どちらで鳴ったかわかる)。重い物ほど大きく、遠くまで聞こえる
 			var w: float = e.get("weight", 0.0)
 			_drop_player.position = e["pos"]
 			_drop_player.volume_db = lerpf(GameConfig.DROP_VOLUME_DB, GameConfig.DROP_VOLUME_DB_HEAVY, w)
 			_drop_player.unit_size = lerpf(GameConfig.DROP_SOUND_RANGE, GameConfig.DROP_SOUND_RANGE_HEAVY, w)
-			_drop_player.pitch_scale = lerpf(1.0, 0.5, w) * randf_range(0.9, 1.1)
+			_drop_player.pitch_scale = randf_range(0.94, 1.06)
 			_drop_player.play()
 
 
 
+## 足音: 歩く鬼は小さく「トッ、トッ」(鬼の体から聞こえる)。追いかけっこ中は、鬼も追いかける人も速い足音
 func _update_footsteps(state: GameState) -> void:
 	var oni := state.get_actor(state.oni_id)
 	if oni == null:
 		return
+	var running := state.phase == GameState.Phase.CHASE
+	var stride := GameConfig.RUN_STRIDE if running else GameConfig.FOOTSTEP_STRIDE
+	var want_stream := Sfx.get_stream("run_step" if running else "step")
+	if _step_player.stream != want_stream:
+		_step_player.stream = want_stream
+		_step_player.volume_db = GameConfig.RUN_STEP_VOLUME_DB if running else GameConfig.FOOTSTEP_VOLUME_DB
 	_oni_walked += oni.position.distance_to(_oni_last_pos)
 	_oni_last_pos = oni.position
-	if _oni_walked >= GameConfig.FOOTSTEP_STRIDE:
+	if _oni_walked >= stride:
 		_oni_walked = 0.0
-		_step_player.pitch_scale = randf_range(0.85, 1.15)
+		_step_player.pitch_scale = randf_range(0.88, 1.12)
 		_step_player.play()
+	var chaser := state.get_actor(state.chaser_id)
+	if chaser == null or not running:
+		_chaser_walked = 0.0
+		return
+	_chaser_step_player.global_position = chaser.position + Vector3(0, 0.1, 0)
+	_chaser_walked += chaser.position.distance_to(_chaser_last_pos) if _chaser_last_pos != Vector3.ZERO else 0.0
+	_chaser_last_pos = chaser.position
+	if _chaser_walked >= GameConfig.RUN_STRIDE:
+		_chaser_walked = 0.0
+		_chaser_step_player.pitch_scale = randf_range(0.95, 1.2)
+		_chaser_step_player.play()
+
+
+## 人のいる場所で効果音を鳴らす(自分なら大きく聞こえるように、自分の頭の位置で)
+func _play_actor(actor_id: int, sound_name: String, self_db: float, other_db: float) -> void:
+	if _room_state == null:
+		return
+	var a := _room_state.get_actor(actor_id)
+	if a == null:
+		return
+	_play_at(a, sound_name, self_db if actor_id == _room_state.local_player_id else other_db)
+
+
+func _play_at(a: GameState.Actor, sound_name: String, vol_db: float) -> void:
+	if _fx3d.is_empty():
+		return
+	var p := _fx3d[_fx3d_next]
+	_fx3d_next = (_fx3d_next + 1) % _fx3d.size()
+	p.stream = Sfx.get_stream(sound_name)
+	p.volume_db = vol_db
+	p.pitch_scale = randf_range(0.96, 1.04)
+	var cam := get_viewport().get_camera_3d()
+	# 自分の音は、カメラ(自分の耳)のすぐそばで鳴らす
+	if a.id == _room_state.local_player_id and cam:
+		p.global_position = cam.global_position
+	else:
+		p.global_position = a.position + Vector3(0, 1.0, 0)
+	p.play()
+
+
+## 環境音: 遠くの校庭のざわめき(ずっと小さく)、時計のカチコチ(時計から)、ときどきカーテンの音(窓から)
+func _update_ambience(delta: float) -> void:
+	if _curtain_player == null:
+		return
+	_curtain_left -= delta
+	if _curtain_left <= 0.0:
+		_curtain_left = randf_range(9.0, 20.0)
+		_curtain_player.pitch_scale = randf_range(0.9, 1.1)
+		_curtain_player.play()
 
 
 ## 席のカメラ ⇔ 上から見るカメラ(確認用)を切りかえる。
@@ -596,6 +678,7 @@ func _build_front_wall(wall: Node3D, half: float) -> void:
 	clock.rotation.x = PI / 2.0
 	clock.position = Vector3(4.6, 3.35, z + 0.02)
 	wall.add_child(clock)
+	_clock_node = clock
 	_build_front_extras(wall, half, z)
 
 
@@ -738,6 +821,11 @@ func _build_window_wall(wall: Node3D, half: float) -> void:
 		_part(Vector3(1.9, 0.06, 0.08), Vector3(x, 2.3, z + 0.05), GameConfig.COLOR_PAPER, 0.015, wall)
 		for sx in [-1.25, 1.25]:
 			_part(Vector3(0.35, 2.1, 0.08), Vector3(x + sx, 2.25, z + 0.08), COLOR_CURTAIN, 0.025, wall)
+		if _curtain_node == null:
+			# カーテンの音を鳴らす場所の目印
+			_curtain_node = Node3D.new()
+			_curtain_node.position = Vector3(x, 2.25, z + 0.1)
+			wall.add_child(_curtain_node)
 		# 窓台と植木鉢
 		_part(Vector3(2.3, 0.05, 0.3), Vector3(x, 1.4, z + 0.15), COLOR_PILLAR, 0.02, wall)
 		for px in [-0.55, 0.5]:
@@ -1202,38 +1290,52 @@ func _build_handkerchief(state: GameState) -> void:
 
 
 func _build_sounds(state: GameState) -> void:
-	# 足音は鬼の体についていく(左右・遠近で鬼の位置がわかる)
-	_step_player = AudioStreamPlayer3D.new()
-	_step_player.stream = Sfx.footstep()
-	_step_player.volume_db = GameConfig.FOOTSTEP_VOLUME_DB
+	# 足音は鬼の体についていく(左右・遠近で鬼の位置がなんとなくわかる。大きさは GameConfig で変えられる)
+	_step_player = Sfx.player_3d(_actor_nodes[state.oni_id] as Node3D, GameConfig.FOOTSTEP_VOLUME_DB, GameConfig.FOOTSTEP_UNIT_SIZE)
+	_step_player.stream = Sfx.get_stream("step")
 	_step_player.max_polyphony = 2
-	# スマホのブラウザでも鳴るように、PC と同じ方式で再生する
-	_step_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
-	(_actor_nodes[state.oni_id] as Node3D).add_child(_step_player)
 	_oni_last_pos = state.get_actor(state.oni_id).position
 	_oni_walked = 0.0
+	_chaser_step_player = Sfx.player_3d(self, GameConfig.RUN_STEP_VOLUME_DB, GameConfig.FOOTSTEP_UNIT_SIZE)
+	_chaser_step_player.stream = Sfx.get_stream("run_step")
+	_chaser_step_player.max_polyphony = 2
+	_chaser_last_pos = Vector3.ZERO
+	_chaser_walked = 0.0
 
-	_drop_player = AudioStreamPlayer3D.new()
-	_drop_player.stream = Sfx.drop()
-	_drop_player.volume_db = GameConfig.DROP_VOLUME_DB
-	_drop_player.unit_size = GameConfig.DROP_SOUND_RANGE
-	_drop_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
-	add_child(_drop_player)
+	# 落とし物の音は、そのラウンドの落とし物の音(本物もフェイクも同じ)
+	_drop_player = Sfx.player_3d(self, GameConfig.DROP_VOLUME_DB, GameConfig.DROP_SOUND_RANGE)
+	_drop_player.stream = Sfx.get_stream("drop_%d" % clampi(state.round_index, 0, 4))
 
-	_stamp_player = AudioStreamPlayer.new()
-	_stamp_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
-	_stamp_player.volume_db = -6.0
-	add_child(_stamp_player)
+	# 場所のある効果音(振り向く・お手つき・拾う・転ぶなど)
+	_fx3d.clear()
+	for i in 4:
+		_fx3d.append(Sfx.player_3d(self, 0.0, 3.0))
 
-	_beep_player = AudioStreamPlayer.new()
-	_beep_player.stream = Sfx.beep()
-	_beep_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
-	add_child(_beep_player)
+	_stamp_player = Sfx.player_2d(self, -4.0)
+
+	_beep_player = Sfx.player_2d(self)
+	_beep_player.stream = Sfx.get_stream("ui_click")
+
+	# 環境音(ごく小さく)
+	_amb_player = Sfx.player_2d(self, GameConfig.AMBIENT_VOLUME_DB)
+	_amb_player.stream = Sfx.get_stream("amb_school")
+	_amb_player.play()
+	_clock_player = Sfx.player_3d(self, GameConfig.CLOCK_VOLUME_DB, 2.0)
+	_clock_player.stream = Sfx.get_stream("clock_tick")
+	if _clock_node:
+		_clock_player.global_position = _clock_node.global_position
+	_clock_player.play()
+	_curtain_player = Sfx.player_3d(self, GameConfig.CURTAIN_VOLUME_DB, 3.0)
+	_curtain_player.stream = Sfx.get_stream("curtain")
+	if _curtain_node:
+		_curtain_player.global_position = _curtain_node.global_position
+	_curtain_left = randf_range(4.0, 10.0)
 
 
 ## 自分に届いたスタンプの音(ほかの人あてのスタンプでは鳴らさない)
 func play_stamp_sound(kind: String) -> void:
-	_stamp_player.stream = Sfx.stamp(kind)
+	_stamp_player.stream = Sfx.get_stream("stamp_" + kind)
+	_stamp_player.pitch_scale = randf_range(0.97, 1.03)
 	_stamp_player.play()
 
 

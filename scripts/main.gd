@@ -44,10 +44,17 @@ const SNAPSHOT_INTERVAL := 0.05
 @onready var touch: TouchControls = $TouchControls
 @onready var net: NetSession = $Net
 @onready var lobby: Lobby = $Lobby
+var audio: AudioDirector
+## 結果のジングルを鳴らしている間は BGM を止めておく残り時間(秒)
+var _jingle_hold := 0.0
 
 
 func _ready() -> void:
 	InputSetup.register()
+	# 音: BGM と、場所のない効果音(ボタン・チャイム・ジングルなど)
+	audio = AudioDirector.new()
+	add_child(audio)
+	audio.play_bgm("bgm_lobby")
 	state = GameState.new()
 	cmds = state
 	# 後ろに見える教室だけ先に作っておく(ロビーの背景)
@@ -306,7 +313,31 @@ func _physics_process(delta: float) -> void:
 	_update_help()
 
 
+## BGM: ロビー・結果は明るい曲、ラウンド中は控えめな曲(ラウンドが進むほど楽器が増える)、追いかけっこは速い曲。
+## 鬼との距離では変えない(BGM で鬼の場所がわからないように)
+func _update_music(delta: float) -> void:
+	_jingle_hold = maxf(_jingle_hold - delta, 0.0)
+	var want := "bgm_lobby"
+	if mode != Mode.LOBBY and _studio == null:
+		match state.phase:
+			GameState.Phase.WALKING, GameState.Phase.DROPPED:
+				want = "bgm_round_%d" % _round_level()
+			GameState.Phase.CHASE:
+				want = "bgm_chase"
+			_:
+				want = "" if _jingle_hold > 0.0 else "bgm_lobby"
+	audio.play_bgm(want)
+
+
+## ラウンド中の曲の段階: 1〜2ラウンド目 = 1、3〜4ラウンド目 = 2、最後のラウンド = 3
+func _round_level() -> int:
+	if state.round_index >= GameConfig.ROUNDS_PER_MATCH - 1:
+		return 3
+	return 1 if state.round_index < 2 else 2
+
+
 func _process(delta: float) -> void:
+	_update_music(delta)
 	if _studio:
 		return
 	view.sync(state, delta)
@@ -674,9 +705,32 @@ func _show_event(e: Dictionary) -> void:
 			else:
 				hud.show_message(tr("%s が追いかけた!") % _name(e["actor"]), Color(0.3, 0.3, 0.3), GameConfig.MESSAGE_TIME)
 		"result":
+			_play_result_sounds(e)
 			_show_result(e)
 		"match_over":
+			audio.play("match_end", -2.0)
+			_jingle_hold = 3.0
 			_show_match_result()
+		"round_start":
+			# ラウンド開始: 学校のチャイムのような音
+			audio.play("chime", -6.0)
+		"last_lap":
+			# 鬼が最後の1周に入った合図
+			audio.play("lap", -4.0)
+
+
+## 勝敗の音: タッチ「パシッ✨」/座れた「ストン」、そのあと勝ち・負けのジングル(BGM は少し止める)
+func _play_result_sounds(r: Dictionary) -> void:
+	var me := state.local_player_id
+	match r["reason"]:
+		"touched":
+			audio.play("touch", -2.0)
+		"sat":
+			audio.play("sit", -2.0)
+	var jingle := "win" if r["winner"] == me else ("lose" if r["loser"] == me else "win")
+	var vol := -4.0 if (r["winner"] == me or r["loser"] == me) else -10.0
+	_jingle_hold = 2.6
+	get_tree().create_timer(0.45).timeout.connect(func() -> void: audio.play(jingle, vol))
 
 
 ## ラウンドが終わった: 可愛い結果カード(見出し・一言・がまんや手下の発表・全員の点数)

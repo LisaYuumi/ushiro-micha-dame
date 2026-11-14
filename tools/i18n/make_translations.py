@@ -201,6 +201,11 @@ EN = {
     "だったよ!": " ",
     "鬼がかって +%d点": "Oni won +%d",
     "%d点": "%d pts",
+    # 音
+    "🎧 イヤホン推奨": "🎧 Headphones recommended",
+    "🔊 音の大きさ": "🔊 Volume",
+    "全体": "Master",
+    "効果音": "Effects",
     # ロビー
     "うしろ見ちゃダメ!": "Don't Look Back!",
     "ひとりで遊ぶ": "Play solo",

@@ -34,7 +34,16 @@ const ONI_LAPS_BEFORE_DROP_MAX := 1.0
 ## 足音を鳴らす間隔(歩いた距離・メートル)
 const FOOTSTEP_STRIDE := 0.7
 ## 足音の大きさ(dB。小さいほど静か)
-const FOOTSTEP_VOLUME_DB := -4.0
+const FOOTSTEP_VOLUME_DB := -9.0
+## 足音が聞こえる広さ(大きいほど遠くまで聞こえる)。大きすぎると鬼の場所が簡単にわかってしまう
+const FOOTSTEP_UNIT_SIZE := 1.6
+## 追いかけっこの足音(走る): 歩幅(メートル)と大きさ(dB)
+const RUN_STRIDE := 0.8
+const RUN_STEP_VOLUME_DB := -6.0
+## 環境音の大きさ(dB): 校庭のざわめき・時計・カーテン(ごく小さく)
+const AMBIENT_VOLUME_DB := -30.0
+const CLOCK_VOLUME_DB := -22.0
+const CURTAIN_VOLUME_DB := -20.0
 ## ハンカチを置いた音(とニセの物音)の大きさ(dB)。ハンカチは足音にまぎれるくらい小さく
 const DROP_VOLUME_DB := -8.0
 ## 置いた音が、この距離(メートル)より離れると急に小さくなる。

@@ -41,6 +41,7 @@ func _initialize() -> void:
 	_test_stamp_truthfulness()
 	_test_stamp_words()
 	_test_milk_art()
+	_test_sounds()
 	_test_languages()
 	_test_custom_stamp_words()
 	_test_bots_send_and_trust_stamps()
@@ -592,6 +593,39 @@ func _test_languages() -> void:
 	Locale.setup("ja")
 	_check(Texts.stamp(Stamps.DROPPED) == "落ちてる😨", "日本語に戻せる")
 	_check(Locale.pick("") in Locale.SUPPORTED, "端末の言語に合わせて選べる")
+
+
+func _test_sounds() -> void:
+	# 使う音が全部そろっていて読める(落とし物は5つとも別の音。BGM・環境音はくり返す)
+	for n in ["drop_0", "drop_1", "drop_2", "drop_3", "drop_4", "step", "run_step", "look", "oops", "trudge", "pickup",
+			"fall", "banana", "lap", "touch", "sit", "stamp_dropped", "stamp_safe", "stamp_trust",
+			"chime", "reveal", "win", "lose", "match_end", "ui_click",
+			"bgm_lobby", "bgm_round_1", "bgm_round_2", "bgm_round_3", "bgm_chase", "amb_school", "clock_tick", "curtain"]:
+		_check(Sfx.get_stream(n) != null, "音 %s がある" % n)
+	var bgm := Sfx.get_stream("bgm_chase") as AudioStreamOggVorbis
+	_check(bgm != null and bgm.loop, "BGM はくり返す")
+	for k in Stamps.ALL:
+		_check(Sfx.get_stream("stamp_" + k) != null, "スタンプ %s の声がある" % k)
+	# 音量のバス(全体・BGM・効果音)
+	Sfx.setup_buses()
+	_check(AudioServer.get_bus_index(Sfx.BUS_BGM) >= 0 and AudioServer.get_bus_index(Sfx.BUS_SFX) >= 0, "BGM と効果音のバスがある")
+	var keep := Profile.vol_bgm
+	Profile.vol_bgm = 0.5
+	Sfx.apply_volumes()
+	_check(absf(AudioServer.get_bus_volume_db(AudioServer.get_bus_index(Sfx.BUS_BGM)) - linear_to_db(0.5)) < 0.01, "BGM の音量を変えられる")
+	Profile.vol_bgm = keep
+	Sfx.apply_volumes()
+	# 鬼が最後の1周に入ったら、合図の音のお知らせが出る(ルールは変えない)
+	var s := _chasing_state(19)
+	var told := false
+	for i in int(60.0 / STEP):
+		s.tick(STEP)
+		for e in s.take_events():
+			if e["type"] == "last_lap":
+				told = true
+		if told or s.phase != GameState.Phase.CHASE:
+			break
+	_check(told or s.phase != GameState.Phase.CHASE, "鬼が最後の1周に入ると合図のお知らせ")
 
 
 func _test_milk_art() -> void:

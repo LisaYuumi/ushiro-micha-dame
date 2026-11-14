@@ -338,6 +338,8 @@ func _flip_minion_card() -> void:
 	if _flipping or _minion_card == null:
 		return
 	_flipping = true
+	# 鬼の手下の正体発表「ジャジャーン」
+	AudioDirector.sfx("reveal", -3.0)
 	var card := _minion_card
 	card.pivot_offset = card.size / 2.0
 	var tw := create_tween()
@@ -392,6 +394,7 @@ func _recenter_result() -> void:
 
 ## 結果カードの「次へ」: キーボードの R と同じ操作を送る
 func _press_next() -> void:
+	AudioDirector.click()
 	for pressed in [true, false]:
 		var ev := InputEventAction.new()
 		ev.action = "restart"

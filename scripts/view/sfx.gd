@@ -1,101 +1,81 @@
 class_name Sfx
 extends RefCounted
-## 仮の効果音を、音声ファイルなしでプログラムで作る。
-## あとで本物の音に差しかえるときは、ここで load() したものを返せばよい。
+## 音の読みこみと、音量のバス(全体・BGM・効果音)。
+## 音は tools/audio/make_sounds.py で作った assets/sounds/<名前>.ogg(プログラムで合成したオリジナルの音)。
+## 同じ名前のファイルを置きかえれば、ゲームはその音を使う(Kenney の音などに差しかえられる。.wav でもよい)。
 
-const RATE := 22050
+const DIR := "res://assets/sounds/"
+## 音量のバス(Master = 全体)
+const BUS_BGM := "BGM"
+const BUS_SFX := "SFX"
 
-static var _footstep: AudioStreamWAV
-static var _drop: AudioStreamWAV
-static var _beep: AudioStreamWAV
-static var _stamp := {}
-
-
-## 「ざっ」という足音(スマホのスピーカーでも聞こえるよう、高めでくっきり)
-static func footstep() -> AudioStreamWAV:
-	if _footstep == null:
-		_footstep = _make(0.10, 0.6, 35.0, 0.0, 0.0, 1.0)
-	return _footstep
+static var _cache := {}
 
 
-## 「ぽさっ」というハンカチを置いた音
-static func drop() -> AudioStreamWAV:
-	if _drop == null:
-		_drop = _make(0.22, 0.35, 16.0, 420.0, 0.35, 1.0)
-	return _drop
+## 名前の音(なければ null)。BGM・環境音はくり返す
+static func get_stream(sound_name: String) -> AudioStream:
+	if _cache.has(sound_name):
+		return _cache[sound_name]
+	var st: AudioStream = null
+	for ext in [".ogg", ".wav", ".mp3"]:
+		if ResourceLoader.exists(DIR + sound_name + ext):
+			st = load(DIR + sound_name + ext)
+			break
+	if st != null and (sound_name.begins_with("bgm_") or sound_name.begins_with("amb_") or sound_name == "clock_tick"):
+		if st is AudioStreamOggVorbis:
+			(st as AudioStreamOggVorbis).loop = true
+		elif st is AudioStreamMP3:
+			(st as AudioStreamMP3).loop = true
+		elif st is AudioStreamWAV:
+			(st as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+			(st as AudioStreamWAV).loop_end = int((st as AudioStreamWAV).get_length() * (st as AudioStreamWAV).mix_rate)
+	_cache[sound_name] = st
+	return st
 
 
-## スタンプが届いた音(種類ごとに少しちがう、仮の音)
-static func stamp(kind: String) -> AudioStreamWAV:
-	# 言葉ではない声(仮の音)
-	if not _stamp.has(kind):
-		match kind:
-			Stamps.DROPPED:
-				# 「ハッ!」: 息まじりの短い声が、上がって止まる
-				_stamp[kind] = _make_fn(0.2, func(t: float, n: float) -> float:
-					var f := 330.0 + 260.0 * t / 0.2
-					var v := sin(TAU * f * t) + 0.4 * sin(TAU * 2.0 * f * t)
-					return (v * 0.45 + n * 0.25) * minf(t * 40.0, 1.0) * maxf(1.0 - t / 0.2, 0.0))
-			Stamps.SAFE:
-				# 「シーッ」: 高い息の音
-				_stamp[kind] = _make_fn(0.5, func(t: float, n: float) -> float:
-					var hiss := n - 0.6 * sin(TAU * 40.0 * t) * n
-					return hiss * 0.5 * minf(t * 15.0, 1.0) * maxf(1.0 - t / 0.5, 0.0))
-			_:
-				# 「うるっ」: 高めの声がふるえる
-				_stamp[kind] = _make_fn(0.45, func(t: float, _n: float) -> float:
-					var f := 420.0 + 35.0 * sin(TAU * 11.0 * t)
-					var v := sin(TAU * f * t) + 0.3 * sin(TAU * 2.0 * f * t)
-					return v * 0.42 * minf(t * 18.0, 1.0) * maxf(1.0 - t / 0.45, 0.0))
-	return _stamp[kind]
+## 音量のバス(BGM・効果音)を用意して、Profile の音量を当てる
+static func setup_buses() -> void:
+	for bus in [BUS_BGM, BUS_SFX]:
+		if AudioServer.get_bus_index(bus) == -1:
+			AudioServer.add_bus()
+			var i := AudioServer.bus_count - 1
+			AudioServer.set_bus_name(i, bus)
+			AudioServer.set_bus_send(i, "Master")
+	apply_volumes()
 
 
-## 時刻 t とノイズ n から音の高さを決める関数で、音を作る
-static func _make_fn(duration: float, f: Callable) -> AudioStreamWAV:
-	var n := int(duration * RATE)
-	var data := PackedByteArray()
-	data.resize(n * 2)
-	var noise_rng := RandomNumberGenerator.new()
-	noise_rng.seed = 777
-	var y := 0.0
-	for i in n:
-		var t := float(i) / RATE
-		y += 0.5 * (noise_rng.randf_range(-1.0, 1.0) - y)
-		var v: float = f.call(t, y * 2.0)
-		data.encode_s16(i * 2, int(clampf(v, -1.0, 1.0) * 32767.0))
-	var w := AudioStreamWAV.new()
-	w.format = AudioStreamWAV.FORMAT_16_BITS
-	w.mix_rate = RATE
-	w.stereo = false
-	w.data = data
-	return w
+## Profile の音量(0〜1)を、バスの大きさにする
+static func apply_volumes() -> void:
+	_set_bus("Master", Profile.vol_master)
+	_set_bus(BUS_BGM, Profile.vol_bgm)
+	_set_bus(BUS_SFX, Profile.vol_sfx)
 
 
-## 音テスト用の「ピー」
-static func beep() -> AudioStreamWAV:
-	if _beep == null:
-		_beep = _make(0.35, 0.0, 4.0, 880.0, 1.0, 0.8)
-	return _beep
+static func _set_bus(bus: String, v: float) -> void:
+	var i := AudioServer.get_bus_index(bus)
+	if i < 0:
+		return
+	AudioServer.set_bus_mute(i, v <= 0.001)
+	AudioServer.set_bus_volume_db(i, linear_to_db(maxf(v, 0.001)))
 
 
-## ノイズ(lowpass でこもらせる)+低い音(tone_hz)を、だんだん小さくする。
-static func _make(duration: float, lowpass: float, decay: float,
-		tone_hz: float, tone_mix: float, volume: float) -> AudioStreamWAV:
-	var n := int(duration * RATE)
-	var data := PackedByteArray()
-	data.resize(n * 2)
-	var y := 0.0
-	var noise_rng := RandomNumberGenerator.new()
-	noise_rng.seed = 12345
-	for i in n:
-		var t := float(i) / RATE
-		y += lowpass * (noise_rng.randf_range(-1.0, 1.0) - y)
-		var s := y * (1.0 - tone_mix) * 3.0 + sin(TAU * tone_hz * t) * tone_mix
-		s *= exp(-t * decay) * volume
-		data.encode_s16(i * 2, int(clampf(s, -1.0, 1.0) * 32767.0))
-	var w := AudioStreamWAV.new()
-	w.format = AudioStreamWAV.FORMAT_16_BITS
-	w.mix_rate = RATE
-	w.stereo = false
-	w.data = data
-	return w
+## 効果音の 2D のプレイヤー(効果音のバス)
+static func player_2d(parent: Node, vol_db: float = 0.0) -> AudioStreamPlayer:
+	var p := AudioStreamPlayer.new()
+	p.bus = BUS_SFX
+	p.volume_db = vol_db
+	# スマホのブラウザでも鳴るように、PC と同じ方式で再生する
+	p.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
+	parent.add_child(p)
+	return p
+
+
+## 効果音の 3D のプレイヤー(鳴った場所から聞こえる。後ろの左右がわかる)
+static func player_3d(parent: Node, vol_db: float = 0.0, unit: float = 2.0) -> AudioStreamPlayer3D:
+	var p := AudioStreamPlayer3D.new()
+	p.bus = BUS_SFX
+	p.volume_db = vol_db
+	p.unit_size = unit
+	p.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
+	parent.add_child(p)
+	return p
