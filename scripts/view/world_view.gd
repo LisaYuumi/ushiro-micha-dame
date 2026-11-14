@@ -368,10 +368,10 @@ func on_event(e: Dictionary) -> void:
 			_pop(e["actor"], "★", Color("F2C14E"))
 			_oops_until[e["actor"]] = _clock + GameConfig.SLIP_TIME
 		"out":
-			_pop(e["actor"], "お手つき!", Color("6EA8F0"))
+			_pop(e["actor"], tr("お手つき!"), Color("6EA8F0"))
 		"milk":
 			_surprise_until[e["target"]] = _clock + 1.2
-			_pop(e["target"], "ばしゃっ", Color.WHITE)
+			_pop(e["target"], tr("ばしゃっ"), Color.WHITE)
 		"dropped", "rustle":
 			# 本物もニセの物音も、まったく同じ音。重い物ほど大きく、低く、遠くまで聞こえる
 			var w: float = e.get("weight", 0.0)
@@ -573,7 +573,7 @@ func _build_front_wall(wall: Node3D, half: float) -> void:
 	# チョークの文字: 少し黄みがかった白で、少し透けて、手書きっぽく傾ける
 	var chalk_color := Color(0.98, 0.97, 0.88, 0.82)
 	var chalk := Label3D.new()
-	chalk.text = "うしろ見ちゃダメ!"
+	chalk.text = tr("うしろ見ちゃダメ!")
 	chalk.font = HudFont.get_chalk_font()
 	chalk.font_size = 104
 	chalk.pixel_size = 0.0058
@@ -620,13 +620,13 @@ func _build_front_extras(wall: Node3D, half: float, z: float) -> void:
 		pivot.add_child(mi)
 	# 日付と日直(黒板の右はし、縦書き風に)
 	var d := Time.get_date_dict_from_system()
-	var days := ["日", "月", "火", "水", "木", "金", "土"]
+	var days := [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")]
 	var duty := "あおい"
 	if _room_state and not _room_state.actors.is_empty():
 		var a: GameState.Actor = _room_state.actors[(round_no * 3 + 1) % _room_state.actors.size()]
-		duty = a.display_name.get_slice("(", 0)
-	_chalk_text(wall, "%d月%d日(%s)" % [d["month"], d["day"], days[d["weekday"]]], Vector3(2.5, 3.42, z + 0.1), 34, 0.0)
-	_chalk_text(wall, "日直 %s" % duty, Vector3(2.5, 2.15, z + 0.1), 34, 0.0)
+		duty = Locale.actor_name(a.display_name)
+	_chalk_text(wall, tr("%d月%d日(%s)") % [d["month"], d["day"], days[d["weekday"]]], Vector3(2.5, 3.42, z + 0.1), 34, 0.0)
+	_chalk_text(wall, tr("日直 %s") % duty, Vector3(2.5, 2.15, z + 0.1), 34, 0.0)
 	# 黒板の左はしの落書き(ラウンドごとにちがう)
 	_chalk_doodle(wall, round_no % 4, Vector3(-3.0, 2.32, z + 0.1))
 	# 教卓(黒板の前の床)
@@ -644,7 +644,7 @@ func _build_front_extras(wall: Node3D, half: float, z: float) -> void:
 	# 学級目標(黒板の上の横長の紙)
 	_part(Vector3(4.6, 0.44, 0.03), Vector3(0, 3.98, z + 0.03), COLOR_PAPER_SOFT, 0.015, wall)
 	var goal := Label3D.new()
-	goal.text = "なかよく げんきに がんばろう"
+	goal.text = tr("なかよく げんきに がんばろう")
 	goal.font = HudFont.get_chalk_font()
 	goal.font_size = 54
 	goal.pixel_size = 0.0045
@@ -767,8 +767,8 @@ func _build_back_wall(wall: Node3D, half: float) -> void:
 	var bz := -half + 0.12
 	_part(Vector3(4.8, 1.4, 0.08), Vector3(0, 2.45, bz), COLOR_WOOD, 0.03, wall)
 	_part(Vector3(4.5, 1.1, 0.08), Vector3(0, 2.45, bz + 0.03), COLOR_BOARD, 0.02, wall)
-	_chalk_text(wall, "きょうの めあて", Vector3(-0.9, 2.75, bz + 0.08), 64, 0.0)
-	_chalk_text(wall, "わすれものを しない", Vector3(-0.6, 2.3, bz + 0.08), 56, -1.5)
+	_chalk_text(wall, tr("きょうの めあて"), Vector3(-0.9, 2.75, bz + 0.08), 64, 0.0)
+	_chalk_text(wall, tr("わすれものを しない"), Vector3(-0.6, 2.3, bz + 0.08), 56, -1.5)
 	for i in 4:
 		_part(Vector3(0.12, 0.12, 0.04), Vector3(1.1 + i * 0.28, 2.85, bz + 0.09), [Color("E26D5A"), Color("5B8FD9"), Color("F2C14E"), Color("6DB58A")][i], 0.01, wall)
 	_part(Vector3(0.7, 0.5, 0.02), Vector3(1.55, 2.3, bz + 0.08), COLOR_PAPER_SOFT, 0.01, wall, Vector3(0, 0, 0.04))
@@ -857,7 +857,7 @@ func _build_character(a: GameState.Actor, is_self: bool) -> Node3D:
 	var model := CharacterModel.new()
 	model.name = "Actor%d" % a.id
 	# ボットの性格は、⚙メニューでオンにしたときだけ名前の横に出す
-	var shown_name := a.display_name if Profile.show_personality else a.display_name.get_slice("(", 0)
+	var shown_name := Locale.actor_name(a.display_name, Profile.show_personality)
 	model.build(a.color, shown_name, HudFont.get_font())
 	if is_self:
 		# 自分の体は、座っているときの自分のカメラには映さない。自分の名前は出さない
@@ -1014,7 +1014,7 @@ func _update_obstacles(state: GameState) -> void:
 			add_child(n)
 			_obstacle_nodes[id] = n
 			if ob["kind"] == "banana":
-				_pop_at(state.obstacle_position(ob), "ぽいっ", Color(1.0, 0.85, 0.1))
+				_pop_at(state.obstacle_position(ob), tr("ぽいっ"), Color(1.0, 0.85, 0.1))
 		var node: Node3D = _obstacle_nodes[id]
 		var ang: float = ob["angle"]
 		node.position = state.obstacle_position(ob)

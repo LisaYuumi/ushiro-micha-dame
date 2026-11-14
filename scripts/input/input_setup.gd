@@ -33,6 +33,7 @@ const KEYS := {
 	"debug_finish": [KEY_J],
 	"debug_milk": [KEY_L],
 	"toggle_personality": [],
+	"toggle_language": [],
 	"quit": [KEY_ESCAPE],
 }
 

@@ -64,7 +64,7 @@ func host_room() -> void:
 	_rtc.create_server()
 	multiplayer.multiplayer_peer = _rtc
 	_connect_signaling(ID_PREFIX + "room-" + room_code)
-	status_changed.emit("部屋を作っています…")
+	status_changed.emit(tr("部屋を作っています…"))
 
 
 ## 合言葉の部屋に入る(参加者)
@@ -78,7 +78,7 @@ func join_room(code: String) -> void:
 	multiplayer.multiplayer_peer = _rtc
 	_host_signal_id = ID_PREFIX + "room-" + code
 	_connect_signaling(ID_PREFIX + "guest-%d-%d" % [randi(), randi()])
-	status_changed.emit("部屋 %s をさがしています…" % code)
+	status_changed.emit(tr("部屋 %s をさがしています…") % code)
 
 
 func leave() -> void:
@@ -168,7 +168,7 @@ func _on_peer_connected(id: int) -> void:
 	elif id == 1:
 		_connect_timeout = -1.0
 		connected_to_host.emit()
-		status_changed.emit("ホストとつながりました")
+		status_changed.emit(tr("ホストとつながりました"))
 
 
 func _on_peer_disconnected(id: int) -> void:
@@ -176,7 +176,7 @@ func _on_peer_disconnected(id: int) -> void:
 		peers_changed.emit(multiplayer.get_peers())
 	elif id == 1:
 		host_lost.emit()
-		status_changed.emit("ホストとの通信が切れました")
+		status_changed.emit(tr("ホストとの通信が切れました"))
 
 
 # --- 仲介(ntfy.sh) ---
@@ -190,7 +190,7 @@ func _connect_signaling(my_topic: String) -> void:
 	_ws_was_open = false
 	var err := _ws.connect_to_url(NTFY_WS % my_topic)
 	if err != OK:
-		status_changed.emit("仲介サーバーにつなげません(%d)" % err)
+		status_changed.emit(tr("仲介サーバーにつなげません(%d)") % err)
 
 
 func _process(delta: float) -> void:
@@ -199,7 +199,7 @@ func _process(delta: float) -> void:
 	if _connect_timeout > 0.0:
 		_connect_timeout -= delta
 		if _connect_timeout <= 0.0:
-			status_changed.emit("直接つながりませんでした。\n全員が同じ Wi-Fi につないで(携帯回線は切って)、ページを読み込み直してもう一度試してください")
+			status_changed.emit(tr("直接つながりませんでした。\n全員が同じ Wi-Fi につないで(携帯回線は切って)、ページを読み込み直してもう一度試してください"))
 	_ws.poll()
 	var st := _ws.get_ready_state()
 	if st == WebSocketPeer.STATE_OPEN:
@@ -208,7 +208,7 @@ func _process(delta: float) -> void:
 	elif st == WebSocketPeer.STATE_CLOSED and _ws_was_open:
 		_ws_was_open = false
 		if _conns.is_empty() or not _any_connected():
-			status_changed.emit("仲介サーバーから切れました。ページを読み込み直してください")
+			status_changed.emit(tr("仲介サーバーから切れました。ページを読み込み直してください"))
 
 
 func _any_connected() -> bool:
@@ -231,10 +231,10 @@ func _on_ntfy_packet(text: String) -> void:
 
 func _on_signaling_open() -> void:
 	if is_host:
-		status_changed.emit("部屋ができました。合言葉: %s" % room_code)
+		status_changed.emit(tr("部屋ができました。合言葉: %s") % room_code)
 	else:
 		# ホストに接続を申し込む(申し込みは、直接通信の準備ができたら送られる)
-		status_changed.emit("仲介サーバーにつながりました。部屋 %s に申し込んでいます…" % room_code)
+		status_changed.emit(tr("仲介サーバーにつながりました。部屋 %s に申し込んでいます…") % room_code)
 		var conn := _make_conn(_host_signal_id, 1)
 		conn.create_offer()
 		_connect_timeout = CONNECT_TIMEOUT
@@ -259,7 +259,7 @@ func _send_next() -> void:
 	req.request_completed.connect(func(result: int, code: int, _h: PackedStringArray, _b: PackedByteArray) -> void:
 		req.queue_free()
 		if result != HTTPRequest.RESULT_SUCCESS or code >= 400:
-			status_changed.emit("仲介サーバーに送れませんでした(%d/%d)。少し待ってもう一度試してください" % [result, code])
+			status_changed.emit(tr("仲介サーバーに送れませんでした(%d/%d)。少し待ってもう一度試してください") % [result, code])
 		_send_next())
 	req.request(NTFY_POST % item[0], ["Content-Type: text/plain"], HTTPClient.METHOD_POST, item[1])
 
@@ -275,12 +275,12 @@ func _on_signal_message(msg: Dictionary) -> void:
 				var gid: int = int(msg.get("godot_id", 0))
 				if gid < 2 or _conns.has(src):
 					return
-				status_changed.emit("だれかが入ろうとしています…")
+				status_changed.emit(tr("だれかが入ろうとしています…"))
 				var conn := _make_conn(src, gid)
 				conn.set_remote_description("offer", msg["sdp"])
 		"ANSWER":
 			if not is_host and _conns.has(src):
-				status_changed.emit("ホストから返事が来ました。直接つないでいます…")
+				status_changed.emit(tr("ホストから返事が来ました。直接つないでいます…"))
 				_conns[src]["conn"].set_remote_description("answer", msg["sdp"])
 		"CANDIDATE":
 			if _conns.has(src):

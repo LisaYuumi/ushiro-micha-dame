@@ -21,6 +21,8 @@ static var show_personality := false
 static var stamp_words := {}
 ## ほかの人の自作の言葉を表示せず、初期の言葉で表示する
 static var hide_custom_words := false
+## 自分で選んだ言語("" なら端末の言語に合わせる。Locale)
+static var lang := ""
 static var _loaded := false
 
 
@@ -35,6 +37,7 @@ static func load_saved() -> void:
 	color = parse_color(str(cfg.get_value("profile", "color", "")), color)
 	show_personality = bool(cfg.get_value("profile", "show_personality", false))
 	hide_custom_words = bool(cfg.get_value("profile", "hide_custom_words", false))
+	lang = str(cfg.get_value("profile", "lang", ""))
 	stamp_words = clean_words(cfg.get_value("profile", "stamp_words", {}))
 
 
@@ -44,6 +47,7 @@ static func save() -> void:
 	cfg.set_value("profile", "color", "#" + color.to_html(false))
 	cfg.set_value("profile", "show_personality", show_personality)
 	cfg.set_value("profile", "hide_custom_words", hide_custom_words)
+	cfg.set_value("profile", "lang", lang)
 	cfg.set_value("profile", "stamp_words", stamp_words)
 	cfg.save(PATH)
 
@@ -84,4 +88,4 @@ static func clean_words(v: Variant) -> Dictionary:
 
 ## 通信で送れる形
 static func to_dict() -> Dictionary:
-	return {"name": player_name, "color": "#" + color.to_html(false), "words": stamp_words}
+	return {"name": player_name, "color": "#" + color.to_html(false), "words": stamp_words, "lang": Locale.current()}

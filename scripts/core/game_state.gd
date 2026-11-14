@@ -152,6 +152,8 @@ var active_stamps: Dictionary = {}
 var minion_id: int = -1
 ## 人ごとの、自分で決めたスタンプの言葉(id -> {種類: 言葉})。ない人・ない種類は初期の言葉
 var stamp_words: Dictionary = {}
+## 人ごとの言語(id -> "ja" / "en")。自作の言葉は、受け取った人と言語が同じときだけ出す
+var stamp_langs: Dictionary = {}
 ## 前のラウンドの手下(発表ずみなので、全員が知っている。ボットの信用に使う)
 var last_minion_id: int = -1
 
@@ -994,6 +996,7 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"obstacles": obstacles,
 		"milk_left": milk_left,
 		"stamp_words": stamp_words,
+		"stamp_langs": stamp_langs,
 		"round_serial": round_serial,
 		"seat_count": seat_count,
 		"minion_id": minion_shown,
@@ -1054,6 +1057,7 @@ func apply_snapshot(s: Dictionary) -> void:
 	obstacles = s.get("obstacles", [])
 	milk_left = s.get("milk_left", 0)
 	stamp_words = s.get("stamp_words", {})
+	stamp_langs = s.get("stamp_langs", {})
 	round_serial = s["round_serial"]
 	minion_id = s.get("minion_id", -1)
 	last_minion_id = s.get("last_minion_id", -1)

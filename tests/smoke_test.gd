@@ -21,6 +21,8 @@ var _fall_done := false
 
 
 func _initialize() -> void:
+	# テストは日本語の文字で確かめる(端末の言語に関係なく)
+	Locale.setup("ja")
 	_test_drop_happens_for_every_seed()
 	_test_otetsuki_when_nothing_behind()
 	_test_found_when_handkerchief_behind()
@@ -39,6 +41,7 @@ func _initialize() -> void:
 	_test_stamp_truthfulness()
 	_test_stamp_words()
 	_test_milk_art()
+	_test_languages()
 	_test_custom_stamp_words()
 	_test_bots_send_and_trust_stamps()
 	_test_player_oni_setup()
@@ -65,6 +68,9 @@ func _initialize() -> void:
 	_test_character_model()
 	_test_profile_names_and_colors()
 
+	# 本番の画面も日本語で動かす(端末の言語に関係なく)
+	Profile.load_saved()
+	Profile.lang = "ja"
 	_main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(_main)
 
@@ -532,6 +538,42 @@ func _test_custom_stamp_words() -> void:
 	Profile.hide_custom_words = false
 
 
+func _test_languages() -> void:
+	# 英語に切りかえる
+	Locale.setup("en")
+	_check(Locale.current() == "en", "英語に切りかえられる")
+	_check(Texts.stamp(Stamps.DROPPED) == "Behind you!😨" and Texts.stamp(Stamps.SAFE) == "You're safe👍" \
+			and Texts.stamp(Stamps.TRUST) == "Trust me🥺", "英語のスタンプ(%s)" % Texts.stamp(Stamps.DROPPED))
+	_check(Locale.t("ひとりで遊ぶ") == "Play solo", "画面の文字が英語になる")
+	_check(Locale.t("ラウンド %d/%d") % [2, 5] == "Round 2/5", "数字の入る文も英語になる")
+	_check(Locale.actor_name("ボット3(せっかち)", true) == "Bot 3 (hasty)", "ボットの名前も英語(%s)" % Locale.actor_name("ボット3(せっかち)", true))
+	_check(Locale.actor_name("たろう") == "たろう", "人がつけた名前はそのまま")
+	_check(Items.name_of(0) == "Handkerchief", "落とし物の名前も英語")
+	# 自作の言葉: 言語が同じ人には出し、ちがう人には受け取った人の言語の初期の言葉で出す
+	var s := GameState.new()
+	s.start_match(5)
+	s.stamp_words[2] = {Stamps.SAFE: "だいじょぶ"}
+	s.stamp_langs[2] = "ja"
+	_check(HeadOverlay.stamp_text(s, 2, Stamps.SAFE) == "You're safe👍", "言語がちがえば、自作の言葉は英語の初期の言葉で出す")
+	s.stamp_words[3] = {Stamps.SAFE: "No worry"}
+	s.stamp_langs[3] = "en"
+	_check(HeadOverlay.stamp_text(s, 3, Stamps.SAFE) == "No worry👍", "言語が同じなら自作の言葉を出す")
+	var g := GameState.new()
+	g.apply_snapshot(s.snapshot())
+	_check(str(g.stamp_langs.get(2, "")) == "ja", "言語も通信で届く")
+	# 文字がはみ出さない: 長い英語でも、ボタンの幅に収まる大きさになる
+	var b := Button.new()
+	b.text = "Banana the chaser"
+	UiStyle.fit(b, 28, 150.0)
+	var size: int = b.get_theme_font_size("font_size")
+	var w := HudFont.get_font().get_string_size(b.text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	_check(w <= 150.0 and size < 28, "長い文字は小さくして収める(%d px / 幅 %.0f)" % [size, w])
+	b.free()
+	Locale.setup("ja")
+	_check(Texts.stamp(Stamps.DROPPED) == "落ちてる😨", "日本語に戻せる")
+	_check(Locale.pick("") in Locale.SUPPORTED, "端末の言語に合わせて選べる")
+
+
 func _test_milk_art() -> void:
 	var tex := MilkArt.texture(Vector2(1280, 720), 1.0)
 	_check(tex != null and tex.get_width() == 1280 and tex.get_height() == 720, "牛乳の絵(SVG)が画面の大きさで作れる")
@@ -551,7 +593,7 @@ func _test_stamp_words() -> void:
 	for k in Stamps.ALL:
 		_check(WorldView.STAMP_COLORS.has(k), "%s に色がある" % k)
 	_check(not Stamps.says_look(Stamps.SAFE) and Stamps.says_look(Stamps.TRUST), "まだへいき=見るな、信じて=見ろ")
-	_check(Texts.t("send_to") % "ボット3" == "ボット3に送る", "「◯◯に送る」")
+	_check(Locale.t("%sに送る") % "ボット3" == "ボット3に送る", "「◯◯に送る」")
 
 
 func _test_stamp_truthfulness() -> void:

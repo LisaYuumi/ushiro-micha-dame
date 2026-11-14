@@ -8,6 +8,8 @@ signal solo_pressed
 signal host_pressed
 signal join_pressed(code: String)
 signal start_pressed
+## 言語ボタン(日本語 ⇔ English)。切りかえは main がする(画面全体の文字を作り直すため)
+signal language_pressed
 
 var _panel: PanelContainer
 var _title: Label
@@ -33,12 +35,15 @@ var _words_box: VBoxContainer
 var _word_buttons := {}
 var _word_edits := {}
 var _hide_words_button: Button
+var _lang_button: Button
 var _preview: Panel
 
 
 func _ready() -> void:
 	layer = 10
 	Profile.load_saved()
+	# 言語: 自分で選んだ言語、なければ端末の言語
+	Locale.setup(Profile.lang)
 	var bg := ColorRect.new()
 	var sky := GameConfig.COLOR_SKY
 	sky.a = 0.93
@@ -66,7 +71,16 @@ func _ready() -> void:
 	_menu.add_theme_constant_override("separation", 12)
 	root.add_child(_menu)
 	_build_profile_rows(_menu)
-	_menu.add_child(_button("スタンプの言葉を変える  😨 👍 🥺", func() -> void: _show_words(), Vector2(0, 58)))
+	var row2 := HBoxContainer.new()
+	row2.add_theme_constant_override("separation", 12)
+	_menu.add_child(row2)
+	var words := _button("スタンプの言葉を変える  😨 👍 🥺", func() -> void: _show_words(), Vector2(0, 58))
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row2.add_child(words)
+	# 言語の切りかえ(どの言語の人にもわかるように、地球の印と言語の名前で)
+	_lang_button = _button("", func() -> void: language_pressed.emit(), Vector2(250, 58))
+	row2.add_child(_lang_button)
+	_update_language_button()
 	# 大きいボタンを2列に(押しやすいように)
 	var menu_grid := GridContainer.new()
 	menu_grid.columns = 2
@@ -110,6 +124,8 @@ func _ready() -> void:
 	_host_box.add_child(_button("スタート", func() -> void: start_pressed.emit(), Vector2(0, 100), true))
 
 	show_menu()
+	# ほかの画面(ボタン)が先にできていても、決まった言語の文字の長さで大きさを合わせ直す
+	UiStyle.refit_all()
 
 
 ## 名前(タップで入力)と、体の色(10色+カラーコード)
@@ -170,7 +186,7 @@ func _build_words_box(root: VBoxContainer) -> void:
 	_words_box = VBoxContainer.new()
 	_words_box.add_theme_constant_override("separation", 10)
 	root.add_child(_words_box)
-	_words_box.add_child(_label("スタンプの言葉(%d文字まで。絵文字は変わりません)" % WordFilter.MAX_LEN, 24))
+	_words_box.add_child(_label(tr("スタンプの言葉(%d文字まで。絵文字は変わりません)") % WordFilter.MAX_LEN, 24))
 	for k in Stamps.ALL:
 		var kind: String = k
 		var row := HBoxContainer.new()
@@ -225,7 +241,7 @@ func _show_words() -> void:
 
 func _ask_word(kind: String) -> void:
 	var now: String = Profile.stamp_words.get(kind, Texts.stamp_word(kind))
-	var t := _prompt("%s の言葉(%d文字まで)" % [Texts.STAMP_EMOJI[kind], WordFilter.MAX_LEN], now)
+	var t := _prompt(tr("%s の言葉(%d文字まで)") % [Texts.STAMP_EMOJI[kind], WordFilter.MAX_LEN], now)
 	if t != "":
 		_set_word(kind, t)
 
@@ -264,16 +280,16 @@ func _update_words() -> void:
 	for k in Stamps.ALL:
 		var word: String = Profile.stamp_words.get(k, "")
 		if _word_buttons.has(k):
-			(_word_buttons[k] as Button).text = "%s(タップで変える)" % (word if word != "" else Texts.stamp_word(k))
+			(_word_buttons[k] as Button).text = tr("%s(タップで変える)") % (word if word != "" else Texts.stamp_word(k))
 		if _word_edits.has(k):
 			var e: LineEdit = _word_edits[k]
 			if not e.has_focus():
 				e.text = word
-	_hide_words_button.text = "ほかの人の自作の言葉: %s" % ("表示しない(初期の言葉で表示)" if Profile.hide_custom_words else "表示する")
+	_hide_words_button.text = tr("ほかの人の自作の言葉: %s") % ("表示しない(初期の言葉で表示)" if Profile.hide_custom_words else "表示する")
 
 
 func _ask_name() -> void:
-	var t := _prompt("名前(%d文字まで)" % Profile.NAME_MAX, Profile.player_name)
+	var t := _prompt(tr("名前(%d文字まで)") % Profile.NAME_MAX, Profile.player_name)
 	if t != "":
 		_set_name(t)
 
@@ -310,7 +326,7 @@ func _set_color(c: Color) -> void:
 func _update_profile() -> void:
 	(_preview.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = Profile.color
 	if _name_button:
-		_name_button.text = "%s(タップで名前を変える)" % Profile.player_name
+		_name_button.text = tr("%s(タップで名前を変える)") % Locale.actor_name(Profile.player_name)
 	for i in _color_buttons.size():
 		var c: Color = Profile.COLORS[i]
 		var chosen := c.is_equal_approx(Profile.color)
@@ -326,8 +342,23 @@ func _toggle_players() -> void:
 	_update_players_button()
 
 
+func _update_language_button() -> void:
+	_lang_button.text = "🌐 " + str(Locale.NAMES.get(Locale.current(), Locale.current()))
+
+
+## 言語を切りかえたあと: 名前・人数・スタンプの言葉など、% で作った文字を作り直す
+## (そのままの文字は、Godot が自動で新しい言語にする)
+func refresh_texts() -> void:
+	_update_language_button()
+	_update_profile()
+	_update_players_button()
+	_update_words()
+	if _words_box.visible:
+		set_status("")
+
+
 func _update_players_button() -> void:
-	_players_button.text = "人数: %d人\n(タップで変える)" % players
+	_players_button.text = tr("人数: %d人\n(タップで変える)") % players
 
 
 func show_menu() -> void:
@@ -344,7 +375,7 @@ func show_host(code: String, joined: int) -> void:
 	_words_box.visible = false
 	_join_box.visible = false
 	_host_box.visible = true
-	_players_label.text = "合言葉: %s\n入っている人: %d人(あなたをふくむ) / %d人で遊ぶ\n足りない席はボットが座ります" % [code, joined, players]
+	_players_label.text = tr("合言葉: %s\n入っている人: %d人(あなたをふくむ) / %d人で遊ぶ\n足りない席はボットが座ります") % [code, joined, players]
 
 
 ## 参加者: ホストがスタートするのを待つ
@@ -386,7 +417,7 @@ func _on_key(key: String) -> void:
 
 
 func _update_code() -> void:
-	_code_label.text = "合言葉: %s" % (_code + "____".substr(0, 4 - _code.length()))
+	_code_label.text = tr("合言葉: %s") % (_code + "____".substr(0, 4 - _code.length()))
 
 
 # --- 部品 ---
@@ -410,6 +441,8 @@ func _button(text: String, on_press: Callable, min_size := Vector2(0, 66), accen
 	UiStyle.button(b, accent, 28)
 	b.pressed.connect(on_press)
 	_buttons.append(b)
+	# 英語など言葉が長くても、ボタンからはみ出さないように(広がるボタンは、半分の幅を目安に)
+	UiStyle.fit(b, 28, (min_size.x if min_size.x > 0.0 else 400.0) - 28.0)
 	return b
 
 

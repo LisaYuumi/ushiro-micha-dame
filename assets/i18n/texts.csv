@@ -1,0 +1,274 @@
+keys,ja,en
+ハンカチ,ハンカチ,Handkerchief
+上履き,上履き,Indoor shoe
+ランドセル,ランドセル,School bag
+机,机,Desk
+教卓,教卓,Teacher's desk
+日本語,日本語,日本語
+ボット,ボット,Bot
+ボット%d,ボット%d,Bot %d
+(%s),(%s), (%s)
+プレイヤー,プレイヤー,Player
+プレイヤー%d,プレイヤー%d,Player %d
+(ボット),(ボット), (bot)
+せっかち,せっかち,hasty
+慎重,慎重,careful
+うたがい屋,うたがい屋,doubter
+おしゃべり,おしゃべり,chatty
+あなた,あなた,You
+あなた!,あなた!,You!
+鬼,鬼,Oni
+追う人,追う人,chaser
+落ちてる,落ちてる,Behind you!
+平気,平気,You're safe
+信じて,信じて,Trust me
+送る相手,送る相手,Send to
+%sに送る,%sに送る,Send to %s
+スタンプの言葉を変える  😨 👍 🥺,スタンプの言葉を変える  😨 👍 🥺,Change stamp words  😨 👍 🥺
+スタンプの言葉(%d文字まで。絵文字は変わりません),スタンプの言葉(%d文字まで。絵文字は変わりません),Stamp words (up to %d characters. Emoji stay the same)
+初期の言葉に戻す,初期の言葉に戻す,Reset to default
+%s の言葉(%d文字まで),%s の言葉(%d文字まで),Words for %s (up to %d characters)
+初期の言葉に戻しました,初期の言葉に戻しました,Reset to the default words
+%s(タップで変える),%s(タップで変える),%s (tap to change)
+ほかの人の自作の言葉: %s,ほかの人の自作の言葉: %s,Others' custom words: %s
+表示しない(初期の言葉で表示),表示しない(初期の言葉で表示),Hide (show defaults)
+表示する,表示する,Show
+落とす,落とす,Drop
+牛乳,牛乳,Milk
+フェイク,フェイク,Fake
+鬼にバナナ,鬼にバナナ,Banana the oni
+追う人にバナナ,追う人にバナナ,Banana the chaser
+◀ 内側,◀ 内側,◀ Inner
+外側 ▶,外側 ▶,Outer ▶
+振り向く,振り向く,Look back
+からっぽ,からっぽ,Empty
+えいっ,えいっ,Splash!
+メニュー,メニュー,Menu
+やり直し,やり直し,Restart
+役を変えて新しい試合,役を変えて新しい試合,"New match, other role"
+上から見る(確認用),上から見る(確認用),Top view (test)
+あそびかた,あそびかた,How to play
+撮影モード(開発用),撮影モード(開発用),Photo mode (dev)
+とじる,とじる,Close
+ボットの性格を表示: %s,ボットの性格を表示: %s,Show bot personality: %s
+オン,オン,On
+オフ,オフ,Off
+HOW_TO_PLAY,"・振り向く(長押し): 押している間だけ後ろを見る。落ちていたら、そのまま拾って走る
+・お手つき(なにもないのに振り向く): 輪から抜けて真ん中で休む。そのラウンドは0点。全員の後ろが見えて、だれにでもスタンプを送れる
+・人をタップ: 画面の下に3つの言葉のボタンが出るので、選んで送る(同じ人には1ラウンド1回)
+・鬼: 自動で前に歩く。スティックを歩く向きに倒すと速く、反対に倒すと止まり、倒し続けると少し戻れる(3歩分まで)。落とす・フェイク(落とす音だけ)・牛乳(牛乳ボタン→「えいっ」になったら、座っている人をタップしてかける。もう一度押すとやめる。画面が半周のあいだ白くなる。1ラウンド1回)
+・追いかけっこ: 鬼が輪の外側を2周して空いた席に座れば鬼の勝ち、それまでにタッチすれば追いかけた人の勝ち。走るのは自動(2人とも同じ速さ)。タップでジャンプ、左右にスワイプ(か ◀ ▶)で内側・外側の列に動く。低い物(バケツ・バナナ)はジャンプか列を変えて、高い物(椅子・机)は列を変えてよける。ぶつかると転ぶ。座っている人はバナナを投げられる
+キーボード: スペース=振り向く 1〜3=スタンプ M=牛乳 Z X C=鬼のスタンプ 走るとき: スペース/W=ジャンプ A/D=内側/外側 鬼が歩くとき: A/D=速く/止まる・戻る
+ E=落とす F=フェイク B/N=バナナ R=やり直し O=役を変える F1=上から見る K=転ぶ L=牛乳をかぶる(確認用) Tab=メニュー","- Look back (hold): look behind you while held. If something was dropped there, you pick it up and run
+- Wrong look (nothing behind you): you leave the ring and rest in the middle. 0 points this round. You can see behind everyone and send stamps to anyone
+- Tap a person: three word buttons appear at the bottom. Pick one to send (once per person per round)
+- Oni: walks forward on its own. Push the stick the way you walk to go faster, the other way to stop, and keep holding to step back (up to 3 steps). Drop / Fake (only the drop sound) / Milk (press Milk, then when it says ""Splash!"" tap a seated person. Press again to cancel. Their screen goes white for half a lap. Once per round)
+- Chase: the oni wins by running 2 laps outside the ring and sitting in the empty seat; the chaser wins by touching the oni first. Running is automatic (both run at the same speed). Tap to jump, swipe left/right (or ◀ ▶) to change lanes. Jump or change lanes to avoid low things (buckets, bananas); change lanes to avoid tall things (chairs, desks). Bumping into one makes you fall. Seated players can throw bananas
+Keyboard: Space=look back 1-3=stamps M=milk Z X C=oni stamps  While running: Space/W=jump A/D=inner/outer  Oni walking: A/D=faster/stop & step back
+ E=drop F=fake B/N=banana R=restart O=switch role F1=top view K=fall L=get milk (test) Tab=menu"
+つながりました! ホストがスタートするのを待っています,つながりました! ホストがスタートするのを待っています,Connected! Waiting for the host to start
+(作成中),(作成中),(creating)
+部屋 %s をさがしています…,部屋 %s をさがしています…,Looking for room %s…
+%s が抜けたのでボットが代わります,%s が抜けたのでボットが代わります,%s left. A bot takes over
+スタート!,スタート!,Start!
+"つながりました! いまは試合中です。
+次の試合から参加できます(ホストが新しい試合を始めるまで待ってください)","つながりました! いまは試合中です。
+次の試合から参加できます(ホストが新しい試合を始めるまで待ってください)","Connected! A match is in progress.
+You can join from the next match (wait for the host to start a new one)"
+つながりました! いま %d人。ホストがスタートするのを待っています,つながりました! いま %d人。ホストがスタートするのを待っています,Connected! %d players now. Waiting for the host to start
+"ホストとの通信が切れました
+ページを読み込み直してください","ホストとの通信が切れました
+ページを読み込み直してください","Lost connection to the host
+Please reload the page"
+部屋を作っています…,部屋を作っています…,Creating a room…
+ホストとつながりました,ホストとつながりました,Connected to the host
+ホストとの通信が切れました,ホストとの通信が切れました,Lost connection to the host
+仲介サーバーにつなげません(%d),仲介サーバーにつなげません(%d),Can't reach the relay server (%d)
+"直接つながりませんでした。
+全員が同じ Wi-Fi につないで(携帯回線は切って)、ページを読み込み直してもう一度試してください","直接つながりませんでした。
+全員が同じ Wi-Fi につないで(携帯回線は切って)、ページを読み込み直してもう一度試してください","Couldn't connect directly.
+Put everyone on the same Wi-Fi (turn off mobile data), reload the page and try again"
+仲介サーバーから切れました。ページを読み込み直してください,仲介サーバーから切れました。ページを読み込み直してください,Disconnected from the relay server. Please reload the page
+部屋ができました。合言葉: %s,部屋ができました。合言葉: %s,Room created. Code: %s
+仲介サーバーにつながりました。部屋 %s に申し込んでいます…,仲介サーバーにつながりました。部屋 %s に申し込んでいます…,Connected to the relay server. Joining room %s…
+仲介サーバーに送れませんでした(%d/%d)。少し待ってもう一度試してください,仲介サーバーに送れませんでした(%d/%d)。少し待ってもう一度試してください,Couldn't send to the relay server (%d/%d). Wait a moment and try again
+だれかが入ろうとしています…,だれかが入ろうとしています…,Someone is joining…
+ホストから返事が来ました。直接つないでいます…,ホストから返事が来ました。直接つないでいます…,The host answered. Connecting directly…
+お手つきでお休み中(このラウンド0点),お手つきでお休み中(このラウンド0点),Out after a wrong look (0 pts this round)
+あなたは鬼の手下,あなたは鬼の手下,You are the oni's helper
+あなたは鬼の手下!,あなたは鬼の手下!,You're the oni's helper!
+だまして +1点,だまして +1点,Fool someone +1
+鬼が勝てば +2点,鬼が勝てば +2点,Oni wins +2
+ほかの人にはないしょだよ,ほかの人にはないしょだよ,Keep it secret!
+次へ進むのはホストです,次へ進むのはホストです,The host moves on
+オンラインでは、鬼は負けた人がやります,オンラインでは、鬼は負けた人がやります,"Online, the loser becomes the oni"
+あなたが鬼で新しい試合,あなたが鬼で新しい試合,New match: you are the oni
+座る側で新しい試合,座る側で新しい試合,New match: you sit
+撮影モードは、ひとりで遊ぶときだけ,撮影モードは、ひとりで遊ぶときだけ,Photo mode is only for solo play
+かける人をタップ!,かける人をタップ!,Tap someone to splash!
+かける人をタップしてね,かける人をタップしてね,Tap someone to splash
+"教えた! +%d点
+(%s を助けた)","教えた! +%d点
+(%s を助けた)","Helped! +%d
+(you helped %s)"
+"だました! +%d点
+(%s が引っかかった)","だました! +%d点
+(%s が引っかかった)","Fooled! +%d
+(%s fell for it)"
+となりの人には送れない,となりの人には送れない,You can't send to a neighbor
+この人には、このラウンドもう送った,この人には、このラウンドもう送った,Already sent to them this round
+"この人はスタンプがいっぱい(%d つ)
+鬼が進むと空く。また送れるよ","この人はスタンプがいっぱい(%d つ)
+鬼が進むと空く。また送れるよ","Their stamps are full (%d)
+A slot opens as the oni moves on"
+いまは送れない,いまは送れない,Can't send now
+本物,本物,real
+ニセ,ニセ,fake
+%s が %s にバナナ!,%s が %s にバナナ!,%s threw a banana at %s!
+つるっ! %s が転んだ,つるっ! %s が転んだ,Whoops! %s fell
+"もう振り向けない!
+(1ラウンド%d回まで)","もう振り向けない!
+(1ラウンド%d回まで)","No more looks!
+(%d per round)"
+空いた席には落とせない,空いた席には落とせない,Can't drop behind an empty seat
+席の後ろで押してね,席の後ろで押してね,Press it behind a seat
+牛乳かけられた!,牛乳かけられた!,You got milk!
+%s に牛乳!,%s に牛乳!,Milk on %s!
+"お手つき!
+真ん中でお休み(このラウンド0点)","お手つき!
+真ん中でお休み(このラウンド0点)","Wrong look!
+Rest in the middle (0 pts this round)"
+"4周したので
+次の席で自動で落とす","4周したので
+次の席で自動で落とす","4 laps done
+Dropping at the next seat"
+あった!,あった!,Found it!
+"追いかけろ!
+タップでジャンプ・左右にスワイプでよける","追いかけろ!
+タップでジャンプ・左右にスワイプでよける","Chase!
+Tap to jump, swipe left/right to dodge"
+"気づかれた! 逃げろ!
+タップでジャンプ・左右にスワイプでよける","気づかれた! 逃げろ!
+タップでジャンプ・左右にスワイプでよける","Spotted! Run!
+Tap to jump, swipe left/right to dodge"
+%s が追いかけた!,%s が追いかけた!,%s gives chase!
+鬼 %d周目(%d周で自動で落とす),鬼 %d周目(%d周で自動で落とす),Oni lap %d (auto-drop at %d)
+鬼が座るまで あと%d周,鬼が座るまで あと%d周,Oni sits in %d lap(s)
+あなたは鬼,あなたは鬼,You are the oni
+ラウンド %d/%d,ラウンド %d/%d,Round %d/%d
+いまの落とし物:%s,いまの落とし物:%s,Item: %s
+あなた %d点,あなた %d点,You %d pts
+ラウンド 1/5,ラウンド 1/5,Round 1/5
+いまの落とし物:ハンカチ,いまの落とし物:ハンカチ,Item: Handkerchief
+見えるまで,見えるまで,Clears in
+タッチ成功!,タッチ成功!,Touched!
+鬼をつかまえた! やったね,鬼をつかまえた! やったね,You caught the oni!
+つかまっちゃった…,つかまっちゃった…,Caught…
+%s にタッチされた,%s にタッチされた,%s touched you
+タッチ!,タッチ!,Touch!
+%s が鬼をつかまえた!,%s が鬼をつかまえた!,%s caught the oni!
+セーフ!,セーフ!,Safe!
+空いた席にすわれた〜!,空いた席にすわれた〜!,You made it to the seat!
+すわられちゃった…,すわられちゃった…,They took your seat…
+あとちょっとだったのに!,あとちょっとだったのに!,So close!
+鬼のかち!,鬼のかち!,Oni wins!
+%s の席にすわった!,%s の席にすわった!,Sat in %s's seat!
+気づかなかった〜!,気づかなかった〜!,You didn't notice!
+うしろに落ちてたよ…,うしろに落ちてたよ…,It was right behind you…
+気づかれなかった!,気づかれなかった!,Nobody noticed!
+%s はぜんぜん気づかなかった,%s はぜんぜん気づかなかった,%s never noticed
+%s が気づかなかった!,%s が気づかなかった!,%s didn't notice!
+全員お手つき!,全員お手つき!,Everyone looked wrong!
+だれも残らなかった〜!,だれも残らなかった〜!,Nobody was left!
+全員お手つき…,全員お手つき…,Everyone looked wrong…
+鬼のかち! みんな振り向きすぎ!,鬼のかち! みんな振り向きすぎ!,Oni wins! Too much looking back!
+さいごの結果へ,さいごの結果へ,Final results
+次のラウンド(%s)へ,次のラウンド(%s)へ,Next round (%s)
+ホストが「次へ」を押すと,ホストが「次へ」を押すと,When the host presses Next: 
+次へ ▶ ,次へ ▶ ,Next ▶ 
+ラウンド %d: %s,ラウンド %d: %s,Round %d: %s
+%d位,%d位,#%d
+ゆうしょう!,ゆうしょう!,Champion!
+試合おわり!,試合おわり!,Match over!
+あなたがいちばん!,あなたがいちばん!,You're number one!
+いちばんは %s!,いちばんは %s!,%s is number one!
+ホストが「次へ」を押すと新しい試合,ホストが「次へ」を押すと新しい試合,A new match starts when the host presses Next
+新しい試合へ ▶,新しい試合へ ▶,New match ▶
+手下はだれ?,手下はだれ?,Who's the helper?
+タップでめくってね,タップでめくってね,Tap to flip
+鬼の手下は…,鬼の手下は…,The oni's helper was…
+だったよ!,だったよ!, 
+鬼がかって +%d点,鬼がかって +%d点,Oni won +%d
+%d点,%d点,%d pts
+うしろ見ちゃダメ!,うしろ見ちゃダメ!,Don't Look Back!
+ひとりで遊ぶ,ひとりで遊ぶ,Play solo
+"部屋を作る
+(ホスト)","部屋を作る
+(ホスト)","Make a room
+(host)"
+"部屋に入る
+(合言葉)","部屋に入る
+(合言葉)","Join a room
+(code)"
+合言葉: ____,合言葉: ____,Code: ____
+けす,けす,Del
+入る,入る,Join
+もどる,もどる,Back
+スタート,スタート,Start
+なまえ,なまえ,name
+名前(%d文字まで),名前(%d文字まで),Name (up to %d characters)
+カラーコード(例: #4D96FF),カラーコード(例: #4D96FF),Color code (e.g. #4D96FF)
+カラーコードが読めませんでした(例: #4D96FF),カラーコードが読めませんでした(例: #4D96FF),Couldn't read that color code (e.g. #4D96FF)
+%s(タップで名前を変える),%s(タップで名前を変える),%s (tap to rename)
+"人数: %d人
+(タップで変える)","人数: %d人
+(タップで変える)","Players: %d
+(tap to change)"
+"合言葉: %s
+入っている人: %d人(あなたをふくむ) / %d人で遊ぶ
+足りない席はボットが座ります","合言葉: %s
+入っている人: %d人(あなたをふくむ) / %d人で遊ぶ
+足りない席はボットが座ります","Code: %s
+Joined: %d (including you) / playing with %d
+Bots fill the empty seats"
+ホストの画面に出ている4桁の数字を入れてください,ホストの画面に出ている4桁の数字を入れてください,Enter the 4-digit code shown on the host's screen
+4桁入れてください,4桁入れてください,Enter 4 digits
+合言葉: %s,合言葉: %s,Code: %s
+正面,正面,Front
+横,横,Side
+後ろ,後ろ,Back
+斜め前,斜め前,3/4
+ふつう,ふつう,Normal
+困り眉,困り眉,Worried
+汗だく,汗だく,Sweaty
+放心,放心,Dazed
+座る,座る,Sit
+体育座り,体育座り,Hug knees
+立つ,立つ,Stand
+走る,走る,Run
+転ぶ,転ぶ,Fall
+向き,向き,Facing
+表情,表情,Face
+ポーズ,ポーズ,Pose
+色,色,Color
+カメラ,カメラ,Camera
+近く,近く,Near
+遠く,遠く,Far
+背景の色,背景の色,Background
+輪の場面,輪の場面,Ring scene
+UIを消す,UIを消す,Hide UI
+お手つき!,お手つき!,Oops!
+ばしゃっ,ばしゃっ,Splash
+ぽいっ,ぽいっ,Toss
+日,日,Sun
+月,月,Mon
+火,火,Tue
+水,水,Wed
+木,木,Thu
+金,金,Fri
+土,土,Sat
+%d月%d日(%s),%d月%d日(%s),%d/%d (%s)
+日直 %s,日直 %s,On duty: %s
+なかよく げんきに がんばろう,なかよく げんきに がんばろう,"Be kind, be happy, do your best"
+きょうの めあて,きょうの めあて,Today's goal
+わすれものを しない,わすれものを しない,Don't forget your things

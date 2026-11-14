@@ -113,3 +113,45 @@ static func dot(color: Color, size: float = 26.0) -> Panel:
 	d.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	d.add_theme_stylebox_override("panel", s)
 	return d
+
+
+## 文字がはみ出さないように、文字の大きさを決める(英語などで文字が長くなっても、ボタンや札の中に収める)。
+## ctrl: Button か Label。base: ふつうの大きさ。max_w: 文字を入れてよい横幅(ピクセル)。
+## 言語を切りかえたら refit_all() で、登録したものを全部やり直す
+static var _fits: Array = []
+
+
+static func fit(ctrl: Control, base: int, max_w: float, min_size: int = 12) -> void:
+	_fits.append([weakref(ctrl), base, max_w, min_size])
+	_apply_fit(ctrl, base, max_w, min_size)
+
+
+static func refit_all() -> void:
+	var keep: Array = []
+	for f in _fits:
+		var c: Control = (f[0] as WeakRef).get_ref()
+		if c == null:
+			continue
+		keep.append(f)
+		_apply_fit(c, f[1], f[2], f[3])
+	_fits = keep
+
+
+static func _apply_fit(ctrl: Control, base: int, max_w: float, min_size: int) -> void:
+	var text := ""
+	if ctrl is Button:
+		text = (ctrl as Button).text
+	elif ctrl is Label:
+		text = (ctrl as Label).text
+	text = String(TranslationServer.translate(text))
+	var font := HudFont.get_font()
+	var size := base
+	while size > min_size:
+		var widest := 0.0
+		for line in text.split("\n"):
+			widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x)
+		if widest <= max_w:
+			break
+		size -= 1
+	ctrl.add_theme_font_size_override("font_size", size)
+

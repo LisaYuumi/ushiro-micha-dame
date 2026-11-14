@@ -36,7 +36,7 @@ func build(state: GameState, models: Dictionary, show_personality: bool) -> void
 	for a in state.actors:
 		if a.id == state.local_player_id or not models.has(a.id):
 			continue
-		var tag_name: String = a.display_name if show_personality else a.display_name.get_slice("(", 0)
+		var tag_name: String = Locale.actor_name(a.display_name, show_personality)
 		var p := UiStyle.pill(tag_name, FONT_SIZE)
 		p.visible = false
 		add_child(p)
@@ -61,7 +61,7 @@ func build(state: GameState, models: Dictionary, show_personality: bool) -> void
 			styles.append(st)
 			labels.append(l)
 		_tags[a.id] = {"panel": p, "model": models[a.id], "bubbles": bubbles, "styles": styles, "labels": labels}
-	_marker = UiStyle.pill(Texts.t("send_target") + " ▼", 20, true)
+	_marker = UiStyle.pill(Locale.t("送る相手") + " ▼", 20, true)
 	(_marker.get_child(0) as Label).add_theme_color_override("font_color", GameConfig.COLOR_PAPER)
 	_marker.visible = false
 	add_child(_marker)
@@ -176,10 +176,13 @@ func update(state: GameState, cam: Camera3D) -> void:
 		_marker.position = Vector2(mx, maxf(top - ms.y - 4.0, 4.0)).floor()
 
 
-## スタンプの文字: 送った人の自作の言葉+絵文字。「ほかの人の自作の言葉を表示しない」なら初期の言葉
+## スタンプの文字: 送った人の自作の言葉+絵文字。スタンプは種類で届き、受け取った人の言語で出す。
+## 自作の言葉は、送った人と受け取った人の言語が同じときだけ出す(ちがえば、受け取った人の言語の初期の言葉)。
+## 「ほかの人の自作の言葉を表示しない」なら初期の言葉
 static func stamp_text(state: GameState, sender: int, kind: String) -> String:
 	var word := ""
-	if sender == state.local_player_id or not Profile.hide_custom_words:
+	var same_lang := str(state.stamp_langs.get(sender, Locale.current())) == Locale.current()
+	if sender == state.local_player_id or (not Profile.hide_custom_words and same_lang):
 		word = str((state.stamp_words.get(sender, {}) as Dictionary).get(kind, ""))
 	return Texts.stamp(kind, word)
 
@@ -187,13 +190,13 @@ static func stamp_text(state: GameState, sender: int, kind: String) -> String:
 ## 吹き出しに出す、送った人の名前(自分は「あなた」、鬼は「鬼」、ボットの性格は出さない)
 static func sender_name(state: GameState, id: int) -> String:
 	if id == state.local_player_id:
-		return Texts.t("me")
+		return Locale.t("あなた")
 	if id == state.oni_id:
-		return Texts.t("oni")
+		return Locale.t("鬼")
 	var a := state.get_actor(id)
 	if a == null:
 		return "?"
-	return a.display_name.get_slice("(", 0)
+	return Locale.actor_name(a.display_name)
 
 
 func _dist(id: int, cam: Camera3D) -> float:

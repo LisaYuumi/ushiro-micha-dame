@@ -11,8 +11,9 @@ static func count() -> int:
 	return NAMES.size()
 
 
+## 落とし物の名前(今の言語で。NAMES は翻訳ファイルのキー)
 static func name_of(index: int) -> String:
-	return NAMES[clampi(index, 0, NAMES.size() - 1)]
+	return Locale.t(NAMES[clampi(index, 0, NAMES.size() - 1)])
 
 
 static func weight_of(index: int) -> float:

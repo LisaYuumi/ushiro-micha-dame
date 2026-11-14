@@ -60,11 +60,12 @@ func _ready() -> void:
 	lobby.host_pressed.connect(_on_host)
 	lobby.join_pressed.connect(_on_join)
 	lobby.start_pressed.connect(_on_host_start)
+	lobby.language_pressed.connect(func() -> void: set_language(Locale.next_language()))
 	net.status_changed.connect(lobby.set_status)
 	net.peers_changed.connect(_on_peers_changed)
 	net.connected_to_host.connect(func() -> void:
 		net.send_profile(Profile.to_dict())
-		lobby.show_waiting("つながりました! ホストがスタートするのを待っています"))
+		lobby.show_waiting(tr("つながりました! ホストがスタートするのを待っています")))
 	net.profile_received.connect(func(pid: int, p: Dictionary) -> void: _peer_profile[pid] = p)
 	net.lobby_received.connect(_on_lobby_info)
 	net.snapshot_received.connect(_on_snapshot)
@@ -90,7 +91,7 @@ func _on_host() -> void:
 	_seats = lobby.players - 1
 	mode = Mode.LOBBY
 	net.host_room()
-	lobby.show_host("(作成中)", 1)
+	lobby.show_host(tr("(作成中)"), 1)
 	net.status_changed.connect(func(_t: String) -> void:
 		if net.is_host and mode == Mode.LOBBY:
 			lobby.show_host(net.room_code, 1 + multiplayer.get_peers().size()))
@@ -98,7 +99,7 @@ func _on_host() -> void:
 
 func _on_join(code: String) -> void:
 	net.join_room(code)
-	lobby.show_waiting("部屋 %s をさがしています…" % code)
+	lobby.show_waiting(tr("部屋 %s をさがしています…") % code)
 
 
 func _on_peers_changed(peer_ids: Array) -> void:
@@ -120,7 +121,7 @@ func _on_peers_changed(peer_ids: Array) -> void:
 					a.is_bot = true
 					a.display_name += "(ボット)"
 				_peer_actor.erase(pid)
-				hud.show_message("%s が抜けたのでボットが代わります" % (a.display_name if a else "?"), Color(0.3, 0.3, 0.3), 2.0)
+				hud.show_message(tr("%s が抜けたのでボットが代わります") % (Locale.actor_name(a.display_name) if a else "?"), Color(0.3, 0.3, 0.3), 2.0)
 
 
 ## ホストが「スタート」: 人は id 0(ホスト)から順に、残りはボット。最初の鬼は人からランダム
@@ -163,16 +164,16 @@ func _on_lobby_info(info: Dictionary) -> void:
 		state.local_player_id = info["your_id"]
 		_built_serial = -1
 		lobby.visible = false
-		hud.show_message("スタート!", Color(0.3, 0.3, 0.3), 1.0)
+		hud.show_message(tr("スタート!"), Color(0.3, 0.3, 0.3), 1.0)
 	elif info.get("late", false):
-		lobby.show_waiting("つながりました! いまは試合中です。\n次の試合から参加できます(ホストが新しい試合を始めるまで待ってください)")
+		lobby.show_waiting(tr("つながりました! いまは試合中です。\n次の試合から参加できます(ホストが新しい試合を始めるまで待ってください)"))
 	else:
-		lobby.show_waiting("つながりました! いま %d人。ホストがスタートするのを待っています" % info.get("players", 0))
+		lobby.show_waiting(tr("つながりました! いま %d人。ホストがスタートするのを待っています") % info.get("players", 0))
 
 
 func _on_host_lost() -> void:
 	if mode == Mode.GUEST:
-		hud.show_message("ホストとの通信が切れました\nページを読み込み直してください", Color(0.85, 0.1, 0.1), 0.0)
+		hud.show_message(tr("ホストとの通信が切れました\nページを読み込み直してください"), Color(0.85, 0.1, 0.1), 0.0)
 
 
 # --- 参加者: ホストから届いた状態とお知らせ ---
@@ -283,9 +284,9 @@ func _physics_process(delta: float) -> void:
 	_update_my_stamps()
 	var out := me.role == GameState.Role.OUT
 	if out and state.phase != GameState.Phase.RESULT:
-		hud.set_role_badge("お手つきでお休み中(このラウンド0点)", Color(0.35, 0.45, 0.6))
+		hud.set_role_badge(tr("お手つきでお休み中(このラウンド0点)"), Color(0.35, 0.45, 0.6))
 	else:
-		hud.set_role_badge("あなたは鬼の手下" if state.minion_id == me.id \
+		hud.set_role_badge(tr("あなたは鬼の手下") if state.minion_id == me.id \
 				and state.phase != GameState.Phase.RESULT else "", Color(0.55, 0.2, 0.7))
 	# 牛乳がかかっている間は、画面が白い
 	hud.set_milk(state.is_milked(me) and state.phase != GameState.Phase.RESULT, state.milk_left_ratio(me))
@@ -353,17 +354,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		_update_help()
 	elif event.is_action_pressed("restart"):
 		if mode == Mode.GUEST:
-			hud.show_message("次へ進むのはホストです", Color(0.3, 0.3, 0.3), 1.2)
+			hud.show_message(tr("次へ進むのはホストです"), Color(0.3, 0.3, 0.3), 1.2)
 		elif mode != Mode.LOBBY:
 			_on_restart_pressed()
 	elif event.is_action_pressed("toggle_role"):
 		if mode != Mode.SOLO:
-			hud.show_message("オンラインでは、鬼は負けた人がやります", Color(0.3, 0.3, 0.3), 1.5)
+			hud.show_message(tr("オンラインでは、鬼は負けた人がやります"), Color(0.3, 0.3, 0.3), 1.5)
 			return
 		# 最初の鬼を自分にするかどうかを切りかえて、新しい試合を始める
 		_player_is_oni = not _player_is_oni
 		_start_round()
-		hud.show_message("あなたが鬼で新しい試合" if _player_is_oni else "座る側で新しい試合", Color(0.3, 0.3, 0.3), 1.2)
+		hud.show_message(tr("あなたが鬼で新しい試合") if _player_is_oni else tr("座る側で新しい試合"), Color(0.3, 0.3, 0.3), 1.2)
 	elif event.is_action_pressed("toggle_personality"):
 		Profile.load_saved()
 		Profile.show_personality = not Profile.show_personality
@@ -375,6 +376,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			var loser := state.get_actor_at_seat(maxi(state.drop_target_seat, 0))
 			if loser:
 				state._finish(state.oni_id, loser.id, "missed")
+	elif event.is_action_pressed("toggle_language"):
+		set_language(Locale.next_language())
 	elif event.is_action_pressed("debug_milk"):
 		# 確認用(ひとりのときだけ): 自分に牛乳をかけて、白い画面を見る
 		var me := state.get_local_player()
@@ -446,7 +449,7 @@ func _on_restart_pressed() -> void:
 	elif state.phase == GameState.Phase.RESULT:
 		if state.next_round():
 			_refresh_round()
-			var msg := "ラウンド %d: %s" % [state.round_index + 1, state.item_name()]
+			var msg := tr("ラウンド %d: %s") % [state.round_index + 1, state.item_name()]
 			hud.show_message(msg, Color(0.3, 0.3, 0.3), 2.0)
 		else:
 			_show_match_result()
@@ -471,24 +474,24 @@ func _show_match_result() -> void:
 		if rank == 1 and top_name == "":
 			top_name = _name(ids[i])
 		var row := _score_row_for(ids[i], state.scores, false)
-		row["mark"] = "★" if rank == 1 else "%d位" % rank
+		row["mark"] = "★" if rank == 1 else tr("%d位") % rank
 		rows.append(row)
 	var me_first: bool = state.scores.get(state.local_player_id, 0) == state.scores[ids[0]]
-	var title := "ゆうしょう!" if me_first else "試合おわり!"
+	var title := tr("ゆうしょう!") if me_first else tr("試合おわり!")
 	if me_first:
 		hud.confetti()
-	var sub := "あなたがいちばん!" if me_first else "いちばんは %s!" % top_name
+	var sub := tr("あなたがいちばん!") if me_first else tr("いちばんは %s!") % top_name
 	hud.hide_message()
 	if mode == Mode.GUEST:
-		hud.show_result_card(title, sub, [], GameConfig.COLOR_ACCENT, rows, "ホストが「次へ」を押すと新しい試合")
+		hud.show_result_card(title, sub, [], GameConfig.COLOR_ACCENT, rows, tr("ホストが「次へ」を押すと新しい試合"))
 	else:
-		hud.show_result_card(title, sub, [], GameConfig.COLOR_ACCENT, rows, "", "新しい試合へ ▶")
+		hud.show_result_card(title, sub, [], GameConfig.COLOR_ACCENT, rows, "", tr("新しい試合へ ▶"))
 
 
 ## 結果カードの1行。delta: このラウンドで増えた分も出すか
 func _score_row_for(id: int, scores: Dictionary, delta: bool) -> Dictionary:
 	var a := state.get_actor(id)
-	var n: String = "あなた" if id == state.local_player_id else (a.display_name.get_slice("(", 0) if a else "?")
+	var n: String = tr("あなた") if id == state.local_player_id else (Locale.actor_name(a.display_name) if a else "?")
 	var sc: int = scores.get(id, 0)
 	return {
 		"name": n,
@@ -504,7 +507,7 @@ func _open_studio() -> void:
 	if _studio or not GameConfig.SHOW_PHOTO_MODE:
 		return
 	if mode == Mode.HOST or mode == Mode.GUEST:
-		hud.show_message("撮影モードは、ひとりで遊ぶときだけ", Color(0.3, 0.3, 0.3), 1.5)
+		hud.show_message(tr("撮影モードは、ひとりで遊ぶときだけ"), Color(0.3, 0.3, 0.3), 1.5)
 		return
 	_close_picker()
 	_studio = PhotoStudio.new()
@@ -567,15 +570,33 @@ func _on_tap(pos: Vector2) -> void:
 	hud.open_send_panel(_short_name(id), _i_am_oni())
 
 
+## 言語を切りかえる(ロビーの言語ボタン・⚙メニューから)。端末に保存し、画面の文字を作り直す
+func set_language(lang: String) -> void:
+	Profile.lang = lang
+	Profile.save()
+	Locale.setup(lang)
+	lobby.refresh_texts()
+	touch.refresh_texts()
+	UiStyle.refit_all()
+	if mode != Mode.LOBBY:
+		_apply_stamp_words()
+		if mode == Mode.GUEST:
+			net.send_profile(Profile.to_dict())
+		view.build(state)
+		_update_help()
+
+
 ## 自作のスタンプの言葉を状態に入れる(ひとり・ホストだけ。参加者の分はロビーで届いた言葉を、もう一度チェックして使う)
 func _apply_stamp_words() -> void:
 	hud.set_send_words(Profile.stamp_words)
 	if mode == Mode.GUEST:
 		return
 	state.stamp_words[state.local_player_id] = Profile.stamp_words.duplicate()
+	state.stamp_langs[state.local_player_id] = Locale.current()
 	for pid in _peer_actor:
 		var prof: Dictionary = _peer_profile.get(pid, {})
 		state.stamp_words[_peer_actor[pid]] = Profile.clean_words(prof.get("words", {}))
+		state.stamp_langs[_peer_actor[pid]] = Locale.pick(str(prof.get("lang", "")))
 
 
 ## 鬼の牛乳: ボタンを押すと「えいっ」(相手を選ぶ)になり、もう一度押すとやめる。
@@ -589,7 +610,7 @@ func _update_milk() -> void:
 		_milk_aiming = not _milk_aiming
 		if _milk_aiming:
 			_close_picker()
-			hud.show_message("かける人をタップ!", Color(0.3, 0.45, 0.7), 1.0)
+			hud.show_message(tr("かける人をタップ!"), Color(0.3, 0.45, 0.7), 1.0)
 	view.set_milk_aim(_milk_aiming)
 
 
@@ -618,8 +639,8 @@ func _show_event(e: Dictionary) -> void:
 	match e.get("type"):
 		"minion":
 			if e["actor"] == me:
-				hud.show_popup_card("あなたは鬼の手下!", ["だまして +1点", "鬼が勝てば +2点"],
-						Color(0.55, 0.2, 0.7), "ほかの人にはないしょだよ", 3.0)
+				hud.show_popup_card(tr("あなたは鬼の手下!"), [tr("だまして +1点"), tr("鬼が勝てば +2点")],
+						Color(0.55, 0.2, 0.7), tr("ほかの人にはないしょだよ"), 3.0)
 		"stamp":
 			if e["target"] == me:
 				hud.flash_stamp(WorldView.STAMP_COLORS[e["kind"]])
@@ -628,65 +649,65 @@ func _show_event(e: Dictionary) -> void:
 				Input.vibrate_handheld(150)
 		"helped":
 			if e["sender"] == me:
-				hud.show_message("教えた! +%d点\n(%s を助けた)" % [e["points"], _name(e["target"])], Color(0.1, 0.6, 0.4), 1.5)
+				hud.show_message(tr("教えた! +%d点\n(%s を助けた)") % [e["points"], _name(e["target"])], Color(0.1, 0.6, 0.4), 1.5)
 				_update_help()
 		"deceived":
 			if e["sender"] == me:
-				hud.show_message("だました! +%d点\n(%s が引っかかった)" % [e["points"], _name(e["target"])], Color(0.6, 0.3, 0.8), 1.5)
+				hud.show_message(tr("だました! +%d点\n(%s が引っかかった)") % [e["points"], _name(e["target"])], Color(0.6, 0.3, 0.8), 1.5)
 				_update_help()
 		"stamp_blocked":
 			if e["sender"] == me:
 				var why := {
-					"neighbor": "となりの人には送れない",
-					"already": "この人には、このラウンドもう送った",
-					"full": "この人はスタンプがいっぱい(%d つ)\n鬼が進むと空く。また送れるよ" % GameConfig.STAMP_SLOTS,
+					"neighbor": tr("となりの人には送れない"),
+					"already": tr("この人には、このラウンドもう送った"),
+					"full": tr("この人はスタンプがいっぱい(%d つ)\n鬼が進むと空く。また送れるよ") % GameConfig.STAMP_SLOTS,
 				}
-				hud.show_message(why.get(e.get("reason", ""), "いまは送れない"), Color(0.3, 0.3, 0.3), 1.4)
+				hud.show_message(why.get(e.get("reason", ""), tr("いまは送れない")), Color(0.3, 0.3, 0.3), 1.4)
 		"dropped":
 			_last_sound = "本物"
 		"rustle":
 			_last_sound = "ニセ"
 		"banana":
-			var who := "あなた" if e["sender"] == me else _name(e["sender"])
-			var whom := "鬼" if e["target"] == state.oni_id else "追う人"
+			var who := tr("あなた") if e["sender"] == me else _name(e["sender"])
+			var whom := tr("鬼") if e["target"] == state.oni_id else tr("追う人")
 			if e["target"] == me:
-				whom = "あなた"
-			hud.show_message("%s が %s にバナナ!" % [who, whom], Color(0.85, 0.7, 0.0), 1.2)
+				whom = tr("あなた")
+			hud.show_message(tr("%s が %s にバナナ!") % [who, whom], Color(0.85, 0.7, 0.0), 1.2)
 		"slip":
-			hud.show_message("つるっ! %s が転んだ" % ("あなた" if e["actor"] == me else _name(e["actor"])), Color(0.85, 0.7, 0.0), 1.2)
+			hud.show_message(tr("つるっ! %s が転んだ") % (tr("あなた") if e["actor"] == me else _name(e["actor"])), Color(0.85, 0.7, 0.0), 1.2)
 		"no_looks":
 			if e["actor"] == me:
-				hud.show_message("もう振り向けない!\n(1ラウンド%d回まで)" % GameConfig.LOOKS_PER_ROUND, Color(0.3, 0.3, 0.3), 1.2)
+				hud.show_message(tr("もう振り向けない!\n(1ラウンド%d回まで)") % GameConfig.LOOKS_PER_ROUND, Color(0.3, 0.3, 0.3), 1.2)
 		"drop_failed":
 			if e["actor"] == me:
 				var empty: bool = e.get("reason", "") == "empty"
-				hud.show_message("空いた席には落とせない" if empty else "席の後ろで押してね", Color(0.3, 0.3, 0.3), 1.0)
+				hud.show_message(tr("空いた席には落とせない") if empty else tr("席の後ろで押してね"), Color(0.3, 0.3, 0.3), 1.0)
 		"milk_failed":
 			if e["actor"] == me:
-				hud.show_message("かける人をタップしてね", Color(0.3, 0.3, 0.3), 1.0)
+				hud.show_message(tr("かける人をタップしてね"), Color(0.3, 0.3, 0.3), 1.0)
 		"milk":
 			if e["target"] == me:
-				hud.show_message("牛乳かけられた!", Color(0.3, 0.45, 0.7), 1.2)
+				hud.show_message(tr("牛乳かけられた!"), Color(0.3, 0.45, 0.7), 1.2)
 			elif e["sender"] == me:
-				hud.show_message("%s に牛乳!" % _name(e["target"]), Color(0.3, 0.45, 0.7), 1.0)
+				hud.show_message(tr("%s に牛乳!") % _name(e["target"]), Color(0.3, 0.45, 0.7), 1.0)
 		"out":
 			if e["actor"] == me:
-				hud.show_message("お手つき!\n真ん中でお休み(このラウンド0点)", Color(0.85, 0.1, 0.1), 2.0)
+				hud.show_message(tr("お手つき!\n真ん中でお休み(このラウンド0点)"), Color(0.85, 0.1, 0.1), 2.0)
 				_close_picker()
 				_update_help()
 		"auto_drop":
 			if _i_am_oni():
-				hud.show_message("4周したので\n次の席で自動で落とす", Color(0.3, 0.3, 0.3), 1.5)
+				hud.show_message(tr("4周したので\n次の席で自動で落とす"), Color(0.3, 0.3, 0.3), 1.5)
 		"found":
 			if e["actor"] == me:
-				hud.show_message("あった!", Color(0.1, 0.5, 0.9), GameConfig.MESSAGE_TIME)
+				hud.show_message(tr("あった!"), Color(0.1, 0.5, 0.9), GameConfig.MESSAGE_TIME)
 		"picked_up":
 			if e["actor"] == me:
-				hud.show_message("追いかけろ!\nタップでジャンプ・左右にスワイプでよける", Color(0.1, 0.5, 0.9), 2.2)
+				hud.show_message(tr("追いかけろ!\nタップでジャンプ・左右にスワイプでよける"), Color(0.1, 0.5, 0.9), 2.2)
 			elif _i_am_oni():
-				hud.show_message("気づかれた! 逃げろ!\nタップでジャンプ・左右にスワイプでよける", Color(0.85, 0.1, 0.1), 2.2)
+				hud.show_message(tr("気づかれた! 逃げろ!\nタップでジャンプ・左右にスワイプでよける"), Color(0.85, 0.1, 0.1), 2.2)
 			else:
-				hud.show_message("%s が追いかけた!" % _name(e["actor"]), Color(0.3, 0.3, 0.3), GameConfig.MESSAGE_TIME)
+				hud.show_message(tr("%s が追いかけた!") % _name(e["actor"]), Color(0.3, 0.3, 0.3), GameConfig.MESSAGE_TIME)
 		"result":
 			_show_result(e)
 		"match_over":
@@ -707,48 +728,48 @@ func _show_result(r: Dictionary) -> void:
 	match r["reason"]:
 		"touched":
 			if r["winner"] == me:
-				title = "タッチ成功!"
-				sub = "鬼をつかまえた! やったね"
+				title = tr("タッチ成功!")
+				sub = tr("鬼をつかまえた! やったね")
 				color = win
 			elif r["loser"] == me:
-				title = "つかまっちゃった…"
-				sub = "%s にタッチされた" % winner
+				title = tr("つかまっちゃった…")
+				sub = tr("%s にタッチされた") % winner
 				color = lose
 			else:
-				title = "タッチ!"
-				sub = "%s が鬼をつかまえた!" % winner
+				title = tr("タッチ!")
+				sub = tr("%s が鬼をつかまえた!") % winner
 		"sat":
 			if r["winner"] == me:
-				title = "セーフ!"
-				sub = "空いた席にすわれた〜!"
+				title = tr("セーフ!")
+				sub = tr("空いた席にすわれた〜!")
 				color = win
 			elif r["loser"] == me:
-				title = "すわられちゃった…"
-				sub = "あとちょっとだったのに!"
+				title = tr("すわられちゃった…")
+				sub = tr("あとちょっとだったのに!")
 				color = lose
 			else:
-				title = "鬼のかち!"
-				sub = "%s の席にすわった!" % loser
+				title = tr("鬼のかち!")
+				sub = tr("%s の席にすわった!") % loser
 		"missed":
 			if r["loser"] == me:
-				title = "気づかなかった〜!"
-				sub = "うしろに落ちてたよ…"
+				title = tr("気づかなかった〜!")
+				sub = tr("うしろに落ちてたよ…")
 				color = lose
 			elif r["winner"] == me:
-				title = "気づかれなかった!"
-				sub = "%s はぜんぜん気づかなかった" % loser
+				title = tr("気づかれなかった!")
+				sub = tr("%s はぜんぜん気づかなかった") % loser
 				color = win
 			else:
-				title = "鬼のかち!"
-				sub = "%s が気づかなかった!" % loser
+				title = tr("鬼のかち!")
+				sub = tr("%s が気づかなかった!") % loser
 		"all_out":
 			if r["winner"] == me:
-				title = "全員お手つき!"
-				sub = "だれも残らなかった〜!"
+				title = tr("全員お手つき!")
+				sub = tr("だれも残らなかった〜!")
 				color = win
 			else:
-				title = "全員お手つき…"
-				sub = "鬼のかち! みんな振り向きすぎ!"
+				title = tr("全員お手つき…")
+				sub = tr("鬼のかち! みんな振り向きすぎ!")
 	var notes := []
 	# 手下は「手下はだれ?」のカードをめくると見られる
 	var minion: int = r.get("minion", -1)
@@ -769,36 +790,34 @@ func _show_result(r: Dictionary) -> void:
 	for id in ids:
 		rows.append(_score_row_for(id, scores, true))
 	var last := state.round_index + 1 >= GameConfig.ROUNDS_PER_MATCH
-	var next_text := "さいごの結果へ" if last else "次のラウンド(%s)へ" % Items.name_of(state.round_index + 1)
+	var next_text := tr("さいごの結果へ") if last else tr("次のラウンド(%s)へ") % Items.name_of(state.round_index + 1)
 	hud.hide_message()
 	if r["winner"] == me:
 		hud.confetti()
 	if mode == Mode.GUEST:
-		hud.show_result_card(title, sub, notes, color, rows, "ホストが「次へ」を押すと" + next_text, "", reveal)
+		hud.show_result_card(title, sub, notes, color, rows, tr("ホストが「次へ」を押すと") + next_text, "", reveal)
 	else:
-		hud.show_result_card(title, sub, notes, color, rows, "", "次へ ▶ " + next_text, reveal)
+		hud.show_result_card(title, sub, notes, color, rows, "", tr("次へ ▶ ") + next_text, reveal)
 
 
 ## 札に出す短い名前(「ボット2(せっかち)」→「ボット2」、鬼は「鬼」)
 func _short_name(id: int) -> String:
 	if id == state.oni_id:
-		return "鬼"
+		return tr("鬼")
 	var a := state.get_actor(id)
 	if a == null:
 		return "?"
-	var n := a.display_name
-	var cut := n.find("(")
-	return n.substr(0, cut) if cut > 0 else n
+	return Locale.actor_name(a.display_name)
 
 
 func _name(id: int) -> String:
 	if id == state.local_player_id:
-		return "あなた"
+		return tr("あなた")
 	var a := state.get_actor(id)
 	if a == null:
 		return "?"
-	# ボットの性格は、⚙メニューでオンにしたときだけ出す
-	return a.display_name if Profile.show_personality else a.display_name.get_slice("(", 0)
+	# ボットの性格は、⚙メニューでオンにしたときだけ出す。ボットの名前は今の言語で
+	return Locale.actor_name(a.display_name, Profile.show_personality)
 
 
 ## 画面の札(左上: ラウンド・落とし物・鬼の周回、右上: 全員の点数)を更新する。説明文は出さない
@@ -809,13 +828,13 @@ func _update_help() -> void:
 	var extra := ""
 	if _i_am_oni() and state.phase == GameState.Phase.WALKING:
 		var laps := int((state.oni_angle - state.oni_start_angle) / TAU) + 1
-		extra = "鬼 %d周目(%d周で自動で落とす)" % [laps, GameConfig.ONI_MAX_LAPS_BEFORE_DROP]
+		extra = tr("鬼 %d周目(%d周で自動で落とす)") % [laps, GameConfig.ONI_MAX_LAPS_BEFORE_DROP]
 	elif state.phase == GameState.Phase.CHASE:
 		var laps_left := maxi(int(ceilf((state.oni_seat_angle - state.oni_angle) / TAU)), 1)
-		extra = "鬼が座るまで あと%d周" % laps_left
+		extra = tr("鬼が座るまで あと%d周") % laps_left
 	elif _i_am_oni():
-		extra = "あなたは鬼"
-	hud.set_round_info("ラウンド %d/%d" % [state.round_index + 1, GameConfig.ROUNDS_PER_MATCH],
-			"いまの落とし物:%s" % state.item_name(), extra, "あなた %d点" % state.scores.get(state.local_player_id, 0))
+		extra = tr("あなたは鬼")
+	hud.set_round_info(tr("ラウンド %d/%d") % [state.round_index + 1, GameConfig.ROUNDS_PER_MATCH],
+			tr("いまの落とし物:%s") % state.item_name(), extra, tr("あなた %d点") % state.scores.get(state.local_player_id, 0))
 
 

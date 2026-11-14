@@ -327,7 +327,7 @@ func _build_minion_card(parent: Container, minion: Dictionary) -> void:
 	info.add_child(nm)
 	info.add_child(UiStyle.label("だったよ!", 24, GameConfig.COLOR_INK))
 	if minion["bonus"]:
-		var bp := UiStyle.pill("鬼がかって +%d点" % GameConfig.SCORE_MINION_ONI_WIN, 18)
+		var bp := UiStyle.pill(tr("鬼がかって +%d点") % GameConfig.SCORE_MINION_ONI_WIN, 18)
 		(bp.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = purple.lightened(0.75)
 		info.add_child(bp)
 	_card_front = front
@@ -448,7 +448,7 @@ func _score_chip(r: Dictionary) -> PanelContainer:
 		var mk := UiStyle.label(mark, 17, GameConfig.COLOR_ACCENT.darkened(0.2))
 		mk.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		col.add_child(mk)
-	var sc := UiStyle.label("%d点" % r["score"], 36, GameConfig.COLOR_INK)
+	var sc := UiStyle.label(tr("%d点") % r["score"], 36, GameConfig.COLOR_INK)
 	sc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(sc)
 	var d: int = r.get("delta", 0)
@@ -483,7 +483,7 @@ func _score_row(r: Dictionary) -> PanelContainer:
 	if d != 0:
 		var dl := UiStyle.label("%+d" % d, 16, Color("2E9E5B") if d > 0 else Color("D9483B"))
 		h.add_child(dl)
-	h.add_child(UiStyle.label("%d点" % r["score"], 18, GameConfig.COLOR_INK))
+	h.add_child(UiStyle.label(tr("%d点") % r["score"], 18, GameConfig.COLOR_INK))
 	return panel
 
 
@@ -591,6 +591,8 @@ func _build_send_panel() -> void:
 		b.custom_minimum_size = Vector2(210, 104)
 		row.add_child(b)
 		_send_buttons.append(b)
+		# 英語など言葉が長くても、ボタンからはみ出さないように
+		UiStyle.fit(b, 32, 186.0)
 	add_child(_send_panel)
 	_send_panel.anchor_left = 0.5
 	_send_panel.anchor_right = 0.5
@@ -603,7 +605,7 @@ func _build_send_panel() -> void:
 
 ## 「◯◯に送る」を出す。above_buttons = true なら、鬼のボタンの上に出す(重ならないように)
 func open_send_panel(target_name: String, above_buttons: bool) -> void:
-	_send_title.text = Texts.t("send_to") % target_name
+	_send_title.text = Locale.t("%sに送る") % target_name
 	_send_panel.visible = true
 	var bottom := -280.0 if above_buttons else -24.0
 	# 鬼のボタン(右下)と重ならないよう、鬼のときは少し左に寄せる
@@ -619,6 +621,7 @@ func set_send_words(words: Dictionary) -> void:
 	for i in _send_buttons.size():
 		var k: String = Stamps.ALL[i]
 		_send_buttons[i].text = Texts.stamp(k, str(words.get(k, "")))
+	UiStyle.refit_all()
 
 
 func close_send_panel() -> void:

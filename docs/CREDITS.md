@@ -26,5 +26,5 @@
   - 作者: Google(Copyright 2021 Google Inc.)
   - 出どころ: npm の @fontsource/noto-color-emoji 5.3.2(元は https://github.com/googlefonts/noto-emoji)
   - ライセンス: SIL Open Font License 1.1(商用利用・同梱できる。フォントだけを売るのは不可)
-  - 使い方: スタンプで使う3つの絵文字(U+1F628・U+1F44D・U+1F97A)だけを切り出して小さくした(色は SVG のデータを使う)。切り出したものも同じライセンス
+  - 使い方: スタンプで使う3つの絵文字(U+1F628・U+1F44D・U+1F97A)と、言語ボタンの 🌐(U+1F310)だけを切り出して小さくした(色は SVG のデータを使う)。切り出したものも同じライセンス
   - ファイル: `assets/fonts/NotoColorEmoji-stamps.ttf`、ライセンス全文: `assets/fonts/OFL-NotoColorEmoji.txt`

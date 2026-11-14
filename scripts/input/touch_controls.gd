@@ -26,6 +26,7 @@ var _out := false
 var _menu: PanelContainer
 var _help_panel: PanelContainer
 var _personality_button: Button
+var _language_button: Button
 var _stick: VirtualStick
 ## 「振り向く」ボタンの矢印・文字・残りの回数のバッジ
 var _look_arrow: Control
@@ -120,6 +121,7 @@ func _build_look_face(b: Button) -> void:
 	var title := UiStyle.label("振り向く", 30, GameConfig.COLOR_PAPER)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title)
+	UiStyle.fit(title, 30, 196.0)
 	_look_title = title
 	# 右上の角の数字バッジ(白い丸に黒枠)
 	var badge := PanelContainer.new()
@@ -210,6 +212,7 @@ func set_milk_state(n: int, aiming: bool) -> void:
 		_milk_label.text = "牛乳"
 		_milk_label.add_theme_color_override("font_color", GameConfig.COLOR_INK)
 	_milk_inner.visible = not empty and not aiming
+	UiStyle.refit_all()
 	for st in ["normal", "hover", "disabled"]:
 		_milk_button.add_theme_stylebox_override(st, normal)
 	var badge_style := _milk_badge.get_parent().get_theme_stylebox("panel") as StyleBoxFlat
@@ -233,6 +236,7 @@ func _icon_face(b: Button, icon: String, text: String, icon_size: Vector2, font_
 	var l := UiStyle.label(text, font_size, color)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(l)
+	UiStyle.fit(l, font_size, b.offset_right - b.offset_left - 14.0)
 	return l
 
 
@@ -309,6 +313,7 @@ func _build_menu() -> void:
 	_menu_button(col, "役を変えて新しい試合", _menu_action.bind("toggle_role"))
 	_menu_button(col, "上から見る(確認用)", _menu_action.bind("debug_top_camera"))
 	_personality_button = _menu_button(col, "", _toggle_personality)
+	_language_button = _menu_button(col, "", _menu_action.bind("toggle_language"))
 	_menu_button(col, "あそびかた", _show_help)
 	if GameConfig.SHOW_PHOTO_MODE:
 		_menu_button(col, "撮影モード(開発用)", _menu_action.bind("photo_mode"))
@@ -327,13 +332,8 @@ func _build_menu() -> void:
 	_menu_button(hcol, "とじる", close_menu, true)
 
 
-const HOW_TO_PLAY := """・振り向く(長押し): 押している間だけ後ろを見る。落ちていたら、そのまま拾って走る
-・お手つき(なにもないのに振り向く): 輪から抜けて真ん中で休む。そのラウンドは0点。全員の後ろが見えて、だれにでもスタンプを送れる
-・人をタップ: その人の頭の上にスタンプが出るので、選んで送る(同じ人には1ラウンド1回)
-・鬼: 自動で前に歩く。スティックを歩く向きに倒すと速く、反対に倒すと止まり、倒し続けると少し戻れる(3歩分まで)。落とす・フェイク(落とす音だけ)・牛乳(牛乳ボタン→「えいっ」になったら、座っている人をタップしてかける。もう一度押すとやめる。画面が半周のあいだ白くなる。1ラウンド1回)
-・追いかけっこ: 鬼が輪の外側を2周して空いた席に座れば鬼の勝ち、それまでにタッチすれば追いかけた人の勝ち。走るのは自動(2人とも同じ速さ)。タップでジャンプ、左右にスワイプ(か ◀ ▶)で内側・外側の列に動く。低い物(バケツ・バナナ)はジャンプか列を変えて、高い物(椅子・机)は列を変えてよける。ぶつかると転ぶ。座っている人はバナナを投げられる
-キーボード: スペース=振り向く 1〜4=スタンプ M=牛乳 Z X C V=鬼のスタンプ 走るとき: スペース/W=ジャンプ A/D=内側/外側 鬼が歩くとき: A/D=速く/止まる・戻る
- E=落とす F=フェイク B/N=バナナ R=やり直し O=役を変える F1=上から見る K=転ぶ L=牛乳をかぶる(確認用) Tab=メニュー"""
+## あそびかたの文(長いので、翻訳ファイルではキー「HOW_TO_PLAY」でまとめて持つ)
+const HOW_TO_PLAY := "HOW_TO_PLAY"
 
 
 func _menu_action(action: String) -> void:
@@ -352,8 +352,17 @@ func _show_help() -> void:
 	UiStyle.center(_help_panel)
 
 
+## 言語を切りかえたあと: % で作った文字を作り直し、はみ出さない大きさにし直す
+func refresh_texts() -> void:
+	_update_menu_texts()
+	_milk_shown = -1
+	_looks_shown = -2
+
+
 func _update_menu_texts() -> void:
-	_personality_button.text = "ボットの性格を表示: %s" % ("オン" if Profile.show_personality else "オフ")
+	_language_button.text = "🌐 " + str(Locale.NAMES.get(Locale.current(), Locale.current()))
+	_personality_button.text = tr("ボットの性格を表示: %s") % (tr("オン") if Profile.show_personality else tr("オフ"))
+	UiStyle.refit_all()
 
 
 ## 画面のまん中に出す白いパネル(中に縦に並べる)
@@ -379,6 +388,7 @@ func _menu_button(parent: Container, text: String, on_press: Callable, accent :=
 	parent.add_child(b)
 	b.pressed.connect(on_press)
 	_buttons.append({"button": b, "action": "", "call": on_press})
+	UiStyle.fit(b, 24, 370.0)
 	return b
 
 
@@ -441,6 +451,9 @@ func _add_button(text: String, action: String, anchor: Vector2, rect: Rect2, fon
 		b.button_down.connect(_send.bind(action, true))
 		b.button_up.connect(_send.bind(action, false))
 	_buttons.append({"button": b, "action": action, "call": on_press})
+	# 長い言葉(英語など)でもはみ出さないように
+	if text != "":
+		UiStyle.fit(b, font_size, rect.size.x - 28.0)
 	return b
 
 
