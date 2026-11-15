@@ -218,9 +218,13 @@ static func lighten(m: Mesh) -> void:
 
 
 ## 停電のための、全部の塗りが読む値(シェーダーのグローバル)。塗りの材質を作る前に用意する
+static var _globals_ready := false
+
+
 static func ensure_globals() -> void:
-	var have := RenderingServer.global_shader_parameter_get_list()
-	if not ("dark_bright" in have):
+	# (一覧を読む関数はエディタの外では使えないので、1回だけ足したかを自分で覚えておく)
+	if not _globals_ready:
+		_globals_ready = true
 		RenderingServer.global_shader_parameter_add("dark_bright", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 1.0)
 		RenderingServer.global_shader_parameter_add("dark_flash_pos", RenderingServer.GLOBAL_VAR_TYPE_VEC3, Vector3.ZERO)
 		RenderingServer.global_shader_parameter_add("dark_flash_r", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
