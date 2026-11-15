@@ -140,8 +140,10 @@ const STAMP_NEIGHBOR_BLOCK_MIN_SEATS := 6
 const BOT_NORMAL_HONEST_CHANCE := 0.9
 ## 普通のボットが、後ろが見えない相手(5人のときの両どなり)に当てずっぽうで「落ちてる!」と言う確率
 const BOT_GUESS_LOOK_CHANCE := 0.3
-## 手下ボットが本当のことを言う確率(怪しまれないように、ときどき本当も混ぜる)
-const BOT_MINION_HONEST_CHANCE := 0.3
+## 手下ボットが本当のことを言う確率(バレにくいように、ウソは鬼の役に立つときに絞る)
+## 後ろに何もない人には、ふだんは本当のことを言う(ウソは2割だけ)/落とされた人には「平気」とウソをつきやすい
+const BOT_MINION_HONEST_WHEN_EMPTY := 0.8
+const BOT_MINION_HONEST_WHEN_DROPPED := 0.35
 ## 鬼ボットが本当のことを言う確率と、スタンプを送る間隔(秒)
 const BOT_ONI_HONEST_CHANCE := 0.3
 const BOT_ONI_STAMP_INTERVAL_MIN := 10.0

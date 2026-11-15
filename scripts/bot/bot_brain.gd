@@ -215,12 +215,13 @@ func _update_stamp(state: GameState, a: GameState.Actor, delta: float) -> void:
 	var say_look := false
 	if state.sees_behind(a.id, target.seat_index):
 		var honest_chance := GameConfig.BOT_NORMAL_HONEST_CHANCE
+		var behind := state.has_handkerchief_behind(target)
 		match state.stamp_role_of(a.id):
 			"minion":
-				honest_chance = GameConfig.BOT_MINION_HONEST_CHANCE
+				# 手下: 何もない人にはだいたい本当(ふつうの人と見分けにくく)、落とされた人には「平気」とウソをつきやすい
+				honest_chance = GameConfig.BOT_MINION_HONEST_WHEN_DROPPED if behind else GameConfig.BOT_MINION_HONEST_WHEN_EMPTY
 			"oni":
 				honest_chance = GameConfig.BOT_ONI_HONEST_CHANCE
-		var behind := state.has_handkerchief_behind(target)
 		say_look = behind if rng.randf() < honest_chance else not behind
 	else:
 		# 後ろが見えない相手(5人のときの両どなり)には当てずっぽう。間違えることがある
