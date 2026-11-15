@@ -1816,7 +1816,7 @@ func _test_minion_vote() -> void:
 	var b2: Dictionary = s2.scores.duplicate()
 	s2.cast_vote(s2.oni_id, mb.id)
 	_check(s2.voting_open, "まだ投票していない人がいれば、発表しない")
-	var r2 := _run_until(s2, "vote_result", GameConfig.VOTE_TIME + 1.0)
+	var r2 := _run_until(s2, "vote_result", GameConfig.VOTE_TIME + GameConfig.MISSED_SCENE_TIME + 1.0)
 	_check(not r2.is_empty(), "時間が来たら発表")
 	_check(s2.scores[s2.oni_id] == b2[s2.oni_id] + GameConfig.SCORE_VOTE_CORRECT, "手下が2人なら、どちらに当てても +%d" % GameConfig.SCORE_VOTE_CORRECT)
 
