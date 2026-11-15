@@ -188,6 +188,8 @@ var stamp_words: Dictionary = {}
 var stamp_langs: Dictionary = {}
 ## スタンプの言葉の選び方(id -> {kind: セットの何番目か})。試合の初めに決まり、試合の間は変わらない
 var stamp_picks: Dictionary = {}
+## このラウンドに届いたスタンプの記録(見逃しの答え合わせに使う): [{"sender", "target", "kind", "truthful"}]
+var stamp_log: Array = []
 ## 前のラウンドの手下(発表ずみなので、全員が知っている。ボットの信用に使う)
 var last_minion_ids: Array = []
 var last_minion_id: int:
@@ -445,6 +447,7 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	voting_open = false
 	votes = {}
 	lie_counts = {}
+	stamp_log = []
 
 
 ## 時間を delta 秒すすめる。
@@ -710,6 +713,7 @@ func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
 		"scorable": seat_pass_age[target.seat_index] <= GameConfig.STAMP_SCORE_RECENT_PASS,
 	})
 	events.append({"type": "stamp", "sender": sender_id, "target": target_id, "kind": kind})
+	stamp_log.append({"sender": sender_id, "target": target_id, "kind": kind, "truthful": truthful})
 	return true
 
 
@@ -1494,6 +1498,17 @@ func _finish(winner_id: int, loser_id: int, reason: String) -> void:
 	votes = {}
 	voting_open = true
 	vote_left = GameConfig.VOTE_TIME
+	if reason == "missed":
+		# 見逃しの答え合わせ: 気づかなかった人に届いたスタンプ(送った人・言葉・ホントかウソか)と、落とした場所。
+		# 演出のぶん、投票の時間をのばす
+		var to_loser := []
+		for st in stamp_log:
+			if st["target"] == loser_id:
+				to_loser.append(st.duplicate())
+		result["missed_stamps"] = to_loser
+		result["drop_angle"] = drop_angle
+		result["drop_pos"] = handkerchief_position
+		vote_left += GameConfig.MISSED_SCENE_TIME
 	result["voting"] = true
 	result["scores"] = scores.duplicate()
 	for a in actors:

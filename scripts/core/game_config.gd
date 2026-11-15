@@ -113,7 +113,7 @@ const BOT_DODGE_MISS := 0.25
 ## 後ろにハンカチを落とされたボットが気づくまでの時間(秒)。この範囲でランダム。
 ## 鬼がもう一周してくるまで(約46秒)に気づかなければ見逃し
 const BOT_NOTICE_TIME_MIN := 1.5
-const BOT_NOTICE_TIME_MAX := 55.0
+const BOT_NOTICE_TIME_MAX := 40.0
 
 # --- 追いかけるときのカメラ ---
 ## 自分が追いかけるとき、カメラを輪の外側のどれだけ後ろ・上に置くか(メートル)
@@ -203,6 +203,8 @@ const MINION_TWO_CHANCE := 0.33
 ## 勝敗のあとの、手下を当てる投票: 当たった人の点数と、投票の時間(秒。全員が投票したらすぐ発表)
 const SCORE_VOTE_CORRECT := 2
 const VOTE_TIME := 20.0
+## 見逃しの演出(トントン→振り向く→放心→答え合わせ→とぼとぼ)のぶん、投票の時間をのばす(秒)
+const MISSED_SCENE_TIME := 8.0
 ## ボットが投票するまでの時間(秒。この範囲でランダム)
 const BOT_VOTE_DELAY_MIN := 1.0
 const BOT_VOTE_DELAY_MAX := 4.0

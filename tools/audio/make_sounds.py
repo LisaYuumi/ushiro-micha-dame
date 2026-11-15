@@ -781,6 +781,27 @@ def gaan():
     return norm(mix(strike, hit, thud(90, 50, 0.4, 0.12) * 0.5), 0.9)
 
 
+def tonton():
+    # 見逃し「トントン」: 肩を後ろから軽く2回たたく(服の上から、ぽすっ・ぽすっ)
+    def tap(scale):
+        d = 0.12
+        return mix(thud(260, 170, d, 0.025), lowpass(noise(d), 2500) * env_exp(d, 0.012) * 0.6) * scale
+    return norm(mix(at(tap(1.0), 0.0, 0.55), at(tap(0.85), 0.22, 0.55)), 0.8)
+
+
+def chiin():
+    # 見逃しの放心「チーン」: 間の抜けたラッパが、プワ〜…と下がっていき、最後に小さく「チーン」
+    d = 1.6
+    out = np.zeros(int(d * SR))
+    for k, (f0, f1, st, ln) in enumerate([(466, 440, 0.0, 0.32), (440, 415, 0.34, 0.32), (415, 392, 0.68, 0.32), (392, 330, 1.0, 0.55)]):
+        t = t_of(ln)
+        f = glide(f0, f1, ln) * (1.0 + 0.012 * np.sin(2 * np.pi * 6.0 * t) * (t / ln))
+        horn = lowpass(tone(f, ln, "saw"), 1400) * env_ar(ln, 0.03, 0.12)
+        out = out + at(horn * 0.5, st, d)
+    out = out + at(bell(midi(84), 0.6, 0.35, 0.6) * 0.25, 1.05, d)
+    return norm(out, 0.85)
+
+
 SOUNDS = {
     "drop_0": drop_0, "drop_1": drop_1, "drop_2": drop_2, "drop_3": drop_3, "drop_4": drop_4,
     "step": step, "run_step": run_step,
@@ -797,7 +818,7 @@ SOUNDS = {
     "step_sand": step_sand, "run_step_sand": run_step_sand, "amb_beach": amb_beach,
     "eraser_pon": eraser_pon,
     "bgm_school_1": bgm_school_1, "bgm_school_2": bgm_school_2, "bgm_school_3": bgm_school_3,
-    "look_zah": look_zah, "found": found, "gaan": gaan,
+    "look_zah": look_zah, "found": found, "gaan": gaan, "tonton": tonton, "chiin": chiin,
 }
 
 

@@ -70,6 +70,7 @@ func _initialize() -> void:
 	_test_lap_behind_not_touch()
 	_test_stamp_shuffle()
 	_test_bots_quiet_in_blackout()
+	_test_missed_replay_data()
 	_test_bot_personalities()
 	_test_look_limit_and_patience()
 	_test_online_match_setup()
@@ -1961,3 +1962,31 @@ func _test_bots_quiet_in_blackout() -> void:
 		for k in s.seat_pass_age.size():
 			s.seat_pass_age[k] = 1.0
 	_check(sent == 0, "停電中、ボットはスタンプを送らない(%d)" % sent)
+
+
+## 見逃しの答え合わせ: 気づかなかった人に届いたスタンプと落とした場所が結果に入り、投票の時間がのびる
+func _test_missed_replay_data() -> void:
+	var s := GameState.new()
+	s.start_match(63)
+	var target := s.get_actor_at_seat(s.drop_target_seat)
+	var e := {}
+	var sent := false
+	for i in int(200.0 / STEP):
+		s.tick(STEP)
+		if not sent and s.phase == GameState.Phase.DROPPED:
+			# 落とされた人に、だれかが嘘の「平気」を送る
+			for a in s.actors:
+				if a.role == GameState.Role.SEATED and a.id != target.id and s.stamp_block_reason(a.id, target.id) == "":
+					sent = s.send_stamp(a.id, target.id, Stamps.SAFE)
+					if sent:
+						break
+		for ev in s.take_events():
+			if ev["type"] == "result":
+				e = ev
+		if not e.is_empty():
+			break
+	_check(e.get("reason", "") == "missed", "(確認用)見逃し")
+	var list: Array = e.get("missed_stamps", [])
+	_check(not sent or (list.size() >= 1 and not list[0]["truthful"]), "気づかなかった人に届いた嘘のスタンプが結果に入る")
+	_check(e.has("drop_pos") and e.has("drop_angle"), "落とした場所が結果に入る")
+	_check(s.vote_left > GameConfig.VOTE_TIME, "見逃しの演出のぶん、投票の時間がのびる")

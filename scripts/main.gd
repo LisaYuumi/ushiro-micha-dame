@@ -68,6 +68,10 @@ func _ready() -> void:
 	_build_view()
 	# 結果カードで、手下だと思う人の札をタップした
 	hud.vote_pressed.connect(_on_vote_pressed)
+	# 見逃しの演出
+	view.missed_scene_done.connect(_on_missed_scene_done)
+	view.missed_replay_started.connect(_on_missed_replay)
+	view.missed_replay_ended.connect(func() -> void: hud.hide_replay())
 	lobby.solo_pressed.connect(_on_solo)
 	lobby.host_pressed.connect(_on_host)
 	lobby.join_pressed.connect(_on_join)
@@ -288,6 +292,8 @@ func _refresh_round() -> void:
 
 func _refresh_round_inner() -> void:
 	bots.reset()
+	_missed_result = {}
+	hud.hide_replay()
 	_round_start_scores = state.scores.duplicate()
 	touch.set_oni_mode(_i_am_oni())
 	_last_sound = ""
@@ -508,6 +514,47 @@ func _update_my_stamps() -> void:
 			"sender_color": sender.color if sender else Color.WHITE,
 		})
 	hud.show_my_stamps(list)
+
+## 見逃しの演出が終わった(またはタップでとばした): 結果の音と結果カード
+var _missed_result := {}
+
+
+func _on_missed_scene_done() -> void:
+	if _missed_result.is_empty():
+		return
+	var e := _missed_result
+	_missed_result = {}
+	hud.hide_replay()
+	_play_result_sounds(e)
+	_show_result(e)
+
+
+## 答え合わせ: 気づかなかった人に届いたスタンプ(送った人・言葉・ホントかウソか)。手下かどうかは、投票のあとにわかる
+func _on_missed_replay(r: Dictionary) -> void:
+	var lines := []
+	for st in r.get("missed_stamps", []):
+		var sender: int = st["sender"]
+		var a := state.get_actor(sender)
+		var truthful: bool = st["truthful"]
+		lines.append({
+			"text": "%s:%s" % [HeadOverlay.sender_name(state, sender), HeadOverlay.stamp_text(state, sender, st["kind"])],
+			"color": a.color if a else Color.WHITE,
+			"tag": tr("ホント") if truthful else tr("ウソ"),
+			"tag_color": Color("2E9E5B") if truthful else Color("E5483B"),
+		})
+	hud.show_replay(tr("%s に届いたスタンプ") % _name(int(r.get("loser", -1))), lines)
+
+
+## 見逃しの演出中は、画面のどこをタップしてもとばせる
+func _input(event: InputEvent) -> void:
+	if not view.is_missed_scene_playing():
+		return
+	var tap: bool = (event is InputEventScreenTouch and event.pressed) \
+			or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT)
+	if tap:
+		view.skip_missed_scene()
+		get_viewport().set_input_as_handled()
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _studio:
@@ -886,8 +933,13 @@ func _show_event(e: Dictionary) -> void:
 			else:
 				hud.show_message(tr("%s が追いかけた!") % _name(e["actor"]), Color(0.3, 0.3, 0.3), GameConfig.MESSAGE_TIME)
 		"result":
-			_play_result_sounds(e)
-			_show_result(e)
+			if e.get("reason", "") == "missed":
+				# 見逃し: トントン → 振り向く → 放心 → 答え合わせ → とぼとぼ のあとに、結果カード(タップでとばせる)
+				_missed_result = e
+				view.play_missed_scene(state, e)
+			else:
+				_play_result_sounds(e)
+				_show_result(e)
 		"match_over":
 			audio.play("match_end", -2.0)
 			_jingle_hold = 3.0
@@ -985,15 +1037,22 @@ func _show_result(r: Dictionary) -> void:
 		var people := []
 		for m in minions:
 			var ma := state.get_actor(m)
+			# 見逃しのラウンド: この手下が、気づかなかった人に送ったウソのスタンプ(手下のカードをめくるとわかる)
+			var lies := []
+			for st in r.get("missed_stamps", []):
+				if st["sender"] == m and not st["truthful"]:
+					lies.append(HeadOverlay.stamp_text(state, m, st["kind"]))
 			people.append({
 				"name": _short_name(m),
 				"color": ma.color if ma else Color.WHITE,
 				"is_me": m == me,
 				"bonus": bool(bonuses.get(m, r.get("minion_bonus", false))),
+				"lies": lies,
 			})
 		reveal = {"people": people}
 	# 手下を当てる投票(手下以外の全員。鬼も)。自分と鬼以外の札をタップできる
-	var voting: bool = bool(r.get("voting", false))
+	# (見逃しの演出のあとに出すこともあるので、今の状態で決める)
+	var voting: bool = state.voting_open
 	var can_vote := voting and not (me in minions)
 	# 全員の点数(この試合の合計。点の多い順、このラウンドで増えた分つき)
 	var scores: Dictionary = r.get("scores", state.scores)

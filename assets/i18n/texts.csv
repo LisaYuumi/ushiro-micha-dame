@@ -263,6 +263,15 @@ the minion…"
 表示しない(シャッフルの言葉で表示),表示しない(シャッフルの言葉で表示),Hide (show shuffled words)
 ガーン!,ガーン!,Oh no!
 画面のゆれ: %s,画面のゆれ: %s,Screen shake: %s
+ホント,ホント,True
+ウソ,ウソ,Lie
+%s に届いたスタンプ,%s に届いたスタンプ,Stamps sent to %s
+ウソ: %s,ウソ: %s,Lied: %s
+◀◀ まきもどし,◀◀ まきもどし,◀◀ Rewind
+スタンプは届かなかった,スタンプは届かなかった,No stamps were sent
+トントン,トントン,Tap tap
+チーン…,チーン…,Ding…
+ここで落とした!,ここで落とした!,Dropped here!
 音がガタガタ割れるときは「なめらか」を試してね,音がガタガタ割れるときは「なめらか」を試してね,"If the sound crackles, try ""Smooth"""
 音の鳴らし方: %s ▶,音の鳴らし方: %s ▶,Sound mode: %s ▶
 なめらか(お試し),なめらか(お試し),Smooth (beta)

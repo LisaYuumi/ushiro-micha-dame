@@ -77,6 +77,9 @@ const SPEED_TIME := 0.3
 ## 画面の上のほうに出す派手な文字(「あったー!!」など。前が見えるように上のほう)
 var _banner: Label
 var _banner_tween: Tween
+## 見逃しの答え合わせ(巻き戻し)の表示: 上の「◀◀ まきもどし」と、届いたスタンプの一覧
+var _replay_title: Label
+var _replay_panel: PanelContainer
 
 
 func _ready() -> void:
@@ -399,6 +402,13 @@ func _build_minion_card(parent: Container, minion: Dictionary) -> void:
 		info.add_child(nm)
 		any_bonus = any_bonus or bool(p["bonus"])
 	info.add_child(UiStyle.label("2人だったよ!" if two else "だったよ!", 22 if two else 24, GameConfig.COLOR_INK))
+	# 見逃しのラウンド: 手下が、気づかなかった人に送ったウソのスタンプ(投票のあとにわかる)
+	for p in people:
+		for w in p.get("lies", []):
+			var lp := UiStyle.pill(tr("ウソ: %s") % str(w), 16)
+			UiStyle.set_bg(lp.get_theme_stylebox("panel") as StyleBoxFlat, Color("E5483B"))
+			UiStyle.set_font_color(lp.get_child(0) as Label, Color.WHITE)
+			info.add_child(lp)
 	if any_bonus:
 		var bp := UiStyle.pill(tr("鬼がかって +%d点") % GameConfig.SCORE_MINION_ONI_WIN, 18)
 		(bp.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = purple.lightened(0.75)
@@ -1000,6 +1010,65 @@ func _draw_speed_lines() -> void:
 		var inner := far * rng.randf_range(0.42, 0.62)
 		var w := rng.randf_range(2.0, 7.0)
 		_speed.draw_line(c + dir * inner, c + dir * far, Color(0.12, 0.1, 0.09, 0.55 * a), w, true)
+
+
+## 見逃しの答え合わせ: 上に「◀◀ まきもどし」、右に「○○に届いたスタンプ」の一覧(送った人の色・言葉・ホント/ウソ)
+## lines: [{"text", "color", "tag", "tag_color"}]
+func show_replay(title: String, lines: Array) -> void:
+	hide_replay()
+	_replay_title = _make_label(44, Color.WHITE)
+	_replay_title.add_theme_color_override("font_outline_color", GameConfig.COLOR_INK)
+	_replay_title.add_theme_constant_override("outline_size", 12)
+	_replay_title.text = tr("◀◀ まきもどし")
+	_replay_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_replay_title.anchor_left = 0.0
+	_replay_title.anchor_right = 1.0
+	_replay_title.offset_top = 70
+	_top.add_child(_replay_title)
+	var tw := _replay_title.create_tween().set_loops()
+	tw.tween_property(_replay_title, "modulate:a", 0.35, 0.35)
+	tw.tween_property(_replay_title, "modulate:a", 1.0, 0.35)
+	_replay_panel = PanelContainer.new()
+	_replay_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 18, 4)
+	st.set_content_margin_all(14)
+	_replay_panel.add_theme_stylebox_override("panel", st)
+	_top.add_child(_replay_panel)
+	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_theme_constant_override("separation", 6)
+	_replay_panel.add_child(col)
+	col.add_child(UiStyle.label(title, 22, GameConfig.COLOR_INK))
+	if lines.is_empty():
+		col.add_child(UiStyle.label("スタンプは届かなかった", 20, GameConfig.COLOR_INK.lightened(0.3)))
+	for ln in lines:
+		var row := HBoxContainer.new()
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_theme_constant_override("separation", 8)
+		col.add_child(row)
+		var pill := UiStyle.pill(str(ln["text"]), 20)
+		UiStyle.set_bg(pill.get_theme_stylebox("panel") as StyleBoxFlat, ln["color"])
+		UiStyle.set_font_color(pill.get_child(0) as Label, text_color_on(ln["color"]))
+		row.add_child(pill)
+		var tag := UiStyle.pill(str(ln["tag"]), 18)
+		UiStyle.set_bg(tag.get_theme_stylebox("panel") as StyleBoxFlat, ln["tag_color"])
+		UiStyle.set_font_color(tag.get_child(0) as Label, Color.WHITE)
+		row.add_child(tag)
+	_replay_panel.anchor_left = 1.0
+	_replay_panel.anchor_right = 1.0
+	_replay_panel.offset_top = 140
+	_replay_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_replay_panel.offset_right = -UiStyle.SAFE
+	_replay_panel.offset_left = -UiStyle.SAFE - 10
+
+
+func hide_replay() -> void:
+	if _replay_title and is_instance_valid(_replay_title):
+		_replay_title.queue_free()
+	if _replay_panel and is_instance_valid(_replay_panel):
+		_replay_panel.queue_free()
+	_replay_title = null
+	_replay_panel = null
 
 
 ## 画面の上のほうに、派手な文字をポンと出して、seconds 秒で消す(前の障害物が見えるように上のほう)

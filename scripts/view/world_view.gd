@@ -1,5 +1,9 @@
 class_name WorldView
 extends Node3D
+## 見逃しの演出: 答え合わせ(上からの巻き戻し)が始まった/終わった・演出がおわった(結果カードを出してよい)
+signal missed_replay_started(result: Dictionary)
+signal missed_replay_ended
+signal missed_scene_done
 ## GameState を読んで 3D の見た目を作る・更新するだけ。
 ## 状態は書きかえない。
 
@@ -120,6 +124,17 @@ var _last_pos := {}
 var _still_time := {}
 ## お手つきの演出: ズッコケてから、とぼとぼ真ん中まで歩く(id -> {"t", "from", "to"})
 var _out_anim := {}
+## 見逃しの演出(鬼が1周しても気づかなかった): {"t", "loser", "oni", "result", "done", "walk_from", "walk_to", "oni_from"}
+var _ms := {}
+## 見逃しの演出の時間(秒): トントン → 振り向く → 放心(魂が抜ける・チーン)→ 答え合わせ(巻き戻し)→ とぼとぼ
+const MS_LOOK := 0.7
+const MS_DAZE := 1.7
+const MS_REPLAY := 2.9
+const MS_REWIND := 2.0
+const MS_REPLAY_END := 5.6
+## 頭に落とし物をのせている人(見逃した人。次のラウンドで消える)と、真ん中に座った位置
+var _item_head_id := -1
+var _missed_sit := {}
 const OUT_FALL_TIME := 0.75
 const OUT_RISE_TIME := 0.35
 const OUT_WALK_SPEED := 1.1
@@ -168,6 +183,9 @@ func build(state: GameState) -> void:
 	_last_pos.clear()
 	_still_time.clear()
 	_out_anim.clear()
+	_ms.clear()
+	_item_head_id = -1
+	_missed_sit.clear()
 	_shake_left = 0.0
 	_obstacle_nodes.clear()
 	_milk_nodes.clear()
@@ -234,13 +252,16 @@ func build(state: GameState) -> void:
 func sync(state: GameState, delta: float) -> void:
 	var turn_step := delta / GameConfig.LOOK_BACK_TIME
 	for a in state.actors:
-		var t: float = move_toward(_turn.get(a.id, 0.0), 1.0 if a.looking_back else 0.0, turn_step)
+		# 見逃しの演出で、ゆっくり振り向く(見た目だけ)
+		var forced := _ms_forced_look(a.id)
+		var t: float = move_toward(_turn.get(a.id, 0.0), 1.0 if a.looking_back or forced else 0.0, turn_step * (0.6 if forced else 1.0))
 		_turn[a.id] = t
 		var node: Node3D = _actor_nodes.get(a.id)
 		if node:
 			node.position = a.position
 			node.rotation.y = a.yaw
 			_apply_out_anim(a, node, delta)
+			_apply_missed_pos(a, node)
 			var blob: MeshInstance3D = _blobs.get(a.id)
 			if blob:
 				blob.position = Vector3(a.position.x, 0.03, a.position.z)
@@ -248,7 +269,7 @@ func sync(state: GameState, delta: float) -> void:
 			var model := node as CharacterModel
 			if model:
 				# 振り向いた姿は全員に見える(頭→上半身の順に後ろを向く)
-				model.set_look(a.looking_back)
+				model.set_look(a.looking_back or _ms_forced_look(a.id))
 				model.set_pose(_pose_of(state, a))
 				# 転んで止まっている間は、前にばったり倒れている(お手つきの演出中は、後ろへズッコケる)
 				if _out_anim.has(a.id):
@@ -259,6 +280,7 @@ func sync(state: GameState, delta: float) -> void:
 				model.set_hat(a.id == state.oni_id, _beach)
 			_update_expression(state, a, model, delta)
 			_update_milk(state, a, model)
+	_update_missed_scene(state, delta)
 	_update_seat_camera(state, delta)
 	if _overlay:
 		_overlay.update(state, get_viewport().get_camera_3d())
@@ -290,7 +312,14 @@ func sync(state: GameState, delta: float) -> void:
 	_clock += delta
 
 	var holder := state.get_actor(state.chaser_id)
-	if holder:
+	if _item_head_id >= 0 and _actor_nodes.has(_item_head_id):
+		# 見逃した人は、落とし物を頭にのせたまま(次のラウンドで消える)
+		var hm := _actor_nodes[_item_head_id] as CharacterModel
+		var head := hm.bone_world("DEF-head").origin
+		_handkerchief.visible = true
+		_handkerchief.transform = Transform3D(hm.global_transform.basis.orthonormalized().scaled(Vector3.ONE * 0.8),
+				head + Vector3(0, CharacterModel.HEAD_RADIUS + 0.06, 0))
+	elif holder:
 		# 追いかける人が持って走る: ハンカチ・上履きは右手に、大きい物は背中に背負う
 		_handkerchief.visible = true
 		_carry_item(_actor_nodes.get(holder.id) as CharacterModel)
@@ -302,6 +331,166 @@ func sync(state: GameState, delta: float) -> void:
 	_hide_item_if_not_visible_to_me(state)
 	_update_footsteps(state)
 	_update_ambience(delta)
+
+
+## 見逃しの演出を始める(鬼が1周しても気づかなかった)。終わったら(結果カードを出してよくなったら)missed_scene_done。
+## みんなの画面で同じ動き。気づかなかった本人の画面は、ゆっくり後ろを向く
+func play_missed_scene(state: GameState, result: Dictionary) -> void:
+	var loser: int = result.get("loser", -1)
+	var ln: Node3D = _actor_nodes.get(loser)
+	if ln == null:
+		missed_scene_done.emit()
+		return
+	var oni_node: Node3D = _actor_nodes.get(state.oni_id)
+	var home := ln.position
+	var center := home.normalized() * GameConfig.OUT_SIT_RADIUS if home.length() > 0.01 else Vector3.ZERO
+	_ms = {"t": 0.0, "loser": loser, "oni": state.oni_id, "result": result, "done": false,
+			"walk_from": home, "walk_to": Vector3(center.x, 0.0, center.z),
+			"oni_from": oni_node.position if oni_node else Vector3.ZERO, "stage": 0}
+	# 1. トントン(鬼が後ろから肩をたたく)
+	_play_actor(loser, "tonton", -2.0, -8.0)
+	_pop(loser, tr("トントン"), Color.WHITE)
+
+
+func is_missed_scene_playing() -> bool:
+	return not _ms.is_empty() and not _ms.get("done", false)
+
+
+## タップでとばす: すぐに終わりの形(真ん中で体育座り・頭に落とし物)にする
+func skip_missed_scene() -> void:
+	if _ms.is_empty():
+		return
+	if int(_ms["stage"]) >= 3 and int(_ms["stage"]) < 4:
+		_end_replay()
+	var loser: int = _ms["loser"]
+	_missed_sit[loser] = _ms["walk_to"]
+	_item_head_id = loser
+	_ms_finish()
+	_ms.clear()
+
+
+func _ms_forced_look(id: int) -> bool:
+	return not _ms.is_empty() and _ms["loser"] == id and float(_ms["t"]) >= MS_LOOK and int(_ms["stage"]) < 4
+
+
+func _ms_dazed(id: int) -> bool:
+	return (not _ms.is_empty() and _ms["loser"] == id and float(_ms["t"]) >= MS_DAZE) or _missed_sit.has(id)
+
+
+func _ms_finish() -> void:
+	if not _ms.get("done", false):
+		_ms["done"] = true
+		missed_scene_done.emit()
+
+
+func _update_missed_scene(state: GameState, delta: float) -> void:
+	if _ms.is_empty():
+		return
+	_ms["t"] = float(_ms["t"]) + delta
+	var t: float = _ms["t"]
+	var loser: int = _ms["loser"]
+	var stage: int = _ms["stage"]
+	if stage == 0 and t >= MS_DAZE:
+		# 3. 放心して、頭から魂がふわっと抜ける。間の抜けたラッパ「チーン」
+		_ms["stage"] = 1
+		_play_actor(loser, "chiin", -2.0, -8.0)
+		_pop(loser, tr("チーン…"), Color("C9C2B6"))
+		_spawn_soul(loser)
+	elif stage == 1 and t >= MS_REPLAY:
+		# 答え合わせ: 上からの視点で巻き戻し(鬼が落とした瞬間へ)
+		_ms["stage"] = 3
+		_top_cam.look_at_from_position(Vector3(0, 11, 5.5), Vector3.ZERO)
+		_top_cam.make_current()
+		missed_replay_started.emit(_ms["result"])
+	elif stage == 3:
+		var oni_node: Node3D = _actor_nodes.get(_ms["oni"])
+		var res: Dictionary = _ms["result"]
+		var k := clampf((t - MS_REPLAY) / MS_REWIND, 0.0, 1.0)
+		if oni_node:
+			# 鬼が輪の外を逆回りにもどっていく(巻き戻し)
+			var from: Vector3 = _ms["oni_from"]
+			var a0 := atan2(from.x, from.z)
+			var a1: float = float(res.get("drop_angle", a0))
+			var a1w := a0 - fposmod(a0 - a1, TAU)
+			if a1w > a0 - 0.3:
+				a1w -= TAU
+			var ang := lerpf(a0, a1w, k * k * (3.0 - 2.0 * k))
+			oni_node.position = Vector3(sin(ang), 0.0, cos(ang)) * GameConfig.ONI_WALK_RADIUS
+		if k >= 1.0 and not _ms.has("dropped_shown"):
+			_ms["dropped_shown"] = true
+			_pop_at(res.get("drop_pos", Vector3.ZERO), tr("ここで落とした!"), Color("FFB020"))
+			if _drop_player:
+				_drop_player.global_position = res.get("drop_pos", Vector3.ZERO)
+				_drop_player.play()
+		if t >= MS_REPLAY_END:
+			_end_replay()
+			# 4. 落とし物を頭にのせて、とぼとぼ真ん中へ(ここで結果カードを出してよい)
+			_ms["stage"] = 4
+			_ms["walking"] = true
+			_ms["walk_t"] = 0.0
+			_item_head_id = loser
+			_missed_sit[loser] = _ms["walk_from"]
+			_play_actor(loser, "trudge", -6.0, -16.0)
+			_ms_finish()
+	elif stage == 4:
+		_ms["walk_t"] = float(_ms["walk_t"]) + delta
+		var from: Vector3 = _ms["walk_from"]
+		var to: Vector3 = _ms["walk_to"]
+		var k := clampf(float(_ms["walk_t"]) * OUT_WALK_SPEED / maxf(from.distance_to(to), 0.01), 0.0, 1.0)
+		_missed_sit[loser] = from.lerp(to, k)
+		if k >= 1.0:
+			_missed_sit[loser] = to
+			_ms.clear()
+
+
+func _end_replay() -> void:
+	if _seat_cam:
+		_seat_cam.make_current()
+	missed_replay_ended.emit()
+
+
+## 見逃した人の位置(とぼとぼ歩く途中・真ん中に座ったあと)と向き
+func _apply_missed_pos(a: GameState.Actor, node: Node3D) -> void:
+	if not _missed_sit.has(a.id):
+		return
+	var p: Vector3 = _missed_sit[a.id]
+	if _ms.has("walking") and _ms["loser"] == a.id:
+		var dir: Vector3 = (_ms["walk_to"] as Vector3) - (_ms["walk_from"] as Vector3)
+		node.rotation.y = atan2(-dir.x, -dir.z)
+	else:
+		# 真ん中で、もとの席の方を向いて座る
+		node.rotation.y = atan2(p.x, p.z) + PI
+	node.position = p
+
+
+## 頭から魂がふわっと抜ける(白いおばけの形が、ゆれながら上へのぼって消える)
+func _spawn_soul(id: int) -> void:
+	var m := _actor_nodes.get(id) as CharacterModel
+	if m == null:
+		return
+	var soul := Node3D.new()
+	var head := SphereMesh.new()
+	head.radius = 0.13
+	head.height = 0.26
+	var hm := Toon.mesh(head, Color(1, 1, 1), 0.02)
+	soul.add_child(hm)
+	var tail := CylinderMesh.new()
+	tail.top_radius = 0.12
+	tail.bottom_radius = 0.0
+	tail.height = 0.28
+	var tm := Toon.mesh(tail, Color(1, 1, 1), 0.02)
+	tm.position = Vector3(0, -0.16, 0)
+	tm.rotation.z = 0.3
+	soul.add_child(tm)
+	add_child(soul)
+	var start := m.bone_world("DEF-head").origin + Vector3(0, 0.3, 0)
+	soul.position = start
+	var tw := soul.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(soul, "position", start + Vector3(0.15, 1.1, 0), 1.6).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(soul, "rotation:z", 0.4, 0.8).set_trans(Tween.TRANS_SINE)
+	tw.chain().tween_property(soul, "scale", Vector3.ZERO, 0.3)
+	tw.chain().tween_callback(soul.queue_free)
 
 
 ## お手つきの演出: ズッコケている間はもとの席の場所、そのあと真ん中まで歩く(状態の位置は、もう真ん中)
@@ -333,6 +522,9 @@ func _apply_out_anim(a: GameState.Actor, node: Node3D, delta: float) -> void:
 
 ## 姿勢: 座っている人は座る、追いかけっこ中は走る、鬼は歩く(止まっていれば立つ)
 func _pose_of(state: GameState, a: GameState.Actor) -> String:
+	# 見逃した人: 演出の終わりにとぼとぼ歩いて、真ん中で体育座り
+	if _missed_sit.has(a.id):
+		return "walk" if _ms.has("walking") and _ms["loser"] == a.id else "floor"
 	if a.role == GameState.Role.SEATED:
 		# 海辺では、砂に直接体育座り
 		return "floor" if _beach else "sit"
@@ -378,10 +570,14 @@ func _update_expression(state: GameState, a: GameState.Actor, model: CharacterMo
 		expr = CharacterModel.OOPS
 	elif a.looking_back or _surprise_until.get(a.id, -1.0) > _clock:
 		expr = CharacterModel.SURPRISED
+	# 見逃しの演出: 鬼はニヤッと笑う
+	if not _ms.is_empty() and _ms["oni"] == a.id and float(_ms["t"]) >= MS_LOOK:
+		expr = CharacterModel.WIN
 	model.set_expression(expr)
 	# お手つきの回数で、顔がだんだん崩れていく(3回目は放心)
 	# お手つきで抜けた人は放心の顔(ズッコケてから、体育座りしている間も)
-	var dazed := _dazed.has(a.id) or a.otetsuki_count >= GameConfig.OTETSUKI_DAZED_COUNT or a.role == GameState.Role.OUT
+	var dazed := _dazed.has(a.id) or a.otetsuki_count >= GameConfig.OTETSUKI_DAZED_COUNT or a.role == GameState.Role.OUT \
+			or _ms_dazed(a.id)
 	model.set_fluster(CharacterModel.FLUSTER_MAX if dazed else mini(a.otetsuki_count, 2))
 	# 振り向いた瞬間にピョンと跳ねる
 	if a.looking_back and not _was_looking.get(a.id, false):
@@ -1417,7 +1613,7 @@ func _pop_at(pos: Vector3, text: String, color: Color) -> void:
 func _hide_item_if_not_visible_to_me(state: GameState) -> void:
 	var me := state.get_local_player()
 	# 手下は両どなりの後ろも見える(GameState.sees_behind)
-	var hidden := state.handkerchief_on_floor and me.role == GameState.Role.SEATED \
+	var hidden := state.phase != GameState.Phase.RESULT and state.handkerchief_on_floor and me.role == GameState.Role.SEATED \
 			and state.drop_target_seat != me.seat_index \
 			and not state.sees_behind(me.id, state.drop_target_seat)
 	var bits := 1 << (HIDDEN_LAYER - 1) if hidden else 1
