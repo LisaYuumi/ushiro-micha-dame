@@ -69,6 +69,7 @@ func _initialize() -> void:
 	_test_accessories()
 	_test_lap_behind_not_touch()
 	_test_stamp_shuffle()
+	_test_bots_quiet_in_blackout()
 	_test_bot_personalities()
 	_test_look_limit_and_patience()
 	_test_online_match_setup()
@@ -1940,3 +1941,23 @@ func _test_stamp_shuffle() -> void:
 	Profile.stamp_words = keep_words
 	Profile.stamp_pick = keep_pick
 	Profile.save()
+
+
+## 停電中は、ボットはスタンプを送らない(だれの後ろも見えないので)
+func _test_bots_quiet_in_blackout() -> void:
+	var s := GameState.new()
+	s.start_match(77)
+	s.blackout = true
+	for i in s.seat_pass_age.size():
+		s.seat_pass_age[i] = 1.0
+	var b := BotBrain.new()
+	b.reset(77)
+	var sent := 0
+	for i in int(30.0 / STEP):
+		b.update(s, STEP)
+		for e in s.take_events():
+			if e["type"] == "stamp":
+				sent += 1
+		for k in s.seat_pass_age.size():
+			s.seat_pass_age[k] = 1.0
+	_check(sent == 0, "停電中、ボットはスタンプを送らない(%d)" % sent)

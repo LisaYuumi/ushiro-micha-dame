@@ -183,6 +183,9 @@ func _update_look(state: GameState, a: GameState.Actor, delta: float) -> void:
 func _update_stamp(state: GameState, a: GameState.Actor, delta: float) -> void:
 	if a.stamps_left == 0:
 		return
+	# 停電中は、だれの後ろも見えないので、ボットはスタンプを送らない(電気がついたら、また送る)
+	if state.blackout:
+		return
 	var is_oni := a.role == GameState.Role.ONI
 	if not _stamp_left.has(a.id):
 		if is_oni:
