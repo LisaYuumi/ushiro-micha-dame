@@ -406,7 +406,7 @@ func _update_missed_scene(state: GameState, delta: float) -> void:
 		var oni_node: Node3D = _actor_nodes.get(_ms["oni"])
 		var res: Dictionary = _ms["result"]
 		var k := clampf((t - MS_REPLAY) / MS_REWIND, 0.0, 1.0)
-		if oni_node:
+		if oni_node and is_finite(float(res.get("drop_angle", INF))):
 			# 鬼が輪の外を逆回りにもどっていく(巻き戻し)
 			var from: Vector3 = _ms["oni_from"]
 			var a0 := atan2(from.x, from.z)
@@ -416,7 +416,7 @@ func _update_missed_scene(state: GameState, delta: float) -> void:
 				a1w -= TAU
 			var ang := lerpf(a0, a1w, k * k * (3.0 - 2.0 * k))
 			oni_node.position = Vector3(sin(ang), 0.0, cos(ang)) * GameConfig.ONI_WALK_RADIUS
-		if k >= 1.0 and not _ms.has("dropped_shown"):
+		if k >= 1.0 and not _ms.has("dropped_shown") and is_finite(float(res.get("drop_angle", INF))):
 			_ms["dropped_shown"] = true
 			_pop_at(res.get("drop_pos", Vector3.ZERO), tr("ここで落とした!"), Color("FFB020"))
 			if _drop_player:
