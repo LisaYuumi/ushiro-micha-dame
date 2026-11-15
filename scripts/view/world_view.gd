@@ -144,6 +144,7 @@ func build(state: GameState) -> void:
 	for c in get_children():
 		c.queue_free()
 	_actor_nodes.clear()
+	_window_lights.clear()
 	_clock_node = null
 	_curtain_node = null
 	_turn.clear()
@@ -249,6 +250,8 @@ func sync(state: GameState, delta: float) -> void:
 			var bc := _sky_color.lerp(DARK_SKY, 1.0 - _blackout.brightness())
 			if _env.background_color != bc:
 				_env.background_color = bc
+		for wl in _window_lights:
+			wl.visible = _blackout.brightness() > 0.5
 	_update_obstacles(state)
 	_update_oni_shadow(state)
 	_update_milk_ring(state, delta)
@@ -562,6 +565,8 @@ func is_top_camera() -> bool:
 
 ## 空の色(停電のときは暗くする)
 var _env: Environment
+## 窓から差しこむ日差し(停電のときは消す)
+var _window_lights: Array[MeshInstance3D] = []
 var _sky_color := Color.WHITE
 const DARK_SKY := Color(0.02, 0.03, 0.08)
 
@@ -702,6 +707,7 @@ func _build_window_light() -> void:
 		mi.position = Vector3(-ROOM_HALF + 1.7, 0.025, z + 0.5)
 		mi.rotation.y = deg_to_rad(-18.0)
 		add_child(mi)
+		_window_lights.append(mi)
 
 
 ## 後ろの壁際に寄せて積んだ机と椅子(ハンカチ落としの場所を作るために机を下げた様子)。

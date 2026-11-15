@@ -52,6 +52,8 @@ render_mode unshaded, cull_front, shadows_disabled;
 
 uniform vec4 ink : source_color = vec4(0.118, 0.106, 0.094, 1.0);
 uniform float width = 0.03;
+// 停電のときは線も暗くする
+global uniform float dark_bright;
 
 void vertex() {
 	vec3 dir = length(VERTEX) > 0.0001 ? normalize(VERTEX) : NORMAL;
@@ -59,7 +61,7 @@ void vertex() {
 }
 
 void fragment() {
-	ALBEDO = ink.rgb;
+	ALBEDO = ink.rgb * dark_bright;
 }
 """
 
@@ -111,6 +113,8 @@ render_mode unshaded, cull_front, shadows_disabled;
 uniform vec4 ink : source_color = vec4(0.118, 0.106, 0.094, 1.0);
 uniform float width = 0.03;
 
+global uniform float dark_bright;
+
 void vertex() {
 	vec3 d = VERTEX - CUSTOM0.xyz;
 	vec3 dir = length(d) > 0.0001 ? normalize(d) : NORMAL;
@@ -118,7 +122,7 @@ void vertex() {
 }
 
 void fragment() {
-	ALBEDO = ink.rgb;
+	ALBEDO = ink.rgb * dark_bright;
 }
 """
 
@@ -168,6 +172,7 @@ static func material_batched(color: Color, outline: float) -> Material:
 	base.set_shader_parameter("albedo", color)
 	if outline > 0.0:
 		if _outline_batched_shader == null:
+			ensure_globals()
 			_outline_batched_shader = Shader.new()
 			_outline_batched_shader.code = _OUTLINE_BATCHED_CODE
 		var line := ShaderMaterial.new()
