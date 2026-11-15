@@ -505,6 +505,91 @@ def _bgm_round(level):
     return norm(_render_song(bpm, bars, parts), 0.75)
 
 
+# --- 教室のラウンド中の曲: 小学校の音楽の時間の楽器(リコーダー・鍵盤ハーモニカ・木琴・カスタネット・タンバリン) ---
+
+def _recorder(freq, d):
+    # リコーダー: やわらかい丸い音に、少しの息の音と、ゆるいビブラート
+    t = t_of(d)
+    f = freq * (1.0 + 0.004 * np.sin(2 * np.pi * 5.5 * t) * np.minimum(t / 0.25, 1.0))
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    body = np.sin(ph) + 0.18 * np.sin(2 * ph) + 0.06 * np.sin(3 * ph)
+    breath = bandpass(noise(d), freq * 1.5, min(freq * 6, 12000)) * 0.06
+    return (body + breath) * env_ar(d, 0.03, 0.06)
+
+
+def _melodica(freq, d):
+    # 鍵盤ハーモニカ: リードのビーッとした音(のこぎり波を少しこもらせる)と、息のゆれ
+    t = t_of(d)
+    raw = tone(freq, d, "saw") * 0.6 + tone(freq * 1.003, d, "saw") * 0.4
+    return lowpass(raw, 2200) * (0.85 + 0.15 * np.sin(2 * np.pi * 4.0 * t)) * env_ar(d, 0.04, 0.1)
+
+
+def _xylo(freq, d):
+    # 木琴: 木をたたいた、短くてころっとした音
+    dd = min(d, 0.35)
+    t = t_of(dd)
+    w = (np.sin(2 * np.pi * freq * t) + 0.35 * np.sin(2 * np.pi * freq * 3.9 * t) * np.exp(-t / 0.03)) * np.exp(-t / 0.13)
+    return mix(w, click(0.01, 1500, 5000, 0.002) * 0.15)
+
+
+def _castanet(d):
+    dd = min(d, 0.06)
+    return bandpass(noise(dd), 1800, 6500) * env_exp(dd, 0.008) + bandpass(noise(dd), 900, 2500) * env_exp(dd, 0.012) * 0.5
+
+
+def _tambourine(d):
+    dd = min(d, 0.22)
+    t = t_of(dd)
+    jingle = sum(np.sin(2 * np.pi * f * t) for f in [5200, 6100, 7300, 8800]) * 0.15
+    return (highpass(noise(dd), 5000) * 0.6 + jingle) * env_exp(dd, 0.06)
+
+
+def _bgm_school(level):
+    # 教室のラウンド中: 小学校っぽい明るい曲(ハ長調・ドレミソラ)。音を短く切って、ぬき足さし足のドキドキ感。
+    # ラウンドが進むほど楽器が増えて、少し速くなる(level 1〜3)。鬼との距離では変えない
+    bpm = [100, 104, 110][level - 1]
+    bars = 8
+    prog = [(60, False), (65, False), (67, False), (60, False), (69, True), (65, False), (67, False), (60, False)]
+    melody = [67, 0, 69, 67, 64, 0, 62, 64, 67, 67, 69, 72, 69, 0, 67, 0,
+              64, 64, 62, 60, 62, 0, 64, 67, 69, 67, 64, 62, 60, 0, 0, 0]
+    parts = []
+    for b, (root, minor) in enumerate(prog):
+        # 木琴: ドン・ソン(根音と5度)を、はずむように
+        for k, n in enumerate([root - 12, root - 5, root - 12, root - 5]):
+            parts.append((b * 4 + k, 0.5, lambda d, n=n: _xylo(midi(n + 12), d), 0.32))
+        if level >= 2:
+            # 鍵盤ハーモニカ: 2拍目と4拍目に、短い和音
+            for k in [1, 3]:
+                for n in _chord_notes(root, minor):
+                    parts.append((b * 4 + k, 0.45, lambda d, n=n: _melodica(midi(n), d), 0.06))
+            # カスタネット: ウン・タ・ウン・タ・タ
+            for k in [1, 3, 3.5]:
+                parts.append((b * 4 + k, 0.2, _castanet, 0.18))
+        if level >= 3:
+            # タンバリン: 1拍目にシャン、ベースの木琴をもう1オクターブ下で
+            parts.append((b * 4, 0.3, _tambourine, 0.14))
+            parts.append((b * 4 + 2, 0.3, _tambourine, 0.08))
+            for k in range(4):
+                parts.append((b * 4 + k + 0.5, 0.3, lambda d, r=root: _xylo(midi(r), d), 0.12))
+    # リコーダーのメロディ(短く切る: ぬき足さし足)
+    for i, n in enumerate(melody):
+        if n:
+            parts.append((i * 1.0, 0.55, lambda d, n=n: _recorder(midi(n + 12), d), 0.22))
+    return norm(_render_song(bpm, bars, parts), 0.75)
+
+
+def bgm_school_1():
+    return _bgm_school(1)
+
+
+def bgm_school_2():
+    return _bgm_school(2)
+
+
+def bgm_school_3():
+    return _bgm_school(3)
+
+
 def bgm_round_1():
     return _bgm_round(1)
 
@@ -711,6 +796,7 @@ SOUNDS = {
     "drop_beach_3": drop_beach_3, "drop_beach_4": drop_beach_4,
     "step_sand": step_sand, "run_step_sand": run_step_sand, "amb_beach": amb_beach,
     "eraser_pon": eraser_pon,
+    "bgm_school_1": bgm_school_1, "bgm_school_2": bgm_school_2, "bgm_school_3": bgm_school_3,
     "look_zah": look_zah, "found": found, "gaan": gaan,
 }
 

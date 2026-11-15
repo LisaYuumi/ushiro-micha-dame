@@ -9,7 +9,8 @@ extends Node
 static var instance: AudioDirector
 
 ## BGM の大きさ(dB)。ラウンド中は、落とし物の音や足音が聞こえるように小さめ
-const BGM_DB := {"bgm_lobby": -10.0, "bgm_round_1": -15.0, "bgm_round_2": -15.0, "bgm_round_3": -14.0, "bgm_chase": -11.0}
+const BGM_DB := {"bgm_lobby": -10.0, "bgm_round_1": -15.0, "bgm_round_2": -15.0, "bgm_round_3": -14.0, "bgm_chase": -11.0,
+		"bgm_school_1": -15.0, "bgm_school_2": -15.0, "bgm_school_3": -14.0}
 const FADE_TIME := 0.8
 
 var _bgm: Array[AudioStreamPlayer] = []
