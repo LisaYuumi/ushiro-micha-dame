@@ -234,6 +234,9 @@ static func ensure_globals() -> void:
 ## 停電の暗さを決める(bright: 1 = ふつう。flash_r > 0 なら、flash_pos のまわり flash_r メートルが明るい)
 static func set_darkness(bright: float, flash_pos: Vector3 = Vector3.ZERO, flash_r: float = 0.0, flash_bright: float = 0.6) -> void:
 	ensure_globals()
+	# 塗りの明るさは「リニア」の色でかかる(画面ではガンマで明るく見える)ので、見た目の明るさにそろえる
+	bright = pow(clampf(bright, 0.0, 1.0), 2.2)
+	flash_bright = pow(clampf(flash_bright, 0.0, 1.0), 2.2)
 	RenderingServer.global_shader_parameter_set("dark_bright", bright)
 	RenderingServer.global_shader_parameter_set("dark_flash_pos", flash_pos)
 	RenderingServer.global_shader_parameter_set("dark_flash_r", flash_r)
