@@ -35,6 +35,8 @@ void vertex() {
 
 void fragment() {
 	ALBEDO = albedo.rgb;
+	// 停電のときは、前の暗い幕と同じ紺色にうっすら寄せる
+	EMISSION = vec3(0.0015, 0.0024, 0.007) * (1.0 - dark_bright);
 }
 
 void light() {
@@ -61,7 +63,7 @@ void vertex() {
 }
 
 void fragment() {
-	ALBEDO = ink.rgb * dark_bright;
+	ALBEDO = mix(vec3(0.0015, 0.0024, 0.007), ink.rgb, dark_bright);
 }
 """
 
@@ -96,6 +98,7 @@ void vertex() {
 
 void fragment() {
 	ALBEDO = albedo.rgb * COLOR.rgb;
+	EMISSION = vec3(0.0015, 0.0024, 0.007) * (1.0 - dark_bright);
 }
 
 void light() {
@@ -122,7 +125,7 @@ void vertex() {
 }
 
 void fragment() {
-	ALBEDO = ink.rgb * dark_bright;
+	ALBEDO = mix(vec3(0.0015, 0.0024, 0.007), ink.rgb, dark_bright);
 }
 """
 
