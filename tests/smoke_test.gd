@@ -67,6 +67,7 @@ func _initialize() -> void:
 	_test_minion_vote()
 	_test_beach_stage()
 	_test_accessories()
+	_test_lap_behind_not_touch()
 	_test_bot_personalities()
 	_test_look_limit_and_patience()
 	_test_online_match_setup()
@@ -1875,3 +1876,26 @@ func _test_accessories() -> void:
 	var g := GameState.new()
 	g.apply_snapshot(s.snapshot(1))
 	_check(g.get_actor(me.id).accessories == me.accessories, "小物は参加した人にも届く")
+
+
+## ほぼ1周遅れで気づいた人に、後ろから鬼が近づいて体が重なっても、タッチにはならない(周回を数える)
+func _test_lap_behind_not_touch() -> void:
+	var s := _chasing_state(65)
+	var c := s.get_actor(s.chaser_id)
+	var oni := s.get_actor(s.oni_id)
+	# 追う人をほぼ1周遅れにして、鬼のすぐ前(体の位置)に置く
+	s.chaser_progress = s.oni_angle - TAU + 0.15
+	c.run_r = oni.run_r
+	c.lane = oni.lane
+	c.position = s._ring_point(fposmod(s.chaser_progress, TAU), c.run_r)
+	_check(c.position.distance_to(oni.position) < GameConfig.TOUCH_DISTANCE, "(確認用)体はすぐそば")
+	var touched := false
+	for i in int(1.0 / STEP):
+		s.tick(STEP)
+		for e in s.take_events():
+			if e["type"] == "result" and e["reason"] == "touched":
+				touched = true
+		if s.phase != GameState.Phase.CHASE:
+			break
+	_check(not touched, "ほぼ1周遅れの人に、後ろから鬼が近づいてもタッチにならない")
+	_check(s.chaser_gap_m() > 10.0, "(確認用)追う人はほぼ1周遅れのまま(%.1f m)" % s.chaser_gap_m())

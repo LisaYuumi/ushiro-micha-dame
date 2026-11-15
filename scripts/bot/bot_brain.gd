@@ -269,7 +269,8 @@ func _update_runner(state: GameState, a: GameState.Actor) -> void:
 		return
 	if a.id == state.chaser_id:
 		var oni := state.get_actor(state.oni_id)
-		var gap := fposmod(state.runner_angle(oni) - state.runner_angle(a), TAU) * a.run_r
+		# 周回も数えた、鬼までの道のり(ほぼ1周遅れのときに、後ろから来た鬼を追いついたと思わないように)
+		var gap := state.chaser_gap_m()
 		if gap < 3.0 and oni.lane != a.lane and state.obstacle_ahead(a, oni.lane, 2.5).is_empty():
 			state.chase_lane(a.id, oni.lane - a.lane)
 			return

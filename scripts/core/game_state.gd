@@ -1321,14 +1321,21 @@ func _tick_chase(delta: float) -> void:
 			_last_lap_told = true
 			events.append({"type": "last_lap"})
 
-	# タッチ: すぐそばまで近づいたら。列がちがっても、輪の上で鬼に追いついた・追い越したらタッチ
-	# (前は近さだけで決めていたので、ちがう列で追い越すとタッチにならなかった)
-	var caught := (oni_angle - chaser_progress) * float(GameConfig.LANE_RADII[1]) <= GameConfig.TOUCH_DISTANCE * 0.5
-	if _flat_distance(chaser.position, oni.position) <= GameConfig.TOUCH_DISTANCE or caught:
+	# タッチ: 周回も数えて、追う人が鬼のすぐ後ろまで追いついたら。列がちがっても、輪の上で追いついた・追い越したらタッチ。
+	# 体がすぐそばにいても、追う人がほぼ1周遅れ(鬼が後ろから近づいてきた)ならタッチにしない
+	var gap_m := chaser_gap_m()
+	var caught := gap_m <= GameConfig.TOUCH_DISTANCE * 0.5
+	var near := gap_m <= GameConfig.TOUCH_DISTANCE * 1.5 and _flat_distance(chaser.position, oni.position) <= GameConfig.TOUCH_DISTANCE
+	if caught or near:
 		_finish(chaser_id, oni_id, "touched")
 	elif sat:
 		_sit(oni, vacant_seat)
 		_finish(oni_id, chaser_id, "sat")
+
+
+## 追う人が鬼から、輪の上で何メートル後ろにいるか(周回も数える。0 以下なら追いついた)
+func chaser_gap_m() -> float:
+	return (oni_angle - chaser_progress) * float(GameConfig.LANE_RADII[1])
 
 
 ## 走る人を1こま進める: 自動で前へ(鬼と同じ向き・同じ速さ)、選んだ列へ横に寄る、ジャンプ、障害物
