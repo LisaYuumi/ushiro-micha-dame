@@ -37,6 +37,17 @@ const FLOOR_BEND := {
 	"DEF-spine.001": 14.0,
 	"DEF-upper_arm.L": -35.0, "DEF-upper_arm.R": -35.0,
 }
+## ひざから崩れ落ちる(お手つきの「ガーン!」): 立った姿から、ひざを折ってすねを後ろにたたみ、背中を丸めて
+## 頭をたれ、腕を前に落とす(床に手をつく感じ)。角度は度(+ で前へ曲げる/- で前へ上げる)
+const KNEEL_BEND := {
+	"DEF-thigh.L": -8.0, "DEF-thigh.R": -8.0,
+	"DEF-shin.L": 95.0, "DEF-shin.R": 95.0,
+	"DEF-spine.001": 22.0, "DEF-spine.003": 18.0,
+	"DEF-neck": 18.0, "DEF-head": 15.0,
+	"DEF-upper_arm.L": -30.0, "DEF-upper_arm.R": -30.0,
+}
+## 崩れ落ちたときに、腰が下がる高さ(すねの長さくらい。ひざが床につく)
+const KNEEL_DROP := 0.4
 ## いすに座ったときの腰の高さ/体育座りの腰の高さ(メートル)
 const SIT_HIP_HEIGHT := 0.5
 const FLOOR_HIP_HEIGHT := 0.14
@@ -99,6 +110,10 @@ var _pose := ""
 var _seat_shift := 0.0
 ## 体育座りの度合い(0 = いす、1 = 床)
 var _floor_w := 0.0
+## ひざから崩れ落ちている度合い(0〜1)と、曲げる骨(骨の番号 -> 角度)
+var _kneel := false
+var _kneel_w := 0.0
+var _kneel_bones := {}
 ## 体育座りで曲げる骨(骨の番号 -> 角度・ラジアン)
 var _bend_bones := {}
 var _look_target := 0.0
@@ -327,6 +342,10 @@ func _build_rig() -> void:
 		var i := _skel.find_bone(bone_name)
 		if i >= 0:
 			_bend_bones[i] = deg_to_rad(FLOOR_BEND[bone_name])
+	for bone_name in KNEEL_BEND:
+		var k := _skel.find_bone(bone_name)
+		if k >= 0:
+			_kneel_bones[k] = deg_to_rad(KNEEL_BEND[bone_name])
 
 
 ## 骨にくっつける体の部品: 丸い頭、カプセルの胴、短い手足(指なし)。全部同じ体の色
@@ -909,6 +928,11 @@ func set_down(v: bool, back: bool = false) -> void:
 		_down_back = back
 
 
+## ひざから崩れ落ちる(お手つきの「ガーン!」)/立ち上がる
+func set_kneel(v: bool) -> void:
+	_kneel = v
+
+
 ## 毎フレームの動き。running: 走っている(大げさに揺れる)
 func animate(delta: float, running: bool) -> void:
 	_time += delta
@@ -949,6 +973,12 @@ func animate(delta: float, running: bool) -> void:
 		_pivot.rotation.z += sin(_time * 7.0) * 0.06 * e if want_down else 0.0
 		_pivot.position.y += 0.16 * e
 	# 体育座り: 腰を中心に後ろへ傾ける(ひざが立つ)。腰が床の上に来るように下げる
+	# ひざから崩れ落ちる: がくっと速く下がり、立ち上がるのは少しゆっくり
+	_kneel_w = move_toward(_kneel_w, 1.0 if _kneel else 0.0, delta / (0.35 if _kneel else 0.45))
+	if _kneel_w > 0.0:
+		var ke := _ease(_kneel_w)
+		_pivot.position.y -= KNEEL_DROP * ke
+		_pivot.rotation.x += -0.12 * ke
 	_floor_w = move_toward(_floor_w, 1.0 if _pose == "floor" else 0.0, delta * 2.5)
 	if _floor_w > 0.0:
 		var lean := FLOOR_LEAN * _floor_w
@@ -996,6 +1026,12 @@ func _update_rig(delta: float) -> void:
 			var g := _skel.get_bone_global_pose(i).basis.get_rotation_quaternion()
 			var axis := (g.inverse() * Vector3.RIGHT).normalized()
 			_skel.set_bone_pose_rotation(i, _skel.get_bone_pose_rotation(i) * Quaternion(axis, _bend_bones[i] * _ease(_floor_w)))
+	# ひざから崩れ落ちる: 骨を曲げる(立った姿の上に足す)
+	if _kneel_w > 0.0:
+		for i in _kneel_bones:
+			var g := _skel.get_bone_global_pose(i).basis.get_rotation_quaternion()
+			var axis := (g.inverse() * Vector3.RIGHT).normalized()
+			_skel.set_bone_pose_rotation(i, _skel.get_bone_pose_rotation(i) * Quaternion(axis, _kneel_bones[i] * _ease(_kneel_w)))
 	# 座る動きは腰が後ろに下がるので、体全体を前へずらして椅子の上に乗せる
 	_seat_shift = move_toward(_seat_shift, SEAT_SHIFT if _pose == "sit" or _pose == "floor" else 0.0, delta / 0.5 * SEAT_SHIFT)
 	_rig.position = Vector3(0, 0, -_seat_shift)

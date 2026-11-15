@@ -135,7 +135,7 @@ const MS_REPLAY_END := 5.6
 ## 頭に落とし物をのせている人(見逃した人。次のラウンドで消える)と、真ん中に座った位置
 var _item_head_id := -1
 var _missed_sit := {}
-const OUT_FALL_TIME := 0.75
+const OUT_FALL_TIME := 1.1
 const OUT_RISE_TIME := 0.35
 const OUT_WALK_SPEED := 1.1
 ## 画面のゆれ(お手つきの本人の画面。⚙メニューでオフにできる)
@@ -273,8 +273,11 @@ func sync(state: GameState, delta: float) -> void:
 				model.set_pose(_pose_of(state, a))
 				# 転んで止まっている間は、前にばったり倒れている(お手つきの演出中は、後ろへズッコケる)
 				if _out_anim.has(a.id):
-					model.set_down(float(_out_anim[a.id]["t"]) < OUT_FALL_TIME, true)
+					# お手つき: ひざから崩れ落ちる
+					model.set_kneel(float(_out_anim[a.id]["t"]) < OUT_FALL_TIME)
+					model.set_down(false)
 				else:
+					model.set_kneel(false)
 					model.set_down(a.slip_left > 0.0)
 				# 鬼だけが学校の黄色い帽子をかぶる
 				model.set_hat(a.id == state.oni_id, _beach)
@@ -1337,23 +1340,55 @@ func _build_character(a: GameState.Actor, is_self: bool) -> Node3D:
 
 
 func _build_oni_shadow() -> void:
-	var disc := CylinderMesh.new()
-	disc.top_radius = 0.35
-	disc.bottom_radius = 0.35
-	disc.height = 0.005
+	# 人の形の影(胴と頭。ふちはぼんやり)を、床に置いた板に貼る。頭は板の -Z の側
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(1.0, 2.4)
 	_oni_shadow_mat = StandardMaterial3D.new()
 	_oni_shadow_mat.albedo_color = Color(0, 0, 0, 0)
+	_oni_shadow_mat.albedo_texture = _shadow_texture()
 	_oni_shadow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_oni_shadow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_oni_shadow = MeshInstance3D.new()
-	_oni_shadow.mesh = disc
+	_oni_shadow.mesh = plane
 	_oni_shadow.material_override = _oni_shadow_mat
 	_oni_shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_oni_shadow.visible = false
 	add_child(_oni_shadow)
 
 
-## 鬼の影: 座っている自分の後ろに鬼が近づくと、自分の前の床に影がのびる。
+## 人の形の影の絵: 上(v = 0)が頭、下が足もと。肩のある胴と丸い頭、ふちはやわらかくぼかす。足もとはうすく消える
+static var _shadow_tex: Texture2D
+
+
+func _shadow_texture() -> Texture2D:
+	if _shadow_tex:
+		return _shadow_tex
+	var w := 64
+	var h := 160
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	for y in h:
+		var v := float(y) / float(h - 1)
+		for x in w:
+			var u := (float(x) / float(w - 1)) * 2.0 - 1.0
+			# 頭(丸)
+			var dh := Vector2(u * 1.0, (v - 0.13) * 2.6).length() - 0.3
+			# 胴(肩が広く、足もとへ細くなる)
+			var half := lerpf(0.62, 0.36, clampf((v - 0.3) / 0.7, 0.0, 1.0))
+			if v < 0.3:
+				half = lerpf(0.3, 0.62, clampf((v - 0.22) / 0.08, 0.0, 1.0))
+			var db := absf(u) - half
+			if v < 0.22:
+				db = 1.0
+			var d := minf(dh, db)
+			var a := 1.0 - smoothstep(-0.12, 0.08, d)
+			# 足もと(自分に近い側)は、うすく消える
+			a *= 1.0 - smoothstep(0.75, 1.0, v)
+			img.set_pixel(x, y, Color(1, 1, 1, a))
+	_shadow_tex = ImageTexture.create_from_image(img)
+	return _shadow_tex
+
+
+## 鬼の影: 座っている自分の後ろに鬼が近づくと、自分の前の床に影がのびる(人の形。鬼のいる左右に合わせて少しななめ)。
 ## 近いほど濃く大きい。鬼が立ち止まれば影も止まる(後ろが見えなくても気配がわかる)
 func _update_oni_shadow(state: GameState) -> void:
 	var me := state.get_local_player()
@@ -1372,11 +1407,15 @@ func _update_oni_shadow(state: GameState) -> void:
 		return
 	var near := 1.0 - dist / GameConfig.ONI_SHADOW_RANGE
 	_oni_shadow.visible = true
-	# 自分の前(輪の内側)の床に、鬼の左右の位置に合わせて映す
-	_oni_shadow.position = me.position - back * (0.9 + 0.5 * near) + right * rel.dot(right) * 0.5 + Vector3(0, 0.03, 0)
-	_oni_shadow.rotation.y = me.yaw
-	_oni_shadow.scale = Vector3(0.8 + 0.5 * near, 1.0, 1.6 + 1.4 * near)
-	_oni_shadow_mat.albedo_color = Color(0, 0, 0, GameConfig.ONI_SHADOW_ALPHA * near)
+	# 鬼から自分の前へのびる向き(板の +Z が鬼の側、頭は前)
+	var toward := atan2(rel.x, rel.z)
+	var side := clampf(rel.dot(right) / maxf(dist, 0.01), -1.0, 1.0)
+	_oni_shadow.rotation.y = lerp_angle(me.yaw, toward, 0.5)
+	var length := 1.0 + 0.6 * near
+	_oni_shadow.scale = Vector3(0.7 + 0.3 * near, 1.0, length)
+	# 自分の前(輪の内側)の床に、頭が前・足もとが自分の側になるように置く
+	_oni_shadow.position = me.position - back * (0.5 + 1.2 * length * 0.5) + right * side * 0.35 + Vector3(0, 0.03, 0)
+	_oni_shadow_mat.albedo_color = Color(0, 0, 0, GameConfig.ONI_SHADOW_ALPHA * (0.4 + 0.6 * near))
 
 
 ## 頭からかぶった牛乳: 白いかたまりと、顔の横にたれるしずく(輪郭線つき)
