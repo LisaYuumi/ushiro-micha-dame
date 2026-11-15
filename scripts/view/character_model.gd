@@ -389,6 +389,20 @@ func _build_hat() -> void:
 
 
 ## 目の位置(世界の座標)。停電のとき、暗い中で目だけ光らせるのに使う。目を閉じている表情のときは、目の真ん中
+## カメラの方を向いている目だけの位置(頭のまん中から目への向きが、カメラの方を向いているか)。
+## 後ろを向いている人の目は、頭の裏から透けて見えないように入れない
+func eye_points_facing(cam_pos: Vector3) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	if _face == null or not _face.is_inside_tree():
+		return out
+	var center := _face.global_position
+	for e in _eyes:
+		var p: Vector3 = e.global_position
+		if (p - center).dot(cam_pos - p) > 0.0:
+			out.append(p)
+	return out
+
+
 func eye_points() -> PackedVector3Array:
 	var out := PackedVector3Array()
 	if _face == null or not _face.is_inside_tree():

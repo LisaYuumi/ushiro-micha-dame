@@ -69,19 +69,42 @@ func update(state: GameState, cam: Camera3D, models: Dictionary, delta: float, s
 		Toon.set_darkness(bright)
 	# キャラの目(暗い中で、うっすら光る)
 	_eye_points = PackedVector2Array()
+	var cam_pos := cam.global_position
 	for id in models:
 		if id == skip_id:
 			continue
 		var m := models[id] as CharacterModel
 		if m == null:
 			continue
-		for p in m.eye_points():
+		for p in m.eye_points_facing(cam_pos):
 			if cam.is_position_behind(p):
 				continue
-			if cam.global_position.distance_to(p) > 30.0:
+			if cam_pos.distance_to(p) > 30.0:
+				continue
+			if _hidden_by_body(cam_pos, p, id, models):
 				continue
 			_eye_points.append(cam.unproject_position(p))
 	_eyes.queue_redraw()
+
+
+## カメラから目までの間に、ほかの人の体(足もとから頭までの太い棒とみなす)があれば、目はかくれている
+func _hidden_by_body(cam_pos: Vector3, eye: Vector3, owner_id: int, models: Dictionary) -> bool:
+	for id in models:
+		if id == owner_id:
+			continue
+		var m := models[id] as Node3D
+		if m == null or not m.visible:
+			continue
+		var base := m.global_position
+		var a := base + Vector3(0, 0.25, 0)
+		var b := base + Vector3(0, 1.75, 0)
+		var pq := Geometry3D.get_closest_points_between_segments(cam_pos, eye, a, b)
+		var on_ray: Vector3 = pq[0]
+		var on_body: Vector3 = pq[1]
+		# 目より手前で、体の太さ(0.3m)より近くを通るなら、かくれている
+		if on_ray.distance_to(on_body) < 0.3 and on_ray.distance_to(eye) > 0.35:
+			return true
+	return false
 
 
 func _draw_eyes() -> void:
