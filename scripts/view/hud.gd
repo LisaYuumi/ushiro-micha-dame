@@ -919,14 +919,14 @@ func _draw_smoke() -> void:
 	var grow := clampf(_milk_t / 0.5, 0.0, 1.0)
 	grow = 1.0 - pow(1.0 - grow, 3.0)
 	var lift := -(1.0 - grow) * sz.y * 0.6 - _milk_wipe * sz.y * GameConfig.MILK_WIPE_UP
-	var band := sz.y * 0.5 + lift
+	var band := sz.y * 0.47 + lift
 	var line := maxf(4.0, sz.y * 0.008)
 	# 下のふちの丸(左から右へ、大きさを変えて並べる。ゆっくりふくらんだりしぼんだり)
 	var puffs := []
 	var x := -sz.x * 0.02
 	var k := 0
 	while x < sz.x * 1.05:
-		var r := sz.y * (0.085 + 0.035 * sin(float(k) * 2.3 + 0.7)) * (1.0 + 0.03 * sin(t * 1.5 + float(k)))
+		var r := sz.y * (0.12 + 0.04 * sin(float(k) * 2.3 + 0.7)) * (1.0 + 0.03 * sin(t * 1.5 + float(k)))
 		puffs.append([Vector2(x + r * 0.8, band + sz.y * 0.02 * sin(float(k) * 1.7)), r])
 		x += r * 1.45
 		k += 1
