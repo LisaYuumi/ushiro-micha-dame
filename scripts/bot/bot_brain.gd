@@ -127,6 +127,9 @@ func _consider_stamps(state: GameState, me: GameState.Actor) -> void:
 		var w := 1.0
 		if st["sender"] in state.last_minion_ids:
 			w = GameConfig.BOT_PREV_MINION_WEIGHT
+		elif st["sender"] == state.oni_id:
+			# 鬼のスタンプはだいたい嘘なので、あまり信用しない
+			w = GameConfig.BOT_ONI_STAMP_WEIGHT
 		vote += w if Stamps.says_look(st["kind"]) else -w
 	var p := Personalities.params(me.personality)
 	var need: float = p["threshold"]

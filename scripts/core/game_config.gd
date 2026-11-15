@@ -147,9 +147,11 @@ const BOT_ONI_HONEST_CHANCE := 0.3
 const BOT_ONI_STAMP_INTERVAL_MIN := 10.0
 const BOT_ONI_STAMP_INTERVAL_MAX := 20.0
 ## ボットが届いたスタンプを信じて振り向く確率のもと(性格でかわる)
-const BOT_TRUST_CHANCE := 0.7
+const BOT_TRUST_CHANCE := 0.6
 ## ボットが、前のラウンドで手下だった人のスタンプを数えるときの重さ(1 = ふつう)
 const BOT_PREV_MINION_WEIGHT := 0.3
+## ボットが、鬼から届いたスタンプを数えるときの重さ(鬼はだいたい嘘なので、あまり信用しない)
+const BOT_ONI_STAMP_WEIGHT := 0.3
 ## ボットがスタンプを送る間隔(秒)。この範囲でランダム(性格でかわる)
 const BOT_STAMP_INTERVAL_MIN := 8.0
 const BOT_STAMP_INTERVAL_MAX := 18.0
@@ -172,7 +174,7 @@ const ONI_DROP_REACH := 1.4
 ## この周数を歩いても落とさなければ、次の席の後ろで自動的に落とす
 const ONI_MAX_LAPS_BEFORE_DROP := 4
 ## 鬼の「ふり」の物音で、その席のボットがだまされて振り向く確率(0〜1)
-const BOT_FEINT_FOOL_CHANCE := 0.3
+const BOT_FEINT_FOOL_CHANCE := 0.2
 
 # --- 試合 ---
 ## 1試合のラウンド数(落とし物は Items の順に重くなる)
