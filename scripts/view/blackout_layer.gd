@@ -81,16 +81,17 @@ func update(state: GameState, cam: Camera3D, models: Dictionary, delta: float, s
 				continue
 			if cam_pos.distance_to(p) > 30.0:
 				continue
-			if _hidden_by_body(cam_pos, p, id, models):
+			if _hidden_by_body(cam_pos, p, id, models, skip_id):
 				continue
 			_eye_points.append(cam.unproject_position(p))
 	_eyes.queue_redraw()
 
 
 ## カメラから目までの間に、ほかの人の体(足もとから頭までの太い棒とみなす)があれば、目はかくれている
-func _hidden_by_body(cam_pos: Vector3, eye: Vector3, owner_id: int, models: Dictionary) -> bool:
+## (skip_id: 座っている自分。自分の体はカメラのすぐ前にあって映していないので、さえぎる体に数えない)
+func _hidden_by_body(cam_pos: Vector3, eye: Vector3, owner_id: int, models: Dictionary, skip_id: int) -> bool:
 	for id in models:
-		if id == owner_id:
+		if id == owner_id or id == skip_id:
 			continue
 		var m := models[id] as Node3D
 		if m == null or not m.visible:
