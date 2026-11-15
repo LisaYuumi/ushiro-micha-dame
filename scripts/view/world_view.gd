@@ -245,6 +245,10 @@ func sync(state: GameState, delta: float) -> void:
 		var me := state.get_local_player()
 		var skip := me.id if me != null and me.role == GameState.Role.SEATED else -1
 		_blackout.update(state, get_viewport().get_camera_3d(), _actor_nodes, delta, skip)
+		if _env:
+			var bc := _sky_color.lerp(DARK_SKY, 1.0 - _blackout.brightness())
+			if _env.background_color != bc:
+				_env.background_color = bc
 	_update_obstacles(state)
 	_update_oni_shadow(state)
 	_update_milk_ring(state, delta)
@@ -556,10 +560,18 @@ func is_top_camera() -> bool:
 
 # --- ここから下は見た目を作る処理 ---
 
+## 空の色(停電のときは暗くする)
+var _env: Environment
+var _sky_color := Color.WHITE
+const DARK_SKY := Color(0.02, 0.03, 0.08)
+
+
 func _build_environment() -> void:
 	var env := Environment.new()
+	_env = env
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = BeachStage.COLOR_SKY if _beach else GameConfig.COLOR_SKY
+	_sky_color = env.background_color
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(1, 1, 1)
 	env.ambient_light_energy = 0.5

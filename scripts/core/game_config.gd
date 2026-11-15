@@ -264,8 +264,8 @@ const BLACKOUT_BRIGHTNESS := 0.03
 const BLACKOUT_LIGHTNING_MIN := 6.0
 const BLACKOUT_LIGHTNING_MAX := 12.0
 const BLACKOUT_LIGHTNING_BRIGHTNESS := 0.45
-## 鬼の懐中電灯で見える丸の大きさ(画面の高さに対する割合)と、その中の明るさ
-const BLACKOUT_FLASHLIGHT_RADIUS := 0.3
+## 鬼の懐中電灯で見える丸の大きさ(鬼の足もとからのメートル)と、その中の明るさ
+const BLACKOUT_FLASHLIGHT_RADIUS := 2.6
 const BLACKOUT_FLASHLIGHT_BRIGHTNESS := 0.6
 
 # --- お手つきで抜けた人 ---

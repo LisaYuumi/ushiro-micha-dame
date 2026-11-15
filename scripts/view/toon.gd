@@ -13,6 +13,26 @@ uniform vec4 albedo : source_color = vec4(1.0);
 uniform float shade_mid = 0.82;
 uniform float shade_dark = 0.66;
 
+// 停電: 3D の明るさ(1 = ふつう)と、鬼の懐中電灯(鬼の足もとのまわりだけ明るい。半径 0 なら無し)
+global uniform float dark_bright;
+global uniform vec3 dark_flash_pos;
+global uniform float dark_flash_r;
+global uniform float dark_flash_bright;
+varying vec3 dark_wpos;
+
+float dark_k() {
+	float b = dark_bright;
+	if (dark_flash_r > 0.0) {
+		float k = smoothstep(dark_flash_r * 0.35, dark_flash_r, distance(dark_wpos.xz, dark_flash_pos.xz));
+		b = mix(max(dark_flash_bright, b), b, k);
+	}
+	return b;
+}
+
+void vertex() {
+	dark_wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
 void fragment() {
 	ALBEDO = albedo.rgb;
 }
@@ -20,7 +40,7 @@ void fragment() {
 void light() {
 	float ndl = dot(NORMAL, LIGHT);
 	float band = ndl > 0.25 ? 1.0 : (ndl > -0.25 ? shade_mid : shade_dark);
-	DIFFUSE_LIGHT = max(DIFFUSE_LIGHT, vec3(band));
+	DIFFUSE_LIGHT = max(DIFFUSE_LIGHT, vec3(band) * dark_k());
 }
 """
 
@@ -52,6 +72,26 @@ uniform vec4 albedo : source_color = vec4(1.0);
 uniform float shade_mid = 0.82;
 uniform float shade_dark = 0.66;
 
+// 停電: 3D の明るさ(1 = ふつう)と、鬼の懐中電灯(鬼の足もとのまわりだけ明るい。半径 0 なら無し)
+global uniform float dark_bright;
+global uniform vec3 dark_flash_pos;
+global uniform float dark_flash_r;
+global uniform float dark_flash_bright;
+varying vec3 dark_wpos;
+
+float dark_k() {
+	float b = dark_bright;
+	if (dark_flash_r > 0.0) {
+		float k = smoothstep(dark_flash_r * 0.35, dark_flash_r, distance(dark_wpos.xz, dark_flash_pos.xz));
+		b = mix(max(dark_flash_bright, b), b, k);
+	}
+	return b;
+}
+
+void vertex() {
+	dark_wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
 void fragment() {
 	ALBEDO = albedo.rgb * COLOR.rgb;
 }
@@ -59,7 +99,7 @@ void fragment() {
 void light() {
 	float ndl = dot(NORMAL, LIGHT);
 	float band = ndl > 0.25 ? 1.0 : (ndl > -0.25 ? shade_mid : shade_dark);
-	DIFFUSE_LIGHT = max(DIFFUSE_LIGHT, vec3(band));
+	DIFFUSE_LIGHT = max(DIFFUSE_LIGHT, vec3(band) * dark_k());
 }
 """
 
@@ -96,6 +136,7 @@ static func material(color: Color, outline: float = GameConfig.OUTLINE_WIDTH) ->
 	if _cache.has(key):
 		return _cache[key]
 	if _toon_shader == null:
+		ensure_globals()
 		_toon_shader = Shader.new()
 		_toon_shader.code = _TOON_CODE
 		_outline_shader = Shader.new()
@@ -119,6 +160,7 @@ static func material_batched(color: Color, outline: float) -> Material:
 	if _cache.has(key):
 		return _cache[key]
 	if _toon_batched_shader == null:
+		ensure_globals()
 		_toon_batched_shader = Shader.new()
 		_toon_batched_shader.code = _TOON_BATCHED_CODE
 	var base := ShaderMaterial.new()
@@ -173,3 +215,22 @@ static func lighten(m: Mesh) -> void:
 		if tm.rings == 64 and tm.ring_segments == 32:
 			tm.rings = 24
 			tm.ring_segments = 8
+
+
+## 停電のための、全部の塗りが読む値(シェーダーのグローバル)。塗りの材質を作る前に用意する
+static func ensure_globals() -> void:
+	var have := RenderingServer.global_shader_parameter_get_list()
+	if not ("dark_bright" in have):
+		RenderingServer.global_shader_parameter_add("dark_bright", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 1.0)
+		RenderingServer.global_shader_parameter_add("dark_flash_pos", RenderingServer.GLOBAL_VAR_TYPE_VEC3, Vector3.ZERO)
+		RenderingServer.global_shader_parameter_add("dark_flash_r", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+		RenderingServer.global_shader_parameter_add("dark_flash_bright", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.6)
+
+
+## 停電の暗さを決める(bright: 1 = ふつう。flash_r > 0 なら、flash_pos のまわり flash_r メートルが明るい)
+static func set_darkness(bright: float, flash_pos: Vector3 = Vector3.ZERO, flash_r: float = 0.0, flash_bright: float = 0.6) -> void:
+	ensure_globals()
+	RenderingServer.global_shader_parameter_set("dark_bright", bright)
+	RenderingServer.global_shader_parameter_set("dark_flash_pos", flash_pos)
+	RenderingServer.global_shader_parameter_set("dark_flash_r", flash_r)
+	RenderingServer.global_shader_parameter_set("dark_flash_bright", flash_bright)
