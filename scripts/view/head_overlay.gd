@@ -176,14 +176,18 @@ func update(state: GameState, cam: Camera3D) -> void:
 		_marker.position = Vector2(mx, maxf(top - ms.y - 4.0, 4.0)).floor()
 
 
-## スタンプの文字: 送った人の自作の言葉+絵文字。スタンプは種類で届き、受け取った人の言語で出す。
-## 自作の言葉は、送った人と受け取った人の言語が同じときだけ出す(ちがえば、受け取った人の言語の初期の言葉)。
-## 「ほかの人の自作の言葉を表示しない」なら初期の言葉
+## スタンプの文字: 言葉+絵文字。スタンプは種類とシャッフルの番号で届き、受け取った人の言語で出す。
+## 自作の言葉は、送った人と受け取った人の言語が同じときだけ出す(ちがえば、受け取った人の言語のシャッフルの言葉)。
+## 「ほかの人の自作の言葉を表示しない」なら、同じ意味のシャッフルの言葉
 static func stamp_text(state: GameState, sender: int, kind: String) -> String:
 	var word := ""
 	var same_lang := str(state.stamp_langs.get(sender, Locale.current())) == Locale.current()
 	if sender == state.local_player_id or (not Profile.hide_custom_words and same_lang):
 		word = str((state.stamp_words.get(sender, {}) as Dictionary).get(kind, ""))
+	if word == "":
+		# 自作の言葉がない(または出さない)ときは、その人のシャッフルの言葉を、受け取った人の言語で
+		var pick: Dictionary = state.stamp_picks.get(sender, {})
+		word = Texts.stamp_word(kind, int(pick.get(kind, 0)))
 	return Texts.stamp(kind, word)
 
 

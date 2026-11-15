@@ -10,6 +10,8 @@ signal join_pressed(code: String)
 signal start_pressed
 ## 言語ボタン(日本語 ⇔ English)。切りかえは main がする(画面全体の文字を作り直すため)
 signal language_pressed
+## 名前・色・小物・スタンプの言葉が変わった(オンラインのときは、ホストに送り直す)
+signal profile_changed
 
 var _panel: PanelContainer
 var _title: Label
@@ -34,6 +36,8 @@ var _code_edit: LineEdit
 var _color_buttons: Array[Button] = []
 ## スタンプの言葉を変える画面(言葉のボタン/入力欄と、「ほかの人の自作の言葉」の切りかえ)
 var _words_box: VBoxContainer
+## ロビーに出す、今の3つのスタンプの言葉(次の試合で使う)
+var _words_label: Label
 var _word_buttons := {}
 var _word_edits := {}
 var _hide_words_button: Button
@@ -101,11 +105,18 @@ func _ready() -> void:
 	var row2 := HBoxContainer.new()
 	row2.add_theme_constant_override("separation", 12)
 	_menu.add_child(row2)
-	var words := _button("スタンプの言葉を変える  😨 👍 🥺", func() -> void: _show_words(), Vector2(0, 58))
-	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row2.add_child(words)
+	# 今の3つのスタンプの言葉と、「シャッフル」(押すとその場で引き直す。何度でも)
+	var words_panel := PanelContainer.new()
+	words_panel.add_theme_stylebox_override("panel", UiStyle.box(GameConfig.COLOR_PAPER, false, 16, 3))
+	words_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row2.add_child(words_panel)
+	_words_label = _label("", 22)
+	_words_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	words_panel.add_child(_words_label)
+	row2.add_child(_button("シャッフル", func() -> void: _shuffle_words(), Vector2(150, 58), true))
 	# 言語の切りかえ(どの言語の人にもわかるように、地球の印と言語の名前で)
-	_lang_button = _button("", func() -> void: language_pressed.emit(), Vector2(250, 58))
+	_lang_button = _button("", func() -> void: language_pressed.emit(), Vector2(190, 58))
 	row2.add_child(_lang_button)
 	row2.add_child(_button("🔊", func() -> void: _show_volume(), Vector2(90, 58)))
 	_update_language_button()
@@ -300,7 +311,16 @@ func _build_acc_box(root: VBoxContainer) -> void:
 			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			row.add_child(b)
 			_acc_kind_buttons[slot][kind] = b
-	_acc_box.add_child(_button("もどる", func() -> void: show_menu(), Vector2(0, 60), true))
+	# 下: 自作のスタンプの言葉を作る画面へ/もどる
+	var acc_bottom := HBoxContainer.new()
+	acc_bottom.add_theme_constant_override("separation", 12)
+	_acc_box.add_child(acc_bottom)
+	var make_words := _button("スタンプの言葉を自分で作る ▶", func() -> void: _show_words(), Vector2(0, 60))
+	make_words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	acc_bottom.add_child(make_words)
+	var acc_back := _button("もどる", func() -> void: show_menu(), Vector2(0, 60), true)
+	acc_back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	acc_bottom.add_child(acc_back)
 
 
 func _show_acc() -> void:
@@ -329,6 +349,7 @@ func _set_acc(slot: String, kind: String) -> void:
 	Profile.save()
 	_acc_preview.set_accessories(a)
 	_update_acc()
+	profile_changed.emit()
 
 
 func _set_acc_color(slot: String, idx: int) -> void:
@@ -341,6 +362,7 @@ func _set_acc_color(slot: String, idx: int) -> void:
 	Profile.save()
 	_acc_preview.set_accessories(a)
 	_update_acc()
+	profile_changed.emit()
 
 
 ## 選んでいる形のボタンはオレンジ、選んでいる色は太いふち
@@ -384,7 +406,7 @@ func _build_words_box(root: VBoxContainer) -> void:
 		else:
 			var e := LineEdit.new()
 			e.max_length = WordFilter.MAX_LEN
-			e.placeholder_text = Texts.stamp_word(kind)
+			e.placeholder_text = Profile.my_stamp_word(kind)
 			e.custom_minimum_size = Vector2(0, 64)
 			e.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			e.add_theme_font_override("font", HudFont.get_font())
@@ -401,10 +423,7 @@ func _build_words_box(root: VBoxContainer) -> void:
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", 12)
 	_words_box.add_child(bottom)
-	var reset := _button("初期の言葉に戻す", func() -> void: _reset_words(), Vector2(0, 64))
-	reset.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bottom.add_child(reset)
-	var back := _button("もどる", func() -> void: show_menu(), Vector2(0, 64), true)
+	var back := _button("もどる", func() -> void: _show_acc(), Vector2(0, 64), true)
 	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bottom.add_child(back)
 	_update_words()
@@ -433,7 +452,7 @@ func _show_words() -> void:
 
 
 func _ask_word(kind: String) -> void:
-	var now: String = Profile.stamp_words.get(kind, Texts.stamp_word(kind))
+	var now: String = Profile.my_stamp_word(kind)
 	_web_input.ask(tr("%s の言葉(%d文字まで)") % [Texts.STAMP_EMOJI[kind], WordFilter.MAX_LEN], now, WordFilter.MAX_LEN,
 			func(t: String) -> void:
 				if t != "":
@@ -443,7 +462,7 @@ func _ask_word(kind: String) -> void:
 ## 言葉を決める: チェックを通ったら保存。だめなら理由を出して、前の言葉のまま
 func _set_word(kind: String, text: String) -> void:
 	var w := text.strip_edges()
-	if w == "" or w == Texts.stamp_word(kind):
+	if w == "" or w == Texts.stamp_word(kind, int(Profile.stamp_pick.get(kind, 0))):
 		Profile.stamp_words.erase(kind)
 	else:
 		var why := WordFilter.check(w)
@@ -455,13 +474,14 @@ func _set_word(kind: String, text: String) -> void:
 	Profile.save()
 	set_status("")
 	_update_words()
+	profile_changed.emit()
 
 
-func _reset_words() -> void:
-	Profile.stamp_words = {}
-	Profile.save()
-	set_status("初期の言葉に戻しました")
+## 「シャッフル」: 自作の言葉をやめて、3つの言葉をその場で引き直す(何度でも)
+func _shuffle_words() -> void:
+	Profile.shuffle_words()
 	_update_words()
+	profile_changed.emit()
 
 
 func _toggle_hide_words() -> void:
@@ -474,12 +494,19 @@ func _update_words() -> void:
 	for k in Stamps.ALL:
 		var word: String = Profile.stamp_words.get(k, "")
 		if _word_buttons.has(k):
-			(_word_buttons[k] as Button).text = tr("%s(タップで変える)") % (word if word != "" else Texts.stamp_word(k))
+			(_word_buttons[k] as Button).text = tr("%s(タップで変える)") % Profile.my_stamp_word(k)
 		if _word_edits.has(k):
 			var e: LineEdit = _word_edits[k]
 			if not e.has_focus():
 				e.text = word
-	_hide_words_button.text = tr("ほかの人の自作の言葉: %s") % ("表示しない(初期の言葉で表示)" if Profile.hide_custom_words else "表示する")
+	_hide_words_button.text = tr("ほかの人の自作の言葉: %s") % (tr("表示しない(シャッフルの言葉で表示)") if Profile.hide_custom_words else tr("表示する"))
+	# ロビーの、今の3つの言葉(次の試合で使う)
+	if _words_label:
+		var parts := PackedStringArray()
+		for k in Stamps.ALL:
+			parts.append(Profile.my_stamp_word(k) + Texts.STAMP_EMOJI[k])
+		_words_label.text = "  ".join(parts)
+		_words_label.add_theme_font_size_override("font_size", UiStyle.fit_size(_words_label.text, 22, 370.0, 12))
 
 
 func _ask_name() -> void:
@@ -509,12 +536,14 @@ func _set_name(text: String) -> void:
 	Profile.player_name = Profile.clean_name(text)
 	Profile.save()
 	_update_profile()
+	profile_changed.emit()
 
 
 func _set_color(c: Color) -> void:
 	Profile.color = c
 	Profile.save()
 	_update_profile()
+	profile_changed.emit()
 	# きせかえの見本のキャラも、新しい色にする
 	if _acc_box and _acc_box.visible:
 		_acc_preview.prepare(Profile.color, Profile.accessories)

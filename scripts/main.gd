@@ -73,6 +73,10 @@ func _ready() -> void:
 	lobby.join_pressed.connect(_on_join)
 	lobby.start_pressed.connect(_on_host_start)
 	lobby.language_pressed.connect(func() -> void: set_language(Locale.next_language()))
+	# ロビーで名前・色・小物・スタンプの言葉を変えたら、部屋に入っているならホストに送り直す
+	lobby.profile_changed.connect(func() -> void:
+		if net.is_online and not net.is_host:
+			net.send_profile(Profile.to_dict()))
 	net.status_changed.connect(lobby.set_status)
 	net.peers_changed.connect(_on_peers_changed)
 	net.connected_to_host.connect(func() -> void:
@@ -162,6 +166,8 @@ func _on_host_start() -> void:
 	var first_oni: int = humans[randi_range(0, humans.size() - 1)]
 	state.stage = Profile.stage
 	state.start_match_custom(-1, humans, first_oni, names, true, _seats, colors, accs)
+	mode = Mode.HOST
+	_apply_stamp_words(true)
 	state.local_player_id = 0
 	mode = Mode.HOST
 	cmds = state
@@ -180,6 +186,10 @@ func _on_lobby_info(info: Dictionary) -> void:
 		_built_serial = -1
 		lobby.visible = false
 		hud.show_message(tr("スタート!"), Color(0.3, 0.3, 0.3), 1.0)
+		# この試合の言葉はホストに送ってある。次の試合の言葉を引いて、ホストに送っておく
+		Profile.roll_next_words()
+		lobby.refresh_texts()
+		net.send_profile(Profile.to_dict())
 	elif info.get("late", false):
 		lobby.show_waiting(tr("つながりました! いまは試合中です。\n次の試合から参加できます(ホストが新しい試合を始めるまで待ってください)"))
 	else:
@@ -253,6 +263,7 @@ func _start_round() -> void:
 		return
 	state.stage = Profile.stage
 	state.start_match(-1, _player_is_oni, _seats, Profile.player_name, Profile.color, Profile.accessories)
+	_apply_stamp_words(true)
 	_refresh_round()
 
 
@@ -264,6 +275,8 @@ func _build_view() -> void:
 	touch.set_water(water)
 	# 「落とす」「フェイク」のボタンの絵は、このラウンドの落とし物
 	touch.set_item_icon(ButtonIcon.item_key(state.stage, state.round_index))
+	# 送るボタンの言葉(参加者は、ホストから届いた自分の言葉)
+	_update_send_words()
 
 
 ## ラウンドが変わったときに、画面とボットを作り直す
@@ -711,17 +724,38 @@ func set_language(lang: String) -> void:
 		_update_help()
 
 
-## 自作のスタンプの言葉を状態に入れる(ひとり・ホストだけ。参加者の分はロビーで届いた言葉を、もう一度チェックして使う)
-func _apply_stamp_words() -> void:
-	hud.set_send_words(Profile.stamp_words)
-	if mode == Mode.GUEST:
-		return
-	state.stamp_words[state.local_player_id] = Profile.stamp_words.duplicate()
-	state.stamp_langs[state.local_player_id] = Locale.current()
-	for pid in _peer_actor:
-		var prof: Dictionary = _peer_profile.get(pid, {})
-		state.stamp_words[_peer_actor[pid]] = Profile.clean_words(prof.get("words", {}))
-		state.stamp_langs[_peer_actor[pid]] = Locale.pick(str(prof.get("lang", "")))
+## スタンプの言葉を状態に入れる(ひとり・ホストだけ。参加者の分はロビーで届いた言葉を、もう一度チェックして使う)。
+## new_match: 試合の初めだけ、言葉(シャッフルの番号・自作の言葉)を決める。試合の途中では変えない。
+## 決めたら、次の試合の言葉を引いておく(ロビーに出る。自作の言葉を入れている人は引き直さない)
+func _apply_stamp_words(new_match: bool = false) -> void:
+	if mode != Mode.GUEST:
+		var me := state.local_player_id
+		if new_match:
+			state.stamp_words[me] = Profile.stamp_words.duplicate()
+			state.stamp_picks[me] = Profile.stamp_pick.duplicate()
+			for pid in _peer_actor:
+				var prof: Dictionary = _peer_profile.get(pid, {})
+				state.stamp_words[_peer_actor[pid]] = Profile.clean_words(prof.get("words", {}))
+				state.stamp_picks[_peer_actor[pid]] = Texts.clean_pick(prof.get("pick", {}))
+			Profile.roll_next_words()
+			lobby.refresh_texts()
+		state.stamp_langs[me] = Locale.current()
+		for pid in _peer_actor:
+			var prof2: Dictionary = _peer_profile.get(pid, {})
+			state.stamp_langs[_peer_actor[pid]] = Locale.pick(str(prof2.get("lang", "")))
+	_update_send_words()
+
+
+## 送るボタンの言葉: この試合の自分の言葉(自作の言葉があればそれ、なければシャッフルの言葉)
+func _update_send_words() -> void:
+	var me := state.local_player_id
+	var custom: Dictionary = state.stamp_words.get(me, {})
+	var pick: Dictionary = state.stamp_picks.get(me, Profile.stamp_pick)
+	var words := {}
+	for kind in Stamps.ALL:
+		var w := str(custom.get(kind, ""))
+		words[kind] = w if w != "" else Texts.stamp_word(kind, int(pick.get(kind, 0)))
+	hud.set_send_words(words)
 
 
 ## 鬼の牛乳: ボタンを押すと「えいっ」(相手を選ぶ)になり、もう一度押すとやめる。

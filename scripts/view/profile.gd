@@ -19,6 +19,8 @@ static var color: Color = COLORS[4]
 static var show_personality := false
 ## 自分で決めたスタンプの言葉(Stamps の種類 -> 言葉。"" なら初期の言葉)。絵文字と意味は変わらない
 static var stamp_words := {}
+## スタンプの言葉のシャッフル({kind: セットの何番目か})。ロビーに出ている言葉が、次の試合で使われる
+static var stamp_pick := {}
 ## ほかの人の自作の言葉を表示せず、初期の言葉で表示する
 static var hide_custom_words := false
 ## 自分で選んだ言語("" なら端末の言語に合わせる。Locale)
@@ -39,6 +41,26 @@ static var screen_shake := true
 static var _loaded := false
 
 
+## 試合が始まったあと: 次の試合の言葉を引いておく(自作の言葉を入れている人は、自動では引き直さない)
+static func roll_next_words() -> void:
+	if stamp_words.is_empty():
+		stamp_pick = Texts.random_pick()
+		save()
+
+
+## ロビーの「シャッフル」: 自作の言葉をやめて、3つの言葉を引き直す
+static func shuffle_words() -> void:
+	stamp_words = {}
+	stamp_pick = Texts.random_pick()
+	save()
+
+
+## 自分のスタンプの言葉(今の言語。自作の言葉があればそれ)
+static func my_stamp_word(kind: String) -> String:
+	var w: String = stamp_words.get(kind, "")
+	return w if w != "" else Texts.stamp_word(kind, int(stamp_pick.get(kind, 0)))
+
+
 ## 音を「なめらか」で鳴らすか(おまかせなら、GPU を使えていない PC のブラウザだけ)
 static func smooth_audio() -> bool:
 	# おまかせは、いまは「ふつう」(自動でなめらかにしたら、かえって割れたという声があったため)
@@ -49,6 +71,7 @@ static func load_saved() -> void:
 	if _loaded:
 		return
 	_loaded = true
+	stamp_pick = Texts.random_pick()
 	var cfg := ConfigFile.new()
 	if cfg.load(PATH) != OK:
 		return
@@ -61,6 +84,7 @@ static func load_saved() -> void:
 	vol_bgm = clampf(float(cfg.get_value("profile", "vol_bgm", 0.7)), 0.0, 1.0)
 	vol_sfx = clampf(float(cfg.get_value("profile", "vol_sfx", 1.0)), 0.0, 1.0)
 	stamp_words = clean_words(cfg.get_value("profile", "stamp_words", {}))
+	stamp_pick = Texts.clean_pick(cfg.get_value("profile", "stamp_pick", Texts.random_pick()))
 	stage = Items.clean_stage(str(cfg.get_value("profile", "stage", "classroom")))
 	accessories = Accessories.clean(cfg.get_value("profile", "accessories", {}))
 	smooth_mode = clampi(int(cfg.get_value("profile", "smooth_mode", -1)), -1, 1)
@@ -78,6 +102,7 @@ static func save() -> void:
 	cfg.set_value("profile", "vol_bgm", vol_bgm)
 	cfg.set_value("profile", "vol_sfx", vol_sfx)
 	cfg.set_value("profile", "stamp_words", stamp_words)
+	cfg.set_value("profile", "stamp_pick", stamp_pick)
 	cfg.set_value("profile", "stage", stage)
 	cfg.set_value("profile", "accessories", accessories)
 	cfg.set_value("profile", "smooth_mode", smooth_mode)
@@ -141,5 +166,5 @@ static func set_volume(key: String, v: float) -> void:
 
 ## 通信で送れる形
 static func to_dict() -> Dictionary:
-	return {"name": player_name, "color": "#" + color.to_html(false), "words": stamp_words, "lang": Locale.current(),
+	return {"name": player_name, "color": "#" + color.to_html(false), "words": stamp_words, "pick": stamp_pick, "lang": Locale.current(),
 			"acc": accessories}

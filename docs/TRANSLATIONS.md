@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(265)
+## 一覧(277)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -214,6 +214,18 @@
 | パタパタ! | Waving it away! |
 | ポンポン! | Pat pat! |
 | あったー!! | Found it!! |
+| うしろ!うしろ! | Right behind! |
+| 来てるよ! | Look out! |
+| あるある! | It's there! |
+| スタンプ:セーフ! | All clear |
+| まだまだ | Not yet |
+| なんもないよ | Nothing there |
+| マジだって! | For real! |
+| ぜったいホント | I swear! |
+| うそじゃない | No lie! |
+| シャッフル | Shuffle |
+| スタンプの言葉を自分で作る ▶ | Make my own words ▶ |
+| 表示しない(シャッフルの言葉で表示) | Hide (show shuffled words) |
 | ガーン! | Oh no! |
 | 画面のゆれ: %s | Screen shake: %s |
 | 音がガタガタ割れるときは「なめらか」を試してね | If the sound crackles, try "Smooth" |

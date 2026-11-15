@@ -186,6 +186,8 @@ var lie_counts: Dictionary = {}
 var stamp_words: Dictionary = {}
 ## 人ごとの言語(id -> "ja" / "en")。自作の言葉は、受け取った人と言語が同じときだけ出す
 var stamp_langs: Dictionary = {}
+## スタンプの言葉の選び方(id -> {kind: セットの何番目か})。試合の初めに決まり、試合の間は変わらない
+var stamp_picks: Dictionary = {}
 ## 前のラウンドの手下(発表ずみなので、全員が知っている。ボットの信用に使う)
 var last_minion_ids: Array = []
 var last_minion_id: int:
@@ -266,6 +268,8 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 			actor.display_name = "ボット%d(%s)" % [bot_no, Personalities.label(actor.personality)]
 			bot_no += 1
 		actor.accessories = Accessories.clean(accessories.get(i, {}))
+		# スタンプの言葉はランダム(人の分は、あとで main がその人の選び方に置きかえる)
+		stamp_picks[i] = Texts.random_pick(rng)
 		if colors.has(i):
 			actor.color = colors[i]
 		else:
@@ -1089,6 +1093,7 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"blackout": blackout,
 		"stamp_words": stamp_words,
 		"stamp_langs": stamp_langs,
+		"stamp_picks": stamp_picks,
 		"round_serial": round_serial,
 		"seat_count": seat_count,
 		"minion_ids": minions_shown,
@@ -1157,6 +1162,7 @@ func apply_snapshot(s: Dictionary) -> void:
 	blackout = s.get("blackout", false)
 	stamp_words = s.get("stamp_words", {})
 	stamp_langs = s.get("stamp_langs", {})
+	stamp_picks = s.get("stamp_picks", {})
 	round_serial = s["round_serial"]
 	minion_ids = s.get("minion_ids", [])
 	minion_count = s.get("minion_count", -1)

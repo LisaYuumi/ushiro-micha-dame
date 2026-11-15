@@ -240,6 +240,18 @@ EN = {
     "パタパタ!": "Waving it away!",
     "ポンポン!": "Pat pat!",
     "あったー!!": "Found it!!",
+    "うしろ!うしろ!": "Right behind!",
+    "来てるよ!": "Look out!",
+    "あるある!": "It's there!",
+    "スタンプ:セーフ!": "All clear",
+    "まだまだ": "Not yet",
+    "なんもないよ": "Nothing there",
+    "マジだって!": "For real!",
+    "ぜったいホント": "I swear!",
+    "うそじゃない": "No lie!",
+    "シャッフル": "Shuffle",
+    "スタンプの言葉を自分で作る ▶": "Make my own words ▶",
+    "表示しない(シャッフルの言葉で表示)": "Hide (show shuffled words)",
     "ガーン!": "Oh no!",
     "画面のゆれ: %s": "Screen shake: %s",
     "音がガタガタ割れるときは「なめらか」を試してね": "If the sound crackles, try \"Smooth\"",
@@ -322,7 +334,7 @@ EN = {
 # 訳さない(元の文のまま出す)もの: 人の名前の例、書道の字(絵として飾る)、内部で使う目印
 KEEP = {"あおい", "友", "夢", "花", "向き:", "表情:", "ポーズ:", "カメラ:"}
 
-JA_OVERRIDE = {"HOW_TO_PLAY": HOW_TO_PLAY_JA}
+JA_OVERRIDE = {"HOW_TO_PLAY": HOW_TO_PLAY_JA, "スタンプ:セーフ!": "セーフ!"}
 
 JP = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
 LIT = re.compile(r'"((?:[^"\\]|\\.)*)"')

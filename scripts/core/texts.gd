@@ -9,7 +9,16 @@ const STAMP_EMOJI := {
 	"safe": "👍",
 	"trust": "🥺",
 }
-## スタンプの初期の言葉の、翻訳ファイルのキー(日本語の元の文)
+## スタンプの言葉のセット(意味ごと。翻訳ファイルのキー = 日本語の元の文)。
+## 試合ごとに、プレイヤーごとに、それぞれのセットから1つずつランダムに選ぶ(シャッフル)。
+## 言葉は番号で送るので、受け取った人の画面では、その人の言語の同じ番号の言葉が出る
+const STAMP_SETS := {
+	"dropped": ["落ちてる", "うしろ!うしろ!", "来てるよ!", "あるある!"],
+	# (「セーフ!」は結果の見出しでも使う別の訳があるので、スタンプ用のキーにする。日本語の表示は「セーフ!」)
+	"safe": ["平気", "スタンプ:セーフ!", "まだまだ", "なんもないよ"],
+	"trust": ["信じて", "マジだって!", "ぜったいホント", "うそじゃない"],
+}
+## (前からある呼び出しのため: セットの1番目)
 const STAMP_KEYS := {
 	"dropped": "落ちてる",
 	"safe": "平気",
@@ -22,9 +31,30 @@ static func t(key: String) -> String:
 	return Locale.t(key)
 
 
-## スタンプの初期の言葉(今の言語。絵文字なし)。日本語「落ちてる」、英語「Behind you!」など
-static func stamp_word(kind: String) -> String:
-	return Locale.t(STAMP_KEYS.get(kind, kind))
+## スタンプの言葉(今の言語。絵文字なし)。index はセットの何番目か(省略すると1番目)
+static func stamp_word(kind: String, index: int = 0) -> String:
+	var list: Array = STAMP_SETS.get(kind, [kind])
+	return Locale.t(list[clampi(index, 0, list.size() - 1)])
+
+
+## 3つのスタンプの言葉を、それぞれのセットからランダムに選ぶ({kind: 何番目か})
+static func random_pick(rng: RandomNumberGenerator = null) -> Dictionary:
+	var d := {}
+	for kind in STAMP_SETS:
+		var n: int = (STAMP_SETS[kind] as Array).size()
+		d[kind] = rng.randi_range(0, n - 1) if rng else randi_range(0, n - 1)
+	return d
+
+
+## 通信や保存から読んだ選び方を、正しい形に直す(知らない番号は1番目)
+static func clean_pick(v: Variant) -> Dictionary:
+	var d := {}
+	var src: Dictionary = v if v is Dictionary else {}
+	for kind in STAMP_SETS:
+		var raw: Variant = src.get(kind, 0)
+		var i: int = int(raw) if (raw is int or raw is float) else 0
+		d[kind] = clampi(i, 0, (STAMP_SETS[kind] as Array).size() - 1)
+	return d
 
 
 ## スタンプに出す文字: 言葉+絵文字(word が "" なら初期の言葉)。例: 「落ちてる😨」「Behind you!😨」

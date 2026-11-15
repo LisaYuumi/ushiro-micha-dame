@@ -68,6 +68,7 @@ func _initialize() -> void:
 	_test_beach_stage()
 	_test_accessories()
 	_test_lap_behind_not_touch()
+	_test_stamp_shuffle()
 	_test_bot_personalities()
 	_test_look_limit_and_patience()
 	_test_online_match_setup()
@@ -588,7 +589,8 @@ func _test_custom_stamp_words() -> void:
 	_check(str(g.stamp_words.get(2, {}).get(Stamps.SAFE, "")) == "だいじょぶ", "自作の言葉が通信で届く")
 	_check(HeadOverlay.stamp_text(g, 2, Stamps.SAFE) == "だいじょぶ👍", "自作の言葉に絵文字がつく")
 	Profile.hide_custom_words = true
-	_check(HeadOverlay.stamp_text(g, 2, Stamps.SAFE) == "平気👍", "「表示しない」なら初期の言葉")
+	g.stamp_picks[2] = {Stamps.DROPPED: 0, Stamps.SAFE: 2, Stamps.TRUST: 0}
+	_check(HeadOverlay.stamp_text(g, 2, Stamps.SAFE) == "まだまだ👍", "「表示しない」なら、同じ意味のシャッフルの言葉")
 	Profile.hide_custom_words = false
 
 
@@ -608,7 +610,8 @@ func _test_languages() -> void:
 	s.start_match(5)
 	s.stamp_words[2] = {Stamps.SAFE: "だいじょぶ"}
 	s.stamp_langs[2] = "ja"
-	_check(HeadOverlay.stamp_text(s, 2, Stamps.SAFE) == "You're safe👍", "言語がちがえば、自作の言葉は英語の初期の言葉で出す")
+	s.stamp_picks[2] = {Stamps.DROPPED: 0, Stamps.SAFE: 1, Stamps.TRUST: 0}
+	_check(HeadOverlay.stamp_text(s, 2, Stamps.SAFE) == "All clear👍", "言語がちがえば、自作の言葉は受け取った人の言語のシャッフルの言葉で出す")
 	s.stamp_words[3] = {Stamps.SAFE: "No worry"}
 	s.stamp_langs[3] = "en"
 	_check(HeadOverlay.stamp_text(s, 3, Stamps.SAFE) == "No worry👍", "言語が同じなら自作の言葉を出す")
@@ -1899,3 +1902,41 @@ func _test_lap_behind_not_touch() -> void:
 			break
 	_check(not touched, "ほぼ1周遅れの人に、後ろから鬼が近づいてもタッチにならない")
 	_check(s.chaser_gap_m() > 10.0, "(確認用)追う人はほぼ1周遅れのまま(%.1f m)" % s.chaser_gap_m())
+
+
+## スタンプの言葉のシャッフル: セットから選ぶ・番号で届く・受け取った人の言語で出る
+func _test_stamp_shuffle() -> void:
+	var seen := {}
+	for i in 60:
+		var p := Texts.random_pick()
+		for k in Stamps.ALL:
+			var idx: int = p[k]
+			_check(idx >= 0 and idx < (Texts.STAMP_SETS[k] as Array).size(), "シャッフルの番号はセットの中")
+			seen["%s%d" % [k, idx]] = true
+	_check(seen.size() == 12, "60回引けば、3つのセットの4つの言葉が全部出る(%d)" % seen.size())
+	_check(Texts.clean_pick({Stamps.SAFE: 99, Stamps.DROPPED: "x"}) == {Stamps.DROPPED: 0, Stamps.SAFE: 3, Stamps.TRUST: 0}, "おかしな番号は直す")
+	var s := GameState.new()
+	s.start_match(7)
+	for a in s.actors:
+		_check(s.stamp_picks.has(a.id), "試合の初めに、全員の言葉が決まる")
+	s.stamp_picks[3] = {Stamps.DROPPED: 1, Stamps.SAFE: 1, Stamps.TRUST: 3}
+	_check(HeadOverlay.stamp_text(s, 3, Stamps.DROPPED) == "うしろ!うしろ!😨", "シャッフルの言葉が出る")
+	_check(HeadOverlay.stamp_text(s, 3, Stamps.SAFE) == "セーフ!👍", "「セーフ!」は日本語ではそのまま")
+	var g := GameState.new()
+	g.apply_snapshot(s.snapshot())
+	_check(HeadOverlay.stamp_text(g, 3, Stamps.TRUST) == "うそじゃない🥺", "言葉の番号は通信で届く")
+	Locale.setup("en")
+	_check(HeadOverlay.stamp_text(g, 3, Stamps.TRUST) == "No lie!🥺", "英語の人には、英語のセットの同じ番号の言葉")
+	_check(HeadOverlay.stamp_text(g, 3, Stamps.SAFE) == "All clear👍", "英語のセーフ")
+	Locale.setup("ja")
+	# シャッフルボタン: 自作の言葉をやめて引き直す
+	var keep_words: Dictionary = Profile.stamp_words.duplicate()
+	var keep_pick: Dictionary = Profile.stamp_pick.duplicate()
+	Profile.stamp_words = {Stamps.SAFE: "だいじょぶ"}
+	Profile.roll_next_words()
+	_check(Profile.stamp_words.has(Stamps.SAFE), "自作の言葉がある人は、自動では引き直さない")
+	Profile.shuffle_words()
+	_check(Profile.stamp_words.is_empty(), "シャッフルを押すと自作の言葉をやめる")
+	Profile.stamp_words = keep_words
+	Profile.stamp_pick = keep_pick
+	Profile.save()
