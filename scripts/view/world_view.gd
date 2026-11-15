@@ -154,6 +154,8 @@ func build(state: GameState) -> void:
 		c.queue_free()
 	_actor_nodes.clear()
 	_window_lights.clear()
+	_wall_labels.clear()
+	_wall_bright = 1.0
 	_clock_node = null
 	_curtain_node = null
 	_turn.clear()
@@ -209,6 +211,10 @@ func build(state: GameState) -> void:
 	for k in _model_cache:
 		(_model_cache[k] as Node).queue_free()
 	_model_cache.clear()
+	# 壁の文字を覚えておく(このあとで出す「ぽいっ」などの文字は入れない)
+	for n in find_children("*", "Label3D", true, false):
+		var l := n as Label3D
+		_wall_labels.append([l, l.modulate, l.outline_modulate])
 	_build_handkerchief(state)
 	_build_oni_shadow()
 	_milk_rings.clear()
@@ -267,6 +273,17 @@ func sync(state: GameState, delta: float) -> void:
 				_env.background_color = bc
 		for wl in _window_lights:
 			wl.visible = _blackout.brightness() > 0.5
+		# 壁の文字も同じ暗さに(停電中だけ。変わったときだけ色をかえる)
+		var wb := _blackout.brightness()
+		if not is_equal_approx(wb, _wall_bright):
+			_wall_bright = wb
+			for wl in _wall_labels:
+				var lab: Label3D = wl[0]
+				if is_instance_valid(lab):
+					var m: Color = wl[1]
+					var o: Color = wl[2]
+					lab.modulate = Color(m.r * wb, m.g * wb, m.b * wb, m.a)
+					lab.outline_modulate = Color(o.r * wb, o.g * wb, o.b * wb, o.a)
 	_update_obstacles(state)
 	_update_oni_shadow(state)
 	_update_milk_ring(state, delta)
@@ -634,6 +651,9 @@ func is_top_camera() -> bool:
 var _env: Environment
 ## 窓から差しこむ日差し(停電のときは消す)
 var _window_lights: Array[MeshInstance3D] = []
+## 壁の文字(黒板・学級目標など。停電のときは同じ暗さにする)と、もとの色 [Label3D, modulate, outline_modulate]
+var _wall_labels: Array = []
+var _wall_bright := 1.0
 var _sky_color := Color.WHITE
 const DARK_SKY := Color(0.02, 0.03, 0.08)
 
