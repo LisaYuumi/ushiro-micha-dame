@@ -295,6 +295,7 @@ func _physics_process(delta: float) -> void:
 		return # まだ最初の状態が届いていない
 	var t0 := Time.get_ticks_usec()
 	var slow := []
+	_look_tame()
 	PlayerInput.apply(state, cmds, view.get_camera_basis())
 	_update_milk()
 	if mode != Mode.GUEST:
@@ -365,6 +366,22 @@ func _physics_process(delta: float) -> void:
 	var total := (Time.get_ticks_usec() - t0) / 1000
 	if total >= 25:
 		print("slow physics %dms: %s" % [total, ", ".join(slow)])
+
+
+## 振り向く瞬間のタメ: 「振り向く」を押した瞬間に「ザッ…」と集中線(見た目と音だけ。
+## 当たり・ハズレの判定や立ち上がりは、押した瞬間のまま遅らせない)
+func _look_tame() -> void:
+	if not (Input.is_action_just_pressed("look_back") or Input.is_action_just_pressed("pick_up")):
+		return
+	var me := state.get_local_player()
+	if me == null or me.role != GameState.Role.SEATED or me.looking_back:
+		return
+	var judged := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
+	if judged and me.looks_left <= 0:
+		return
+	audio.play("look_zah", -2.0)
+	if judged:
+		hud.speed_lines()
 
 
 ## BGM: ロビー・結果は明るい曲、ラウンド中は控えめな曲(ラウンドが進むほど楽器が増える)、追いかけっこは速い曲。
@@ -810,7 +827,10 @@ func _show_event(e: Dictionary) -> void:
 				hud.show_message((tr("%s に水鉄砲!") if state.stage == "beach" else tr("%s を黒板消しでポンポン!")) % _name(e["target"]), Color(0.3, 0.45, 0.7), 1.0)
 		"out":
 			if e["actor"] == me:
-				hud.show_message(tr("お手つき!\n真ん中でお休み(このラウンド0点)"), Color(0.85, 0.1, 0.1), 2.0)
+				# ハズレ: 「ガーン!」(画面のゆれと音は WorldView)。そのあと、どうなったかの説明
+				hud.show_banner(tr("ガーン!"), Color("6EA8F0"), 0.7)
+				get_tree().create_timer(0.7).timeout.connect(func() -> void:
+					hud.show_message(tr("お手つき!\n真ん中でお休み(このラウンド0点)"), Color(0.85, 0.1, 0.1), 1.6))
 				_close_picker()
 				_update_help()
 		"auto_drop":
@@ -818,10 +838,14 @@ func _show_event(e: Dictionary) -> void:
 				hud.show_message(tr("4周したので\n次の席で自動で落とす"), Color(0.3, 0.3, 0.3), 1.5)
 		"found":
 			if e["actor"] == me:
-				hud.show_message(tr("あった!"), Color(0.1, 0.5, 0.9), GameConfig.MESSAGE_TIME)
+				# 当たり: 画面の上のほうに「あったー!!」(0.5秒。前の障害物が見えるように上のほう)
+				hud.show_banner(tr("あったー!!"), Color("FFB020"), 0.5)
 		"picked_up":
 			if e["actor"] == me:
-				hud.show_message(tr("追いかけろ!\nスティックを左右に倒してよける"), Color(0.1, 0.5, 0.9), 2.2)
+				# 「あったー!!」が消えたら、上のほうに小さく操作の案内(まん中には出さない: 前が見えるように)
+				get_tree().create_timer(0.5).timeout.connect(func() -> void:
+					if state.phase == GameState.Phase.CHASE:
+						hud.show_banner(tr("追いかけろ!\nスティックを左右に倒してよける"), Color(0.1, 0.5, 0.9), 1.8, 34))
 			elif _i_am_oni():
 				hud.show_message(tr("気づかれた! 逃げろ!\nスティックを左右に倒してよける"), Color(0.85, 0.1, 0.1), 2.2)
 			else:

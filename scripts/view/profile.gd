@@ -34,6 +34,8 @@ static var accessories := {}
 ## 音の鳴らし方: 1 = なめらか(ブラウザに音を混ぜてもらう・サンプル再生)/0 = ふつう/-1 = おまかせ
 ## (おまかせ: GPU を使えていない PC のブラウザだけ、なめらか)
 static var smooth_mode := -1
+## お手つきのときに画面をゆらすか(⚙メニューで切りかえ)
+static var screen_shake := true
 static var _loaded := false
 
 
@@ -62,6 +64,7 @@ static func load_saved() -> void:
 	stage = Items.clean_stage(str(cfg.get_value("profile", "stage", "classroom")))
 	accessories = Accessories.clean(cfg.get_value("profile", "accessories", {}))
 	smooth_mode = clampi(int(cfg.get_value("profile", "smooth_mode", -1)), -1, 1)
+	screen_shake = bool(cfg.get_value("profile", "screen_shake", true))
 
 
 static func save() -> void:
@@ -78,6 +81,7 @@ static func save() -> void:
 	cfg.set_value("profile", "stage", stage)
 	cfg.set_value("profile", "accessories", accessories)
 	cfg.set_value("profile", "smooth_mode", smooth_mode)
+	cfg.set_value("profile", "screen_shake", screen_shake)
 	cfg.save(PATH)
 
 

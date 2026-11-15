@@ -665,6 +665,37 @@ def eraser_pon():
     return norm(mix(at(pat(210, 1.0), 0.0, d), at(pat(230, 0.85), 0.17, d), at(pat(250, 0.7), 0.34, d), at(puff, 0.05, d)), 0.85)
 
 
+def look_zah():
+    # 振り向く瞬間のタメ「ザッ…」: 布がこすれる、ざらっとした短い音が、すっと消える
+    d = 0.32
+    t = t_of(d)
+    scrape = bandpass(noise(d), 900, 5200) * env_ar(d, 0.012, 0.28)
+    grit = highpass(noise(d), 4000) * (0.5 + 0.5 * np.sin(2 * np.pi * 38 * t)) * env_ar(d, 0.01, 0.2) * 0.35
+    body = thud(150, 90, 0.12, 0.04) * 0.35
+    return norm(mix(scrape, grit, body), 0.85)
+
+
+def found():
+    # 当たり「あったー!!」: 短いファンファーレ(タタタ・ターン!)
+    notes = [(midi(72), 0.0, 0.08), (midi(76), 0.08, 0.08), (midi(79), 0.16, 0.08), (midi(84), 0.26, 0.34)]
+    d = 0.7
+    out = np.zeros(int(d * SR))
+    for f, st, ln in notes:
+        out = out + at(_brass(f, ln + 0.08) * 0.8, st, d)
+        out = out + at(bell(f * 2, ln + 0.1, 0.15, 0.6) * 0.25, st, d)
+    return norm(out, 0.85)
+
+
+def gaan():
+    # ハズレ「ガーン!」: 低い鐘のような、ガーン…とひびく音
+    d = 1.2
+    t = t_of(d)
+    strike = sum(a * np.sin(2 * np.pi * f * t) * np.exp(-t / dk) for f, a, dk in
+                 [(110, 1.0, 0.6), (163, 0.6, 0.45), (233, 0.45, 0.35), (347, 0.3, 0.25), (523, 0.15, 0.18)])
+    hit = click(0.03, 400, 2500, 0.01) * 0.6
+    return norm(mix(strike, hit, thud(90, 50, 0.4, 0.12) * 0.5), 0.9)
+
+
 SOUNDS = {
     "drop_0": drop_0, "drop_1": drop_1, "drop_2": drop_2, "drop_3": drop_3, "drop_4": drop_4,
     "step": step, "run_step": run_step,
@@ -680,6 +711,7 @@ SOUNDS = {
     "drop_beach_3": drop_beach_3, "drop_beach_4": drop_beach_4,
     "step_sand": step_sand, "run_step_sand": run_step_sand, "amb_beach": amb_beach,
     "eraser_pon": eraser_pon,
+    "look_zah": look_zah, "found": found, "gaan": gaan,
 }
 
 

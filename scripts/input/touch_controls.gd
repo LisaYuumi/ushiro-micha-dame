@@ -32,6 +32,8 @@ var _help_panel: PanelContainer
 var _volume_panel: PanelContainer
 var _volume_sliders: VolumePanel
 var _personality_button: Button
+## 画面のゆれ(お手つきのとき)のオン・オフ
+var _shake_button: Button
 var _language_button: Button
 var _stick: VirtualStick
 ## 「振り向く」ボタンの矢印・文字・残りの回数のバッジ
@@ -333,6 +335,7 @@ func _build_menu() -> void:
 	_menu_button(col, "役を変えて新しい試合", _menu_action.bind("toggle_role"))
 	_menu_button(col, "上から見る(確認用)", _menu_action.bind("debug_top_camera"))
 	_personality_button = _menu_button(col, "", _toggle_personality)
+	_shake_button = _menu_button(col, "", _toggle_shake)
 	_language_button = _menu_button(col, "", _menu_action.bind("toggle_language"))
 	_menu_button(col, "🔊 音の大きさ", _show_volume)
 	_menu_button(col, "あそびかた", _show_help)
@@ -370,6 +373,12 @@ func _menu_action(action: String) -> void:
 	close_menu()
 
 
+func _toggle_shake() -> void:
+	Profile.screen_shake = not Profile.screen_shake
+	Profile.save()
+	_update_menu_texts()
+
+
 func _toggle_personality() -> void:
 	_tap_action("toggle_personality")
 	_update_menu_texts()
@@ -398,6 +407,7 @@ func refresh_texts() -> void:
 func _update_menu_texts() -> void:
 	_language_button.text = "🌐 " + str(Locale.NAMES.get(Locale.current(), Locale.current()))
 	_personality_button.text = tr("ボットの性格を表示: %s") % (tr("オン") if Profile.show_personality else tr("オフ"))
+	_shake_button.text = tr("画面のゆれ: %s") % (tr("オン") if Profile.screen_shake else tr("オフ"))
 	UiStyle.refit_all()
 
 

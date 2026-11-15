@@ -70,12 +70,36 @@ var _milk_bar: Control
 
 ## 名札(HeadOverlay・層 1)やボタン(層 2)より上に出す物: お知らせのカード・結果カード・真ん中の大きな文字
 var _top: CanvasLayer
+## 振り向く瞬間の集中線(画面のふちから中心へ向かう線)と、その残り時間
+var _speed: Control
+var _speed_left := 0.0
+const SPEED_TIME := 0.3
+## 画面の上のほうに出す派手な文字(「あったー!!」など。前が見えるように上のほう)
+var _banner: Label
+var _banner_tween: Tween
 
 
 func _ready() -> void:
 	_top = CanvasLayer.new()
 	_top.layer = 5
 	add_child(_top)
+	_speed = Control.new()
+	_speed.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_speed.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_speed.draw.connect(_draw_speed_lines)
+	_speed.visible = false
+	add_child(_speed)
+	_banner = _make_label(84, Color("FFB020"))
+	_banner.add_theme_color_override("font_outline_color", GameConfig.COLOR_INK)
+	_banner.add_theme_constant_override("outline_size", 18)
+	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_banner.anchor_left = 0.0
+	_banner.anchor_right = 1.0
+	_banner.anchor_top = 0.1
+	_banner.anchor_bottom = 0.3
+	_banner.visible = false
+	_top.add_child(_banner)
 	_milk = Control.new()
 	_milk.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_milk.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -118,6 +142,10 @@ func _process(delta: float) -> void:
 		_milk.queue_redraw()
 		_milk_pill.visible = _milk_on
 		_milk_bar.queue_redraw()
+	if _speed_left > 0.0:
+		_speed_left -= delta
+		_speed.visible = _speed_left > 0.0
+		_speed.queue_redraw()
 	if _message_left > 0.0:
 		_message_left -= delta
 		if _message_left <= 0.0:
@@ -950,6 +978,47 @@ func _draw_smoke() -> void:
 			var pr := 3.5 + 2.0 * float(i % 2)
 			_milk.draw_circle(Vector2(px, py), pr + 2.0, ink)
 			_milk.draw_circle(Vector2(px, py), pr, white)
+
+
+## 振り向く瞬間のタメ: 画面のふちから中心へ向かう集中線を、少しの間だけ出す(見た目だけ)
+func speed_lines() -> void:
+	_speed_left = SPEED_TIME
+	_speed.visible = true
+	_speed.queue_redraw()
+
+
+func _draw_speed_lines() -> void:
+	var sz := _speed.size
+	var c := sz / 2.0
+	var a := clampf(_speed_left / SPEED_TIME, 0.0, 1.0)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(Time.get_ticks_msec() / 40)
+	var far := c.length() * 1.05
+	for i in 56:
+		var ang := TAU * (float(i) + rng.randf() * 0.6) / 56.0
+		var dir := Vector2(cos(ang), sin(ang))
+		var inner := far * rng.randf_range(0.42, 0.62)
+		var w := rng.randf_range(2.0, 7.0)
+		_speed.draw_line(c + dir * inner, c + dir * far, Color(0.12, 0.1, 0.09, 0.55 * a), w, true)
+
+
+## 画面の上のほうに、派手な文字をポンと出して、seconds 秒で消す(前の障害物が見えるように上のほう)
+func show_banner(text: String, color: Color, seconds: float, font_size: int = 84) -> void:
+	_banner.text = text
+	_banner.add_theme_font_size_override("font_size", font_size)
+	_banner.add_theme_color_override("font_color", color)
+	_banner.visible = true
+	_banner.pivot_offset = _banner.size / 2.0
+	_banner.scale = Vector2(0.5, 0.5)
+	_banner.modulate.a = 1.0
+	if _banner_tween:
+		_banner_tween.kill()
+	_banner_tween = create_tween()
+	_banner_tween.tween_property(_banner, "scale", Vector2(1.15, 1.15), 0.08)
+	_banner_tween.tween_property(_banner, "scale", Vector2.ONE, 0.06)
+	_banner_tween.tween_interval(maxf(seconds - 0.24, 0.05))
+	_banner_tween.tween_property(_banner, "modulate:a", 0.0, 0.1)
+	_banner_tween.tween_callback(func() -> void: _banner.visible = false)
 
 
 ## 画面の上のまん中に、役を出す(空文字で消す)。color の地に白い文字

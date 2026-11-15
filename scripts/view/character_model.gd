@@ -136,6 +136,8 @@ var _down := false
 var _down_hold := false
 var _down_timer := 0.0
 var _down_w := 0.0
+## 倒れる向き: false = 前へばったり(転ぶ)/true = 後ろへズッコケ(お手つき)
+var _down_back := false
 ## まばたき: 次のまばたきまでの時間と、目を閉じている残り時間
 var _blink_wait := randf_range(1.5, 4.0)
 var _blink_left := 0.0
@@ -900,9 +902,11 @@ func _update_ragdoll(delta: float) -> void:
 		_ragdoll_w = 0.0
 
 
-## 転んでいるか(状態の「転んで止まっている残り時間」から、毎フレーム渡す)
-func set_down(v: bool) -> void:
+## 転んでいるか(状態の「転んで止まっている残り時間」から、毎フレーム渡す)。back = true なら後ろへズッコケる
+func set_down(v: bool, back: bool = false) -> void:
 	_down = v
+	if v:
+		_down_back = back
 
 
 ## 毎フレームの動き。running: 走っている(大げさに揺れる)
@@ -941,7 +945,7 @@ func animate(delta: float, running: bool) -> void:
 	_down_w = move_toward(_down_w, 1.0 if want_down else 0.0, delta / (0.22 if want_down else 0.4))
 	if _down_w > 0.0:
 		var e := _ease(_down_w)
-		_pivot.rotation.x += -1.38 * e
+		_pivot.rotation.x += (1.25 if _down_back else -1.38) * e
 		_pivot.rotation.z += sin(_time * 7.0) * 0.06 * e if want_down else 0.0
 		_pivot.position.y += 0.16 * e
 	# 体育座り: 腰を中心に後ろへ傾ける(ひざが立つ)。腰が床の上に来るように下げる

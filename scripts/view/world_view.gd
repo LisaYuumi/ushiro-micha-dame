@@ -118,6 +118,15 @@ var _dazed := {}
 ## 鬼が歩いているか立ち止まっているかを見分けるため(id -> 前の位置/止まっている時間)
 var _last_pos := {}
 var _still_time := {}
+## お手つきの演出: ズッコケてから、とぼとぼ真ん中まで歩く(id -> {"t", "from", "to"})
+var _out_anim := {}
+const OUT_FALL_TIME := 0.75
+const OUT_RISE_TIME := 0.35
+const OUT_WALK_SPEED := 1.1
+## 画面のゆれ(お手つきの本人の画面。⚙メニューでオフにできる)
+var _shake_left := 0.0
+const SHAKE_TIME := 0.4
+const SHAKE_PIXELS := 0.08
 
 
 ## ラウンドが変わっても同じ人のキャラは使い回す(作り直すと重く、ラウンドの始まりにガタッと止まるので)
@@ -156,6 +165,8 @@ func build(state: GameState) -> void:
 	_dust_left.clear()
 	_last_pos.clear()
 	_still_time.clear()
+	_out_anim.clear()
+	_shake_left = 0.0
 	_obstacle_nodes.clear()
 	_milk_nodes.clear()
 
@@ -223,6 +234,7 @@ func sync(state: GameState, delta: float) -> void:
 		if node:
 			node.position = a.position
 			node.rotation.y = a.yaw
+			_apply_out_anim(a, node, delta)
 			var blob: MeshInstance3D = _blobs.get(a.id)
 			if blob:
 				blob.position = Vector3(a.position.x, 0.03, a.position.z)
@@ -232,8 +244,11 @@ func sync(state: GameState, delta: float) -> void:
 				# 振り向いた姿は全員に見える(頭→上半身の順に後ろを向く)
 				model.set_look(a.looking_back)
 				model.set_pose(_pose_of(state, a))
-				# 転んで止まっている間は、前にばったり倒れている
-				model.set_down(a.slip_left > 0.0)
+				# 転んで止まっている間は、前にばったり倒れている(お手つきの演出中は、後ろへズッコケる)
+				if _out_anim.has(a.id):
+					model.set_down(float(_out_anim[a.id]["t"]) < OUT_FALL_TIME, true)
+				else:
+					model.set_down(a.slip_left > 0.0)
 				# 鬼だけが学校の黄色い帽子をかぶる
 				model.set_hat(a.id == state.oni_id, _beach)
 			_update_expression(state, a, model, delta)
@@ -272,12 +287,45 @@ func sync(state: GameState, delta: float) -> void:
 	_update_ambience(delta)
 
 
+## お手つきの演出: ズッコケている間はもとの席の場所、そのあと真ん中まで歩く(状態の位置は、もう真ん中)
+func _apply_out_anim(a: GameState.Actor, node: Node3D, delta: float) -> void:
+	if not _out_anim.has(a.id):
+		return
+	if a.role != GameState.Role.OUT:
+		_out_anim.erase(a.id)
+		return
+	var an: Dictionary = _out_anim[a.id]
+	an["t"] = float(an["t"]) + delta
+	var t: float = an["t"]
+	var from: Vector3 = an["from"]
+	var to: Vector3 = an["to"]
+	var walk_start := OUT_FALL_TIME + OUT_RISE_TIME
+	if t < walk_start:
+		node.position = from
+		return
+	var dist := from.distance_to(to)
+	var k := clampf((t - walk_start) * OUT_WALK_SPEED / maxf(dist, 0.01), 0.0, 1.0)
+	if k >= 1.0:
+		_out_anim.erase(a.id)
+		return
+	node.position = from.lerp(to, k)
+	# 歩く向きを向く
+	var dir := to - from
+	node.rotation.y = atan2(-dir.x, -dir.z)
+
+
 ## 姿勢: 座っている人は座る、追いかけっこ中は走る、鬼は歩く(止まっていれば立つ)
 func _pose_of(state: GameState, a: GameState.Actor) -> String:
 	if a.role == GameState.Role.SEATED:
 		# 海辺では、砂に直接体育座り
 		return "floor" if _beach else "sit"
 	if a.role == GameState.Role.OUT:
+		# お手つきの演出中: ズッコケている間は立った姿、そのあと真ん中まで歩く
+		if _out_anim.has(a.id):
+			var t: float = _out_anim[a.id]["t"]
+			if t < OUT_FALL_TIME + OUT_RISE_TIME:
+				return "idle"
+			return "walk"
 		# お手つきで抜けた人は、真ん中で体育座り
 		return "floor"
 	if state.phase == GameState.Phase.RESULT:
@@ -315,13 +363,15 @@ func _update_expression(state: GameState, a: GameState.Actor, model: CharacterMo
 		expr = CharacterModel.SURPRISED
 	model.set_expression(expr)
 	# お手つきの回数で、顔がだんだん崩れていく(3回目は放心)
-	var dazed := _dazed.has(a.id) or a.otetsuki_count >= GameConfig.OTETSUKI_DAZED_COUNT
+	# お手つきで抜けた人は放心の顔(ズッコケてから、体育座りしている間も)
+	var dazed := _dazed.has(a.id) or a.otetsuki_count >= GameConfig.OTETSUKI_DAZED_COUNT or a.role == GameState.Role.OUT
 	model.set_fluster(CharacterModel.FLUSTER_MAX if dazed else mini(a.otetsuki_count, 2))
 	# 振り向いた瞬間にピョンと跳ねる
 	if a.looking_back and not _was_looking.get(a.id, false):
 		model.hop()
-		# 振り向く「バッ!」(自分は大きく、ほかの人はその場所から小さく)
-		_play_at(a, "look", -2.0 if a.id == state.local_player_id else -12.0)
+		# 振り向く「バッ!」(ほかの人は、その場所から小さく聞こえる。自分は押した瞬間に main が「ザッ…」を鳴らす)
+		if a.id != state.local_player_id:
+			_play_at(a, "look", -12.0)
 	_was_looking[a.id] = a.looking_back
 	model.animate(delta, running and state.phase == GameState.Phase.CHASE)
 
@@ -432,9 +482,8 @@ func _pop(actor_id: int, text: String, color: Color) -> void:
 func on_event(e: Dictionary) -> void:
 	match e.get("type"):
 		"otetsuki":
+			# (音と文字は、すぐあとの「out」で「ガーン!」を出す)
 			_oops_until[e["actor"]] = _clock + 1.5
-			_play_actor(e["actor"], "oops", -4.0, -14.0)
-			_pop(e["actor"], "?", Color("6EA8F0"))
 		"stamp":
 			# スタンプが届いた人は、びっくり顔になる
 			_surprise_until[e["target"]] = _clock + 1.0
@@ -457,10 +506,23 @@ func on_event(e: Dictionary) -> void:
 		"lights_on":
 			AudioDirector.sfx("power_on", -3.0)
 		"out":
-			_pop(e["actor"], tr("お手つき!"), Color("6EA8F0"))
-			# 体育座りに移る「とぼとぼ」(「シーン…」のあと)
+			# ハズレ: 「ガーン!」。ズッコケてから、とぼとぼ真ん中まで歩いて体育座り(みんなの画面で見える)
 			var who: int = e["actor"]
-			get_tree().create_timer(1.1).timeout.connect(func() -> void: _play_actor(who, "trudge", -6.0, -16.0))
+			_pop(who, tr("ガーン!"), Color("6EA8F0"))
+			_play_actor(who, "gaan", -2.0, -10.0)
+			var node: Node3D = _actor_nodes.get(who)
+			var a := _room_state.get_actor(who) if _room_state else null
+			if node and a:
+				_out_anim[who] = {"t": 0.0, "from": node.position, "to": a.position}
+			if who == _room_state.local_player_id and Profile.screen_shake:
+				_shake_left = SHAKE_TIME
+			get_tree().create_timer(OUT_FALL_TIME + OUT_RISE_TIME).timeout.connect(func() -> void: _play_actor(who, "trudge", -6.0, -16.0))
+		"found":
+			# 当たり: 短いファンファーレ。ほかの人の画面では、その人の頭の上に「あったー!!」
+			var who: int = e["actor"]
+			_play_actor(who, "found", -3.0, -12.0)
+			if _room_state and who != _room_state.local_player_id:
+				_pop(who, tr("あったー!!"), Color("FFB020"))
 		"milk":
 			_surprise_until[e["target"]] = _clock + 1.2
 			if _beach:
@@ -1628,6 +1690,11 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 	var me := state.get_local_player()
 	if me == null or _seat_cam == null:
 		return
+	# 画面のゆれ(お手つきの本人。だんだん小さく)
+	_shake_left = maxf(_shake_left - delta, 0.0)
+	var amp := SHAKE_PIXELS * (_shake_left / SHAKE_TIME)
+	_seat_cam.h_offset = randf_range(-amp, amp)
+	_seat_cam.v_offset = randf_range(-amp, amp)
 	# 座っているときは自分の体を映さない。立ち上がって追いかけるときは映す
 	var self_bit := 1 << (SELF_LAYER - 1)
 	if me.role == GameState.Role.OUT:
