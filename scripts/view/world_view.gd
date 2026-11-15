@@ -463,7 +463,12 @@ func on_event(e: Dictionary) -> void:
 			get_tree().create_timer(1.1).timeout.connect(func() -> void: _play_actor(who, "trudge", -6.0, -16.0))
 		"milk":
 			_surprise_until[e["target"]] = _clock + 1.2
-			_pop(e["target"], tr("ばしゃっ"), Color.WHITE)
+			if _beach:
+				_pop(e["target"], tr("ばしゃっ"), Color.WHITE)
+			else:
+				# 教室: 黒板消しでポンポンポン(チョークの粉の煙)
+				_pop(e["target"], tr("ポンポン!"), Color.WHITE)
+				_play_actor(e["target"], "eraser_pon", -2.0, -5.0)
 		"dropped", "rustle":
 			# 本物もフェイクも、まったく同じ音(落とし物ごとの音。同じ大きさ・同じゆらぎ)。
 			# 落とした場所から聞こえる(後ろの左右どちらで鳴ったかわかる)。重い物ほど大きく、遠くまで聞こえる
@@ -1099,26 +1104,49 @@ func _update_oni_shadow(state: GameState) -> void:
 ## 頭からかぶった牛乳: 白いかたまりと、顔の横にたれるしずく(輪郭線つき)
 func _build_milk_splash() -> Node3D:
 	var root := Node3D.new()
-	# 海辺は水鉄砲の水(水色)
-	var col := Color("BFE8FF") if _beach else Color(1.0, 0.99, 0.95)
-	var cap := SphereMesh.new()
-	cap.radius = 0.2
-	cap.height = 0.16
-	cap.radial_segments = 14
-	cap.rings = 6
-	var top := Toon.mesh(cap, col, 0.02)
-	top.position = Vector3(0, 0.36, 0)
-	root.add_child(top)
-	for k in 4:
-		var drop := SphereMesh.new()
-		drop.radius = 0.045
-		drop.height = 0.12
-		drop.radial_segments = 8
-		drop.rings = 4
-		var d := Toon.mesh(drop, col, 0.015)
-		var ang := TAU * (float(k) + 0.25) / 4.0
-		d.position = Vector3(sin(ang) * 0.21, 0.24 - 0.05 * float(k % 2), cos(ang) * 0.21)
-		root.add_child(d)
+	if _beach:
+		# 海辺: 水鉄砲の水(水色)が頭にかかる
+		var col := Color("BFE8FF")
+		var cap := SphereMesh.new()
+		cap.radius = 0.2
+		cap.height = 0.16
+		cap.radial_segments = 14
+		cap.rings = 6
+		var top := Toon.mesh(cap, col, 0.02)
+		top.position = Vector3(0, 0.36, 0)
+		root.add_child(top)
+		for k in 4:
+			var drop := SphereMesh.new()
+			drop.radius = 0.045
+			drop.height = 0.12
+			drop.radial_segments = 8
+			drop.rings = 4
+			var d := Toon.mesh(drop, col, 0.015)
+			var ang := TAU * (float(k) + 0.25) / 4.0
+			d.position = Vector3(sin(ang) * 0.21, 0.24 - 0.05 * float(k % 2), cos(ang) * 0.21)
+			root.add_child(d)
+	else:
+		# 教室: 黒板消しのチョークの粉が、頭のまわりでもくもく(白と灰色の丸いかたまり)
+		for k in 6:
+			var puff := SphereMesh.new()
+			var r := 0.1 + 0.03 * float(k % 3)
+			puff.radius = r
+			puff.height = r * 1.7
+			puff.radial_segments = 10
+			puff.rings = 5
+			var col := Color("FBFAF7") if k % 2 == 0 else Color("E3DED6")
+			var p := Toon.mesh(puff, col, 0.02)
+			var ang := TAU * float(k) / 6.0
+			p.position = Vector3(sin(ang) * 0.2, 0.3 + 0.08 * float(k % 2), cos(ang) * 0.2)
+			root.add_child(p)
+		var top_puff := SphereMesh.new()
+		top_puff.radius = 0.15
+		top_puff.height = 0.24
+		top_puff.radial_segments = 10
+		top_puff.rings = 5
+		var tp := Toon.mesh(top_puff, Color("FBFAF7"), 0.02)
+		tp.position = Vector3(0, 0.45, 0)
+		root.add_child(tp)
 	root.visible = false
 	return root
 

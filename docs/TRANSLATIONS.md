@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(257)
+## 一覧(262)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -208,6 +208,11 @@
 | つける | Wear |
 | なし | None |
 | キャンセル | Cancel |
+| 黒板消し | Eraser |
+| 黒板消しでポンポンされた! | Chalk dust in your face! |
+| %s を黒板消しでポンポン! | Chalk dust on %s! |
+| パタパタ! | Waving it away! |
+| ポンポン! | Pat pat! |
 | 音がガタガタ割れるときは「なめらか」を試してね | If the sound crackles, try "Smooth" |
 | 音の鳴らし方: %s ▶ | Sound mode: %s ▶ |
 | なめらか(お試し) | Smooth (beta) |

@@ -785,7 +785,7 @@ func set_milk(on: bool, left: float = 1.0, wiped: bool = false) -> void:
 	_milk_left = clampf(left, 0.0, 1.0)
 	if wiped and not _milk_wiping and on:
 		# 「ゴシゴシ」: ぬぐいはじめ
-		show_message(tr("ゴシゴシ!"), Color(0.3, 0.45, 0.7), 0.8)
+		show_message(tr("ゴシゴシ!") if _water else tr("パタパタ!"), Color(0.3, 0.45, 0.7), 0.8)
 	_milk_wiping = wiped
 
 
@@ -820,7 +820,7 @@ func _build_milk_pill() -> void:
 		_milk_bar.draw_style_box(bg, r)
 		if _milk_left > 0.01:
 			var fill := StyleBoxFlat.new()
-			fill.bg_color = ButtonIcon.MILK_BLUE
+			fill.bg_color = ButtonIcon.MILK_BLUE if _water else Color("9A948C")
 			fill.set_corner_radius_all(6)
 			_milk_bar.draw_style_box(fill, Rect2(r.position + Vector2(4, 4), Vector2((r.size.x - 8) * _milk_left, r.size.y - 8))))
 	row.add_child(_milk_bar)
@@ -838,12 +838,15 @@ func _build_milk_pill() -> void:
 func set_water(v: bool) -> void:
 	_water = v
 	if _milk_pill_icon:
-		_milk_pill_icon.kind = "water" if v else "milk"
+		_milk_pill_icon.kind = "water" if v else "eraser"
 
 
 ## 上から白い牛乳がたれる: 見本をまねた絵(MilkArt の SVG)を上からすべり下ろして出し、
 ## その下で白い粒がゆっくり落ちる(黒い輪郭)
 func _draw_milk() -> void:
+	if not _water:
+		_draw_smoke()
+		return
 	var sz := _milk.size
 	var t := Time.get_ticks_msec() / 1000.0
 	var ink := GameConfig.COLOR_INK
@@ -903,6 +906,50 @@ func set_minion_mark(on: bool) -> void:
 	for r in _minion_corners:
 		if r.visible != on:
 			r.visible = on
+
+
+## 教室の黒板消し: 上からもくもくの白い煙(下のふちは大小の丸が並んで黒い輪郭)、中に灰色の粉のつぶ、
+## 下に小さな粒がゆっくり落ちる。画面の上の 2/3 くらいがかくれる(走っている間は手でパタパタして上へよける)
+func _draw_smoke() -> void:
+	var sz := _milk.size
+	var t := Time.get_ticks_msec() / 1000.0
+	var ink := GameConfig.COLOR_INK
+	var white := Color(1.0, 1.0, 0.995)
+	var dust := Color("E3DED6")
+	var grow := clampf(_milk_t / 0.5, 0.0, 1.0)
+	grow = 1.0 - pow(1.0 - grow, 3.0)
+	var lift := -(1.0 - grow) * sz.y * 0.6 - _milk_wipe * sz.y * GameConfig.MILK_WIPE_UP
+	var band := sz.y * 0.5 + lift
+	var line := maxf(4.0, sz.y * 0.008)
+	# 下のふちの丸(左から右へ、大きさを変えて並べる。ゆっくりふくらんだりしぼんだり)
+	var puffs := []
+	var x := -sz.x * 0.02
+	var k := 0
+	while x < sz.x * 1.05:
+		var r := sz.y * (0.085 + 0.035 * sin(float(k) * 2.3 + 0.7)) * (1.0 + 0.03 * sin(t * 1.5 + float(k)))
+		puffs.append([Vector2(x + r * 0.8, band + sz.y * 0.02 * sin(float(k) * 1.7)), r])
+		x += r * 1.45
+		k += 1
+	for p in puffs:
+		_milk.draw_circle(p[0], p[1] + line, ink)
+	_milk.draw_rect(Rect2(0, -10, sz.x, band + 10), white)
+	for p in puffs:
+		_milk.draw_circle(p[0], p[1], white)
+	# 煙の中の、灰色の粉のつぶ(ゆっくりただよう)
+	for i in 9:
+		var cx := sz.x * fposmod(0.08 + 0.115 * float(i) + 0.01 * sin(t * 0.4 + float(i)), 1.0)
+		var cy := band * (0.2 + 0.6 * fposmod(float(i) * 0.37, 1.0)) + 6.0 * sin(t * 0.7 + float(i) * 2.0)
+		var rr := sz.y * (0.025 + 0.02 * fposmod(float(i) * 0.53, 1.0))
+		_milk.draw_circle(Vector2(cx, cy), rr, dust)
+	# 下に落ちていく小さな粒(白に黒い輪郭)。手でパタパタしている間は出さない
+	if _milk_wipe < 0.5:
+		for i in 12:
+			var px := sz.x * (0.05 + 0.08 * float(i)) + sin(float(i) * 4.1) * 18.0
+			var fall := fmod(t * (30.0 + 10.0 * float(i % 3)) + float(i) * 61.0, sz.y * 0.32)
+			var py := band + sz.y * 0.08 + fall
+			var pr := 3.5 + 2.0 * float(i % 2)
+			_milk.draw_circle(Vector2(px, py), pr + 2.0, ink)
+			_milk.draw_circle(Vector2(px, py), pr, white)
 
 
 ## 画面の上のまん中に、役を出す(空文字で消す)。color の地に白い文字

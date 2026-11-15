@@ -805,9 +805,9 @@ func _show_event(e: Dictionary) -> void:
 				hud.show_message(tr("かける人をタップしてね"), Color(0.3, 0.3, 0.3), 1.0)
 		"milk":
 			if e["target"] == me:
-				hud.show_message(tr("水鉄砲でかけられた!") if state.stage == "beach" else tr("牛乳かけられた!"), Color(0.3, 0.45, 0.7), 1.2)
+				hud.show_message(tr("水鉄砲でかけられた!") if state.stage == "beach" else tr("黒板消しでポンポンされた!"), Color(0.3, 0.45, 0.7), 1.2)
 			elif e["sender"] == me:
-				hud.show_message((tr("%s に水鉄砲!") if state.stage == "beach" else tr("%s に牛乳!")) % _name(e["target"]), Color(0.3, 0.45, 0.7), 1.0)
+				hud.show_message((tr("%s に水鉄砲!") if state.stage == "beach" else tr("%s を黒板消しでポンポン!")) % _name(e["target"]), Color(0.3, 0.45, 0.7), 1.0)
 		"out":
 			if e["actor"] == me:
 				hud.show_message(tr("お手つき!\n真ん中でお休み(このラウンド0点)"), Color(0.85, 0.1, 0.1), 2.0)

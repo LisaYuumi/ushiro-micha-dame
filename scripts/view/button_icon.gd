@@ -53,6 +53,17 @@ func _draw() -> void:
 		"milk_empty":
 			# 倒れた空っぽのパック(灰色っぽく)
 			_draw_carton(c + Vector2(0, s * 0.1), s * 0.8, line, deg_to_rad(-80.0), Color("F2EFEA"), Color("B9B4AC"), Color("8A847C"))
+		"eraser":
+			_draw_eraser(c, s, line, 0.0, Color("3F6FD0"), Color("8E8A84"), INK)
+		"eraser_pour":
+			# 黒板消しでポンポン: かたむいた黒板消しと、白い粉のもくもく(白い線: 青い地の上に乗せるため)
+			_draw_eraser(c + Vector2(s * 0.08, -s * 0.06), s * 0.9, line, deg_to_rad(-20.0), Color.WHITE, Color("D8D3CC"), INK)
+			for d in [Vector2(-0.3, 0.28), Vector2(-0.08, 0.36), Vector2(0.18, 0.32)]:
+				var p: Vector2 = c + (d as Vector2) * s
+				draw_circle(p, s * 0.1 + line * 0.5, INK)
+				draw_circle(p, s * 0.1 - line * 0.3, Color.WHITE)
+		"eraser_empty":
+			_draw_eraser(c, s * 0.9, line, deg_to_rad(10.0), Color("D8D3CC"), Color("ECE8E2"), Color("8A847C"))
 		"water":
 			_draw_water_gun(c, s, line, Color("FF8A3D"), Color("6CC6F2"), INK)
 		"water_pour":
@@ -111,6 +122,25 @@ func _draw_carton(c: Vector2, s: float, line: float, rot: float, body: Color, ba
 		closed.append(closed[0])
 		draw_polyline(closed, ink, line, true)
 	draw_rect(spout, ink, false, line * 0.8)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## 黒板消し: 上の持つところ(色)と、下のフェルト(灰色)。rot で回す
+func _draw_eraser(c: Vector2, s: float, line: float, rot: float, body: Color, felt: Color, ink: Color) -> void:
+	draw_set_transform(c, rot, Vector2.ONE)
+	var w := s * 0.82
+	var top := PackedVector2Array([Vector2(-w / 2, -s * 0.2), Vector2(w / 2, -s * 0.2), Vector2(w / 2, s * 0.06), Vector2(-w / 2, s * 0.06)])
+	var bottom := PackedVector2Array([Vector2(-w / 2, s * 0.06), Vector2(w / 2, s * 0.06), Vector2(w / 2 - s * 0.03, s * 0.22), Vector2(-w / 2 + s * 0.03, s * 0.22)])
+	draw_colored_polygon(top, body)
+	draw_colored_polygon(bottom, felt)
+	# フェルトのすじ
+	for k in 4:
+		var x := lerpf(-w / 2 + s * 0.1, w / 2 - s * 0.1, float(k) / 3.0)
+		draw_line(Vector2(x, s * 0.09), Vector2(x, s * 0.2), ink.lerp(felt, 0.5), line * 0.4, true)
+	for poly in [top, bottom]:
+		var closed: PackedVector2Array = (poly as PackedVector2Array).duplicate()
+		closed.append(closed[0])
+		draw_polyline(closed, ink, line, true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 

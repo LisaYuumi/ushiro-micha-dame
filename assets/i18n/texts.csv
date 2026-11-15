@@ -243,6 +243,11 @@ the minion…"
 つける,つける,Wear
 なし,なし,None
 キャンセル,キャンセル,Cancel
+黒板消し,黒板消し,Eraser
+黒板消しでポンポンされた!,黒板消しでポンポンされた!,Chalk dust in your face!
+%s を黒板消しでポンポン!,%s を黒板消しでポンポン!,Chalk dust on %s!
+パタパタ!,パタパタ!,Waving it away!
+ポンポン!,ポンポン!,Pat pat!
 音がガタガタ割れるときは「なめらか」を試してね,音がガタガタ割れるときは「なめらか」を試してね,"If the sound crackles, try ""Smooth"""
 音の鳴らし方: %s ▶,音の鳴らし方: %s ▶,Sound mode: %s ▶
 なめらか(お試し),なめらか(お試し),Smooth (beta)

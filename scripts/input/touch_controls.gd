@@ -79,7 +79,7 @@ func _ready() -> void:
 	_milk_inner.offset_right = -7
 	_milk_inner.offset_bottom = -7
 	_milk_button.add_child(_milk_inner)
-	_milk_label = _icon_face(_milk_button, "milk", "牛乳", Vector2(60, 62), 24, GameConfig.COLOR_INK)
+	_milk_label = _icon_face(_milk_button, "eraser", "黒板消し", Vector2(60, 62), 24, GameConfig.COLOR_INK)
 	_milk_icon = _milk_button.get_child(_milk_button.get_child_count() - 1).get_child(0) as ButtonIcon
 	_milk_badge = _corner_badge(_milk_button, Vector2(150 - 40, -18))
 	_oni_buttons.append(_milk_button)
@@ -214,7 +214,7 @@ func set_milk_state(n: int, aiming: bool) -> void:
 	if empty:
 		normal = UiStyle.box(Color("E6E1D8"), false)
 		normal.border_color = Color("9A948C")
-		_milk_icon.kind = "water_empty" if _water else "milk_empty"
+		_milk_icon.kind = "water_empty" if _water else "eraser_empty"
 		_milk_label.text = "からっぽ"
 		_milk_label.add_theme_color_override("font_color", Color("8A847C"))
 	elif aiming:
@@ -223,13 +223,13 @@ func set_milk_state(n: int, aiming: bool) -> void:
 		normal.shadow_color = Color(ButtonIcon.MILK_BLUE, 0.45)
 		normal.shadow_size = 10
 		normal.shadow_offset = Vector2.ZERO
-		_milk_icon.kind = "water_pour" if _water else "milk_pour"
+		_milk_icon.kind = "water_pour" if _water else "eraser_pour"
 		_milk_label.text = "えいっ"
 		_milk_label.add_theme_color_override("font_color", GameConfig.COLOR_PAPER)
 	else:
 		normal = UiStyle.box(GameConfig.COLOR_PAPER)
-		_milk_icon.kind = "water" if _water else "milk"
-		_milk_label.text = "水鉄砲" if _water else "牛乳"
+		_milk_icon.kind = "water" if _water else "eraser"
+		_milk_label.text = "水鉄砲" if _water else "黒板消し"
 		_milk_label.add_theme_color_override("font_color", GameConfig.COLOR_INK)
 	_milk_inner.visible = not empty and not aiming
 	UiStyle.refit_all()

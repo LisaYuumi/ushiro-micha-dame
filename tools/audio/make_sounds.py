@@ -653,6 +653,18 @@ def amb_beach():
     return norm(loop[:-fade], 0.6)
 
 
+def eraser_pon():
+    # 黒板消しでポンポンポン: フェルトでやわらかくたたく音3つ(だんだん小さく)と、粉がふわっと舞う音
+    def pat(f0, scale):
+        d = 0.14
+        body = thud(f0, f0 * 0.6, d, 0.035)
+        felt = lowpass(noise(d), 1800) * env_exp(d, 0.02) * 0.7
+        return mix(body, felt) * scale
+    d = 0.9
+    puff = bandpass(noise(d), 1200, 5000) * env_ar(d, 0.15, 0.6) * 0.25
+    return norm(mix(at(pat(210, 1.0), 0.0, d), at(pat(230, 0.85), 0.17, d), at(pat(250, 0.7), 0.34, d), at(puff, 0.05, d)), 0.85)
+
+
 SOUNDS = {
     "drop_0": drop_0, "drop_1": drop_1, "drop_2": drop_2, "drop_3": drop_3, "drop_4": drop_4,
     "step": step, "run_step": run_step,
@@ -667,6 +679,7 @@ SOUNDS = {
     "drop_beach_0": drop_beach_0, "drop_beach_1": drop_beach_1, "drop_beach_2": drop_beach_2,
     "drop_beach_3": drop_beach_3, "drop_beach_4": drop_beach_4,
     "step_sand": step_sand, "run_step_sand": run_step_sand, "amb_beach": amb_beach,
+    "eraser_pon": eraser_pon,
 }
 
 
