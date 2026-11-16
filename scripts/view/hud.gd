@@ -54,6 +54,7 @@ var _card_hint_label: Label
 var _popup: PanelContainer
 ## 牛乳がかかったときの白い画面(いちばん下に置く。札やスタンプはその上に見える)
 var _milk: Control
+var _milk_group: CanvasGroup
 var _milk_on := false
 var _milk_a := 0.0
 ## かかってからの時間(しずくがのびる動き)と、晴れるまでの残り(1 → 0)
@@ -104,14 +105,17 @@ func _ready() -> void:
 	_top.add_child(_banner)
 	_milk = Control.new()
 	_milk.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_milk.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_milk.position = Vector2.ZERO
 	_milk.draw.connect(_draw_milk)
 	_milk.visible = false
 	# 牛乳は 3D のすぐ上(層 0)に描く。名札の吹き出しやスタンプ、札はその上に見える
 	var milk_layer := CanvasLayer.new()
 	milk_layer.layer = 0
 	add_child(milk_layer)
-	milk_layer.add_child(_milk)
+	# こすって薄くするとき、丸の重なりが透けないように、全部を1枚の絵にまとめてから薄くする
+	_milk_group = CanvasGroup.new()
+	milk_layer.add_child(_milk_group)
+	_milk_group.add_child(_milk)
 	_build_milk_pill()
 	# 説明文は出さない(A案: 文字は札とボタンだけ)。古い呼び出しのために部品だけ残す
 	_help = _make_label(22, GameConfig.COLOR_INK)
@@ -136,11 +140,14 @@ func _process(delta: float) -> void:
 	var want := 1.0 if _milk_on else 0.0
 	if _milk_a != want or (_milk_on and _milk.visible):
 		_milk_a = move_toward(_milk_a, want, delta / (0.15 if _milk_on else 0.8))
-		# 手でぬぐう: 0.5秒くらいで、牛乳が上へよけていく
-		_milk_wipe = move_toward(_milk_wipe, 1.0 if _milk_wiping else 0.0, delta / 0.5)
+		# 手でゴシゴシこする: こするたびに(1秒に4回くらい)少しずつ薄くなる
+		var stroke := 0.35 + 0.65 * absf(sin(_milk_t * TAU * 2.0))
+		_milk_wipe = move_toward(_milk_wipe, 1.0 if _milk_wiping else 0.0, delta / GameConfig.MILK_WIPE_TIME * (stroke if _milk_wiping else 1.0))
 		_milk_t = _milk_t + delta if _milk_on else _milk_t
 		_milk.visible = _milk_a > 0.0
-		_milk.modulate.a = _milk_a
+		_milk_group.self_modulate.a = _milk_a * (1.0 - GameConfig.MILK_WIPE_FADE * _milk_wipe)
+		# (親が Control ではないので、大きさは画面に合わせて毎回決める)
+		_milk.size = get_viewport().get_visible_rect().size
 		_milk.queue_redraw()
 		_milk_pill.visible = _milk_on
 		_milk_bar.queue_redraw()
@@ -821,7 +828,7 @@ func flash_stamp(color: Color) -> void:
 
 ## 牛乳がかかっている間は、上から白い牛乳がたれてくる(鬼の影や向かいの人の後ろが見えにくい)。
 ## left: 晴れるまでの残り(1 → 0)。上のまん中の「見えるまで」の棒に出す
-## wiped: 走っているので、手でぬぐって下のほうを見えるようにする(走っていて転ばないように)
+## wiped: 走っているので、手でゴシゴシこすって薄くする(走っていて転ばないように)
 func set_milk(on: bool, left: float = 1.0, wiped: bool = false) -> void:
 	if on and not _milk_on:
 		_milk_t = 0.0
@@ -830,7 +837,7 @@ func set_milk(on: bool, left: float = 1.0, wiped: bool = false) -> void:
 	_milk_left = clampf(left, 0.0, 1.0)
 	if wiped and not _milk_wiping and on:
 		# 「ゴシゴシ」: ぬぐいはじめ
-		show_message(tr("ゴシゴシ!") if _water else tr("パタパタ!"), Color(0.3, 0.45, 0.7), 0.8)
+		show_message(tr("ゴシゴシ!"), Color(0.3, 0.45, 0.7), 0.8)
 	_milk_wiping = wiped
 
 
@@ -902,9 +909,9 @@ func _draw_milk() -> void:
 	var tex := MilkArt.texture(sz, 1.5, _water)
 	if tex:
 		var drop := -(1.0 - grow) * sz.y * 0.6 + sin(t * 1.3) * 3.0
-		# 手でぬぐったら、牛乳は上のほうだけに(走る先の下半分が見える)
-		drop -= _milk_wipe * sz.y * GameConfig.MILK_WIPE_UP
-		_milk.draw_texture_rect(tex, Rect2(Vector2(0, drop), sz), false)
+		# こすっている間は、こする手に合わせて少し左右にゆれる
+		var rub := sin(t * TAU * 2.0) * 10.0 if _milk_wiping else 0.0
+		_milk.draw_texture_rect(tex, Rect2(Vector2(rub, drop), sz), false)
 	# 落ちていく粒(しずくの下から、ゆっくり落ちてくり返す)。ぬぐったら出さない
 	var band := sz.y * MilkArt.BAND
 	for i in (0 if _milk_wipe > 0.5 else 7):
@@ -917,6 +924,23 @@ func _draw_milk() -> void:
 		_milk.draw_circle(Vector2.ZERO, rr + 3.0, ink)
 		_milk.draw_circle(Vector2.ZERO, rr, white)
 		_milk.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_draw_scrub(sz, t)
+
+
+## ゴシゴシこすっている間: 画面のまん中あたりを、こすったあとのすじが左右に行き来する
+func _draw_scrub(sz: Vector2, t: float) -> void:
+	if not _milk_wiping:
+		return
+	var col := Color(GameConfig.COLOR_INK, 0.35)
+	var cx := sz.x * 0.5 + sin(t * TAU * 2.0) * sz.x * 0.16
+	for i in 3:
+		var y := sz.y * (0.22 + 0.11 * float(i))
+		var w := sz.x * (0.22 - 0.03 * float(i))
+		var pts := PackedVector2Array()
+		for j in 9:
+			var u := float(j) / 8.0
+			pts.append(Vector2(cx - w / 2.0 + w * u, y + (12.0 if j % 2 == 0 else -12.0)))
+		_milk.draw_polyline(pts, col, maxf(3.0, sz.y * 0.006), true)
 
 
 ## 画面の四すみの紫のカギ形(手下のしるし)
@@ -954,7 +978,7 @@ func set_minion_mark(on: bool) -> void:
 
 
 ## 教室の黒板消し: 上からもくもくの白い煙(下のふちは大小の丸が並んで黒い輪郭)、中に灰色の粉のつぶ、
-## 下に小さな粒がゆっくり落ちる。画面の上の 2/3 くらいがかくれる(走っている間は手でパタパタして上へよける)
+## 下に小さな粒がゆっくり落ちる。画面の上の 2/3 くらいがかくれる(走っている間は手でゴシゴシこすって薄くする)
 func _draw_smoke() -> void:
 	var sz := _milk.size
 	var t := Time.get_ticks_msec() / 1000.0
@@ -963,7 +987,7 @@ func _draw_smoke() -> void:
 	var dust := Color("E3DED6")
 	var grow := clampf(_milk_t / 0.5, 0.0, 1.0)
 	grow = 1.0 - pow(1.0 - grow, 3.0)
-	var lift := -(1.0 - grow) * sz.y * 0.6 - _milk_wipe * sz.y * GameConfig.MILK_WIPE_UP
+	var lift := -(1.0 - grow) * sz.y * 0.6
 	var band := sz.y * 0.47 + lift
 	var line := maxf(4.0, sz.y * 0.008)
 	# 下のふちの丸(左から右へ、大きさを変えて並べる。ゆっくりふくらんだりしぼんだり)
@@ -986,7 +1010,7 @@ func _draw_smoke() -> void:
 		var cy := band * (0.2 + 0.6 * fposmod(float(i) * 0.37, 1.0)) + 6.0 * sin(t * 0.7 + float(i) * 2.0)
 		var rr := sz.y * (0.025 + 0.02 * fposmod(float(i) * 0.53, 1.0))
 		_milk.draw_circle(Vector2(cx, cy), rr, dust)
-	# 下に落ちていく小さな粒(白に黒い輪郭)。手でパタパタしている間は出さない
+	# 下に落ちていく小さな粒(白に黒い輪郭)。こすって薄くなってきたら出さない
 	if _milk_wipe < 0.5:
 		for i in 12:
 			var px := sz.x * (0.05 + 0.08 * float(i)) + sin(float(i) * 4.1) * 18.0
@@ -995,6 +1019,7 @@ func _draw_smoke() -> void:
 			var pr := 3.5 + 2.0 * float(i % 2)
 			_milk.draw_circle(Vector2(px, py), pr + 2.0, ink)
 			_milk.draw_circle(Vector2(px, py), pr, white)
+	_draw_scrub(sz, t)
 
 
 ## 振り向く瞬間のタメ: 画面のふちから中心へ向かう集中線を、少しの間だけ出す(見た目だけ)

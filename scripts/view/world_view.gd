@@ -1495,8 +1495,8 @@ func _update_oni_shadow(state: GameState) -> void:
 func _build_milk_splash() -> Node3D:
 	var root := Node3D.new()
 	if _beach:
-		# 海辺: 水鉄砲の水(水色)が頭にかかる
-		var col := Color("BFE8FF")
+		# 海辺: 水鉄砲の水(水色。画面にかかる水と同じ色)が頭にかかる
+		var col := Color(MilkArt.WATER_WHITE)
 		var cap := SphereMesh.new()
 		cap.radius = 0.2
 		cap.height = 0.16

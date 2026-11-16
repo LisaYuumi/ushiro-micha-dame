@@ -11,8 +11,9 @@ const INK := "#1E1B18"
 const WHITE := "#FFFFFD"
 const SHADE := "#CFE6F7"
 ## 海辺の水鉄砲の水しぶき(同じ形で、水色)
-const WATER_WHITE := "#E3F6FF"
-const WATER_SHADE := "#7CC8EE"
+## 水鉄砲の水は、白ではなく水色(牛乳・煙とまちがえないように)
+const WATER_WHITE := "#A9DFF8"
+const WATER_SHADE := "#5AB2E2"
 ## 輪郭の太さ・かげの厚み(画面の高さ 720 のとき)
 const LINE := 8.0
 const SHADE_DEPTH := 10.0

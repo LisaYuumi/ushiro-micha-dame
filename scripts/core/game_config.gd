@@ -265,8 +265,10 @@ const MILK_LAPS := 0.5
 ## ボットの鬼が、そのラウンドで牛乳を使う確率/使うとき、落とす相手に落とす瞬間かける確率
 const BOT_ONI_MILK_CHANCE := 0.8
 const BOT_ONI_MILK_AT_DROP := 0.5
-## 牛乳がかかったまま走るとき(追いかけっこ)、手でぬぐって牛乳を上へよける量(画面の高さの割合)
-const MILK_WIPE_UP := 0.4
+## 煙・水がかかったまま走るとき(追いかけっこ)、手でゴシゴシこすって薄くする:
+## こすりきるまでの秒数と、どこまで薄くするか(1 = 消える。0.8 なら 2割の濃さが残る)
+const MILK_WIPE_TIME := 1.2
+const MILK_WIPE_FADE := 0.8
 ## 牛乳がかかっているボットが、落とされたのに気づくまでの時間の倍率
 const BOT_MILK_NOTICE_MULT := 1.6
 

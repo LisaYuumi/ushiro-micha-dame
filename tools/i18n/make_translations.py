@@ -237,7 +237,6 @@ EN = {
     "黒板消し": "Eraser",
     "黒板消しでポンポンされた!": "Chalk dust in your face!",
     "%s を黒板消しでポンポン!": "Chalk dust on %s!",
-    "パタパタ!": "Waving it away!",
     "ポンポン!": "Pat pat!",
     "あったー!!": "Found it!!",
     "うしろ!うしろ!": "Right behind!",
