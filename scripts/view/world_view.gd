@@ -1976,14 +1976,12 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 				face = c / float(eyes.size()) - head
 			face.y = 0.0
 			face = face.normalized() if face.length() > 0.001 else Vector3.FORWARD
-			if not _out_anim[me.id].has("dbg"):
-				_out_anim[me.id]["dbg"] = true
-				print("face dbg: eyes=%d face=%s basis_z=%s head=%s cam_from=%s" % [eyes.size(), str(face), str(model.global_transform.basis.z), str(head), str(_seat_cam.global_position)])
 			var t_face: float = _out_anim[me.id]["t"]
 			# 顔のアップから、崩れ落ちるときは少し引いて、下がる体を追う
 			var pull := clampf((t_face - OUT_FACE_TIME) / OUT_FALL_TIME, 0.0, 1.0)
-			var eye := head + face * lerpf(0.75, 1.6, pull) + Vector3(0, lerpf(0.05, 0.35, pull), 0)
-			_seat_cam.look_at_from_position(eye, head + Vector3(0, -0.25 * pull, 0))
+			# (崩れ落ちるときは頭が前にたれるので、カメラを下げて、下から顔を見上げる)
+			var eye := head + face * lerpf(0.75, 1.1, pull) + Vector3(0, lerpf(0.0, -0.45, pull), 0)
+			_seat_cam.look_at_from_position(eye, head + Vector3(0, -0.15 * pull, 0))
 			return
 	if me.role == GameState.Role.OUT:
 		# お手つきで抜けた: 真ん中の上の高いところから、輪の全員の後ろを見下ろす(天井は映さない)
