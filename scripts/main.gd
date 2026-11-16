@@ -70,8 +70,6 @@ func _ready() -> void:
 	hud.vote_pressed.connect(_on_vote_pressed)
 	# 見逃しの演出
 	view.missed_scene_done.connect(_on_missed_scene_done)
-	view.missed_replay_started.connect(_on_missed_replay)
-	view.missed_replay_ended.connect(func() -> void: hud.hide_replay())
 	lobby.solo_pressed.connect(_on_solo)
 	lobby.host_pressed.connect(_on_host)
 	lobby.join_pressed.connect(_on_join)
@@ -293,7 +291,6 @@ func _refresh_round() -> void:
 func _refresh_round_inner() -> void:
 	bots.reset()
 	_missed_result = {}
-	hud.hide_replay()
 	_round_start_scores = state.scores.duplicate()
 	touch.set_oni_mode(_i_am_oni())
 	_last_sound = ""
@@ -523,26 +520,8 @@ func _on_missed_scene_done() -> void:
 		return
 	var e := _missed_result
 	_missed_result = {}
-	hud.hide_replay()
 	_play_result_sounds(e)
 	_show_result(e)
-
-
-## 答え合わせ: 気づかなかった人に届いたスタンプ(送った人・言葉・ホントかウソか)。手下かどうかは、投票のあとにわかる
-func _on_missed_replay(r: Dictionary) -> void:
-	var lines := []
-	for st in r.get("missed_stamps", []):
-		var sender: int = st["sender"]
-		var a := state.get_actor(sender)
-		var truthful: bool = st["truthful"]
-		lines.append({
-			# (答え合わせなので、5人のときも送った人の名前を出す)
-			"text": "%s:%s" % [_name(sender) if sender != state.local_player_id else tr("あなた"), HeadOverlay.stamp_text(state, sender, st["kind"])],
-			"color": a.color if a else Color.WHITE,
-			"tag": tr("ホント") if truthful else tr("ウソ"),
-			"tag_color": Color("2E9E5B") if truthful else Color("E5483B"),
-		})
-	hud.show_replay(tr("%s に届いたスタンプ") % _name(int(r.get("loser", -1))), lines)
 
 
 ## 見逃しの演出中は、画面のどこをタップしてもとばせる
@@ -937,6 +916,12 @@ func _show_event(e: Dictionary) -> void:
 			if e.get("reason", "") == "missed":
 				# 見逃し: トントン → 振り向く → 放心 → 答え合わせ → とぼとぼ のあとに、結果カード(タップでとばせる)
 				_missed_result = e
+				# 答え合わせのリプレイの最後に出す、このラウンドで入った点数
+				var gains := {}
+				var sc: Dictionary = e.get("scores", state.scores)
+				for id in sc:
+					gains[id] = int(sc[id]) - int(_round_start_scores.get(id, sc[id]))
+				e["round_gains"] = gains
 				view.play_missed_scene(state, e)
 			else:
 				_play_result_sounds(e)

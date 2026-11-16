@@ -13,6 +13,8 @@ const OOPS := "oops"           # お手つき: 汗・「へ」の口
 const PANIC := "panic"         # 追いかける/逃げる: 細い目・汗・「o」の口・前のめり
 const WIN := "win"             # 勝ち: にっこり(「^」の目・U の口)
 const LOSE := "lose"           # 負け: しょんぼり(下がった目・への字の口・うなだれる)
+const SMIRK := "smirk"         # ニヤニヤ(見逃しで振り向かれた鬼): 細めた目・片方が上がった笑い口・つり眉
+const AWKWARD := "awkward"     # 気まずい(見逃して振り向いた人): 困り眉・汗・目をそらす・ゆがんだ口
 
 ## お手つきでだんだん崩れる顔(set_fluster)
 ## 0: ふだん / 1: 困り眉・汗 / 2: 汗2つ・目がちぐはぐ・への字口・ふるえる / 3: 放心(×の目・ぽかん口・ふらふら)
@@ -835,13 +837,26 @@ func _apply_face() -> void:
 		e.visible = not happy
 	for h in _happy_eyes:
 		h.visible = happy
-	_mouth_flat.visible = expr == NORMAL
+	_mouth_flat.visible = expr == NORMAL or expr == AWKWARD
 	_mouth_o.visible = expr == SURPRISED or expr == PANIC
-	_mouth_smile.visible = expr == WIN
+	_mouth_smile.visible = expr == WIN or expr == SMIRK
 	_mouth_frown.visible = expr == OOPS or expr == LOSE
-	_sweat.visible = expr == OOPS or expr == PANIC
+	_sweat.visible = expr == OOPS or expr == PANIC or expr == AWKWARD
+	# ニヤニヤ・気まずいでは、口を少し傾け、目を横へずらす(ほかの顔ではもとの位置)
+	_mouth_smile.rotation.z = 0.28 if expr == SMIRK else 0.0
+	_mouth_smile.position.x = 0.015 if expr == SMIRK else 0.0
+	_mouth_flat.rotation.z = -0.25 if expr == AWKWARD else 0.0
+	for i in _eyes.size():
+		_eyes[i].position.x = (-0.08 if i == 0 else 0.08) + (0.03 if expr == AWKWARD else 0.0)
+	for i in _brows.size():
+		var base := 0.4 if i == 0 else -0.4
+		_brows[i].rotation.z = -base if expr == SMIRK else base
 	var eye_scale := Vector3.ONE
 	match expr:
+		SMIRK:
+			eye_scale = Vector3(1.3, 0.4, 1.0)
+		AWKWARD:
+			eye_scale = Vector3(0.8, 0.8, 1.0)
 		SURPRISED:
 			eye_scale = Vector3(1.7, 1.7, 1.7)
 		PANIC:
@@ -855,7 +870,7 @@ func _apply_face() -> void:
 	var f := maxi(_fluster, 0)
 	var calm := expr == NORMAL or expr == SURPRISED or expr == OOPS
 	for b in _brows:
-		b.visible = f >= 1 and expr != WIN
+		b.visible = (f >= 1 and expr != WIN) or expr == SMIRK or expr == AWKWARD
 	_sweat.visible = _sweat.visible or f >= 1
 	_sweat2.visible = f >= 2
 	for xe in _x_eyes:

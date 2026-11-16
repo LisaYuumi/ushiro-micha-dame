@@ -892,6 +892,48 @@ def chiin():
     return norm(out, 0.85)
 
 
+def rewind_kyuru():
+    # 答え合わせの巻き戻し「キュルキュル」: テープを早く巻き戻す、上下にゆれる高い音
+    d = 0.6
+    t = t_of(d)
+    f = 1400 + 700 * np.sin(2 * np.pi * 9.0 * t) + 900 * t / d
+    squeal = lowpass(tone(f, d, "saw"), 3500) * 0.35
+    hiss = bandpass(noise(d), 2000, 7000) * 0.18
+    return norm((squeal + hiss) * env_ar(d, 0.02, 0.12), 0.7)
+
+
+def replay_pon():
+    # 答え合わせのハンコ「ポン」(ほんと): 軽く高い、ぽんっ
+    d = 0.22
+    return norm(mix(thud(720, 420, d, 0.05), click(0.03, 1500, 5000, 0.006) * 0.4), 0.8)
+
+
+def replay_don():
+    # 答え合わせのハンコ「ドン」(ウソ): 低く重い、どんっ
+    d = 0.4
+    return norm(mix(thud(160, 70, d, 0.11), lowpass(noise(d), 600) * env_exp(d, 0.03) * 0.5), 0.9)
+
+
+def jajaan():
+    # ウソつきにスポットライト「ジャジャーン」: 短い2つの和音と、のばす和音
+    d = 1.1
+    out = np.zeros(int(d * SR))
+    for st, ln, root in [(0.0, 0.12, 62), (0.16, 0.85, 65)]:
+        for k in (0, 4, 7, 12):
+            out = out + at(_brass(midi(root + k), ln) * 0.4, st, d)
+    out = out + at(lowpass(noise(0.5), 3000) * env_exp(0.5, 0.15) * 0.3, 0.16, d)
+    return norm(out, 0.85)
+
+
+def honest():
+    # みんな正直だった: やさしい「ポロン♪」
+    d = 0.8
+    out = np.zeros(int(d * SR))
+    for i, n in enumerate([72, 76, 79, 84]):
+        out = out + at(bell(midi(n), 0.6, 0.3, 0.5) * 0.35, i * 0.07, d)
+    return norm(out, 0.75)
+
+
 SOUNDS = {
     "drop_0": drop_0, "drop_1": drop_1, "drop_2": drop_2, "drop_3": drop_3, "drop_4": drop_4,
     "step": step, "run_step": run_step,
@@ -911,6 +953,8 @@ SOUNDS = {
     "bgm_beach_1": bgm_beach_1, "bgm_beach_2": bgm_beach_2, "bgm_beach_3": bgm_beach_3,
     "bgm_school_1": bgm_school_1, "bgm_school_2": bgm_school_2, "bgm_school_3": bgm_school_3,
     "look_zah": look_zah, "found": found, "gaan": gaan, "tonton": tonton, "chiin": chiin,
+    "rewind_kyuru": rewind_kyuru, "replay_pon": replay_pon, "replay_don": replay_don, "jajaan": jajaan,
+    "honest": honest,
 }
 
 

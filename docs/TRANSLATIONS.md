@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(287)
+## 一覧(288)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -228,13 +228,14 @@
 | 表示しない(シャッフルの言葉で表示) | Hide (show shuffled words) |
 | ガーン! | Oh no! |
 | 画面のゆれ: %s | Screen shake: %s |
-| ホント | True |
+| ほんと | True |
 | だれか | Someone |
 | ウソ | Lie |
-| %s に届いたスタンプ | Stamps sent to %s |
 | ウソ: %s | Lied: %s |
-| ◀◀ まきもどし | ◀◀ Rewind |
-| スタンプは届かなかった | No stamps were sent |
+| そのとき後ろでは… | Meanwhile, behind them… |
+| 一時停止 | Paused |
+| ウソつき! | Liar! |
+| みんな正直だった! | Everyone told the truth! |
 | トントン | Tap tap |
 | チーン… | Ding… |
 | ここで落とした! | Dropped here! |
