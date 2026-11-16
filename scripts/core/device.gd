@@ -28,6 +28,15 @@ static func is_mobile() -> bool:
 	return OS.has_feature("web_android") or OS.has_feature("web_ios") or OS.has_feature("mobile")
 
 
+## 画面の細かさ(1 = ふつう。スマホは 2〜3 で、そのぶん描く点が多い)
+static func pixel_ratio() -> float:
+	if OS.has_feature("web"):
+		var v: Variant = JavaScriptBridge.eval("window.devicePixelRatio || 1", true)
+		if v is float or v is int:
+			return float(v)
+	return DisplayServer.screen_get_scale()
+
+
 ## 軽い動きにするか(GPU を使えていない PC のブラウザ)
 static func light_mode() -> bool:
 	return software_render()

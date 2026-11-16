@@ -467,8 +467,37 @@ func _log_perf(delta: float) -> void:
 	_perf_phys_n = 0
 
 
+## 重い機種で 3D の細かさを自動で下げる(画面が細かいスマホや、GPU を使えていないブラウザだけ)
+var _aq_step := 0
+var _aq_time := 0.0
+var _aq_frames := 0
+
+
+func _auto_quality(delta: float) -> void:
+	if lobby.visible or _studio or _aq_step >= GameConfig.AUTO_QUALITY_STEPS.size() - 1:
+		return
+	_aq_time += delta
+	_aq_frames += 1
+	if _aq_time < GameConfig.AUTO_QUALITY_WINDOW:
+		return
+	var fps := _aq_frames / _aq_time
+	_aq_time = 0.0
+	_aq_frames = 0
+	if fps >= GameConfig.AUTO_QUALITY_FPS:
+		return
+	# (画面がふつうの細かさの PC は、細かさを下げるとかえって重くなることがあるので、下げない)
+	if Device.pixel_ratio() < 1.5 and not Device.light_mode():
+		return
+	_aq_step += 1
+	var vp := get_tree().root
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	vp.scaling_3d_scale = GameConfig.AUTO_QUALITY_STEPS[_aq_step]
+	print("auto quality: fps=%.0f -> 3D scale %.2f (pixel ratio %.1f)" % [fps, vp.scaling_3d_scale, Device.pixel_ratio()])
+
+
 func _process(delta: float) -> void:
 	_log_perf(delta)
+	_auto_quality(delta)
 	_update_music(delta)
 	if _studio:
 		return
