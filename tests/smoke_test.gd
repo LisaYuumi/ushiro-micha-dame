@@ -2004,27 +2004,8 @@ func _test_missed_replay_data() -> void:
 	_check(e.get("reason", "") == "missed", "(確認用)見逃し")
 	var list: Array = e.get("missed_stamps", [])
 	_check(not sent or (list.size() >= 1 and not list[0]["truthful"]), "気づかなかった人に届いた嘘のスタンプが結果に入る")
-	_check(not sent or bool(list[list.size() - 1].get("after_drop", false)), "落とした後に送ったスタンプには印がつく")
-	_check(MissedReplay.replay_stamps({"missed_stamps": [{"sender": 1, "kind": Stamps.SAFE, "truthful": true, "after_drop": false}]}).is_empty(),
-			"落とす前に送ったスタンプは、リプレイに出さない")
 	_check(e.has("drop_pos") and e.has("drop_angle"), "落とした場所が結果に入る")
 	_check(s.vote_left > GameConfig.VOTE_TIME, "見逃しの演出のぶん、投票の時間がのびる")
-	# 答え合わせのリプレイ: スタンプがなければ 4・5 の代わりに「だれも教えてくれなかった…」。ウソがあればスポットライト、なければ「みんな正直だった!」
-	var base := MissedReplay.step_time("intro") + MissedReplay.step_time("walk") + MissedReplay.step_time("drop") + MissedReplay.step_time("score")
-	_check(is_equal_approx(MissedReplay.total_time({"missed_stamps": []}), base + GameConfig.REPLAY_NOBODY_TIME),
-			"スタンプが届いていなければ、4と5の代わりに「だれも教えてくれなかった…」")
-	# 「見てたのに…!」: 落とされた人の後ろが見えていた人(両どなり・鬼・本人は入らない)
-	var w := MissedReplay.watchers(s, target.id)
-	_check(not w.is_empty(), "後ろが見えていた人がいる")
-	for id in w:
-		var wa := s.get_actor(id)
-		_check(id != target.id and id != s.oni_id, "見てたのに…!は、本人と鬼にはつかない")
-		if wa.role == GameState.Role.SEATED:
-			_check(s.can_see_behind(wa.seat_index, target.seat_index if target.seat_index >= 0 else target.home_seat), "見てたのに…!は、後ろが見えていた人だけ(両どなりは入らない)")
-	var lie := {"missed_stamps": [{"sender": 1, "target": 2, "kind": Stamps.SAFE, "truthful": false}]}
-	var honest := {"missed_stamps": [{"sender": 1, "target": 2, "kind": Stamps.DROPPED, "truthful": true}]}
-	_check(is_equal_approx(MissedReplay.total_time(lie), base + GameConfig.REPLAY_STAMPS_TIME + GameConfig.REPLAY_SPOT_TIME), "ウソがあればスポットライト")
-	_check(is_equal_approx(MissedReplay.total_time(honest), base + GameConfig.REPLAY_STAMPS_TIME + GameConfig.REPLAY_HONEST_TIME), "ウソがなければ「みんな正直だった!」")
-	# 演出(振り向き・顔のアップ・チーン・リプレイ)は、のばした投票の時間におさまる
-	var scene := GameConfig.MISSED_LOOK_TIME + GameConfig.MISSED_TURN_TIME + GameConfig.MISSED_FACE_TIME + GameConfig.MISSED_CHIIN_TIME + MissedReplay.total_time(lie)
+	# 演出(振り向き・顔のアップ・チーン)は、のばした投票の時間におさまる
+	var scene := GameConfig.MISSED_LOOK_TIME + GameConfig.MISSED_TURN_TIME + GameConfig.MISSED_FACE_TIME + GameConfig.MISSED_CHIIN_TIME
 	_check(scene + 1.0 <= GameConfig.MISSED_SCENE_TIME, "見逃しの演出は %.1f 秒(投票をのばす %.1f 秒におさまる)" % [scene, GameConfig.MISSED_SCENE_TIME])

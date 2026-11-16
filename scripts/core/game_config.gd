@@ -207,33 +207,14 @@ const MINION_TWO_CHANCE := 0.33
 ## 勝敗のあとの、手下を当てる投票: 当たった人の点数と、投票の時間(秒。全員が投票したらすぐ発表)
 const SCORE_VOTE_CORRECT := 2
 const VOTE_TIME := 20.0
-## 見逃しの演出(トントン→振り向く→顔のアップ→放心→答え合わせ→とぼとぼ)のぶん、投票の時間をのばす(秒)
+## 見逃しの演出(トントン→振り向く→顔のアップ→放心→とぼとぼ)のぶん、投票の時間をのばす(秒)
 ## (下の演出の秒数の合計より長くしておく)
-const MISSED_SCENE_TIME := 12.0
+const MISSED_SCENE_TIME := 6.0
 ## 見逃しの演出の秒数: トントンから振り向きはじめるまで / 振り向いてから顔のアップまで / 顔のアップ / 放心(チーン)
 const MISSED_LOOK_TIME := 0.7
 const MISSED_TURN_TIME := 0.35
 const MISSED_FACE_TIME := 1.3
 const MISSED_CHIIN_TIME := 1.2
-## 答え合わせのリプレイ「そのとき後ろでは…」の秒数(どこでもタップでとばせる)
-## 1. 巻き戻し(セピア・走査線・キュルキュル)
-const REPLAY_INTRO_TIME := 0.5
-## 2. 鬼の足取り(上から。足あとを残して、何倍速で歩くか)
-const REPLAY_WALK_TIME := 1.0
-const REPLAY_WALK_SPEED := 2.0
-## 3. ここで落とした!(スローにして一時停止)。はじめのこの割合でゆっくり止まる
-const REPLAY_DROP_TIME := 1.0
-const REPLAY_DROP_SLOW := 0.4
-## 4. 誰が何を言ったか(届いたスタンプを1つずつ。この時間を、スタンプの数で分ける)
-const REPLAY_STAMPS_TIME := 2.0
-## 5. ウソつきにスポットライト / ウソがなかったときの「みんな正直だった!」
-const REPLAY_SPOT_TIME := 1.0
-const REPLAY_HONEST_TIME := 0.8
-## スタンプが1つも届いていなかったとき(4・5の代わり): 落とされた人だけ明るく、風が吹いて「だれも教えてくれなかった…」。
-## 後ろが見えていた人に「見てたのに…!」
-const REPLAY_NOBODY_TIME := 1.3
-## 6. このラウンドで入った点数
-const REPLAY_SCORE_TIME := 1.0
 ## ボットが投票するまでの時間(秒。この範囲でランダム)
 const BOT_VOTE_DELAY_MIN := 1.0
 const BOT_VOTE_DELAY_MAX := 4.0

@@ -188,7 +188,7 @@ var stamp_words: Dictionary = {}
 var stamp_langs: Dictionary = {}
 ## スタンプの言葉の選び方(id -> {kind: セットの何番目か})。試合の初めに決まり、試合の間は変わらない
 var stamp_picks: Dictionary = {}
-## このラウンドに届いたスタンプの記録(見逃しの答え合わせに使う): [{"sender", "target", "kind", "truthful", "after_drop"}]
+## このラウンドに届いたスタンプの記録(見逃しの答え合わせに使う): [{"sender", "target", "kind", "truthful"}]
 var stamp_log: Array = []
 ## 前のラウンドの手下(発表ずみなので、全員が知っている。ボットの信用に使う)
 var last_minion_ids: Array = []
@@ -715,9 +715,7 @@ func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
 		"scorable": seat_pass_age[target.seat_index] <= GameConfig.STAMP_SCORE_RECENT_PASS,
 	})
 	events.append({"type": "stamp", "sender": sender_id, "target": target_id, "kind": kind})
-	# after_drop: 落とした後に送ったか(答え合わせのリプレイでは、落とした後のスタンプだけ出す)
-	stamp_log.append({"sender": sender_id, "target": target_id, "kind": kind, "truthful": truthful,
-			"after_drop": handkerchief_on_floor})
+	stamp_log.append({"sender": sender_id, "target": target_id, "kind": kind, "truthful": truthful})
 	return true
 
 

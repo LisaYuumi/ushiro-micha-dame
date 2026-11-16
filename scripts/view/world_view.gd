@@ -128,13 +128,12 @@ var _out_anim := {}
 ## 見逃しの演出(鬼が1周しても気づかなかった): {"t", "loser", "oni", "result", "done", "walk_from", "walk_to", "oni_from"}
 var _ms := {}
 ## 見逃しの演出: トントン → 振り向く → 顔のアップ(鬼の画面は相手の気まずい顔、気づかなかった人の画面は鬼のニヤニヤ、
-## ほかの人は2人を横から)→ 放心(魂が抜ける・チーン。2人を横から)→ 答え合わせのリプレイ(MissedReplay)→ とぼとぼ
-## 段階: 0 トントン・振り向く / 1 顔のアップ / 2 チーン / 3 リプレイ / 4 とぼとぼ。秒数は GameConfig の MISSED_*
+## ほかの人は2人を横から)→ 放心(魂が抜ける・チーン。2人を横から)→ とぼとぼ
+## 段階: 0 トントン・振り向く / 1 顔のアップ / 2 チーン / 4 とぼとぼ。秒数は GameConfig の MISSED_*
 const MS_LOOK := GameConfig.MISSED_LOOK_TIME
 const MS_FACE := GameConfig.MISSED_LOOK_TIME + GameConfig.MISSED_TURN_TIME
 const MS_CHIIN := MS_FACE + GameConfig.MISSED_FACE_TIME
-const MS_REPLAY := MS_CHIIN + GameConfig.MISSED_CHIIN_TIME
-var _replay: MissedReplay
+const MS_WALK := MS_CHIIN + GameConfig.MISSED_CHIIN_TIME
 ## 頭に落とし物をのせている人(見逃した人。次のラウンドで消える)と、真ん中に座った位置
 var _item_head_id := -1
 var _missed_sit := {}
@@ -191,9 +190,6 @@ func build(state: GameState) -> void:
 	_ms.clear()
 	_item_head_id = -1
 	_missed_sit.clear()
-	if _replay:
-		_replay.queue_free()
-		_replay = null
 	_shake_left = 0.0
 	_obstacle_nodes.clear()
 	_milk_nodes.clear()
@@ -326,11 +322,7 @@ func sync(state: GameState, delta: float) -> void:
 	_clock += delta
 
 	var holder := state.get_actor(state.chaser_id)
-	if _replay:
-		# 答え合わせのリプレイ: 落とした瞬間から、落とした場所に見せる
-		_handkerchief.visible = _replay.item_shown
-		_handkerchief.transform = Transform3D(Basis.IDENTITY, state.handkerchief_position)
-	elif _item_head_id >= 0 and _actor_nodes.has(_item_head_id):
+	if _item_head_id >= 0 and _actor_nodes.has(_item_head_id):
 		# 見逃した人は、落とし物を頭にのせたまま(次のラウンドで消える)
 		var hm := _actor_nodes[_item_head_id] as CharacterModel
 		var head := hm.bone_world("DEF-head").origin
@@ -379,7 +371,7 @@ func skip_missed_scene() -> void:
 	if _ms.is_empty():
 		return
 	if int(_ms["stage"]) >= 1 and int(_ms["stage"]) < 4:
-		_end_replay()
+		_end_close_up()
 	var loser: int = _ms["loser"]
 	_missed_sit[loser] = _ms["walk_to"]
 	_item_head_id = loser
@@ -388,18 +380,16 @@ func skip_missed_scene() -> void:
 
 
 func _ms_forced_look(id: int) -> bool:
-	# (リプレイの間は、落とした場面なので前を向いている)
-	return not _ms.is_empty() and _ms["loser"] == id and float(_ms["t"]) >= MS_LOOK and int(_ms["stage"]) < 3
+	return not _ms.is_empty() and _ms["loser"] == id and float(_ms["t"]) >= MS_LOOK and int(_ms["stage"]) < 4
 
 
 func _ms_dazed(id: int) -> bool:
-	return (not _ms.is_empty() and _ms["loser"] == id and float(_ms["t"]) >= MS_CHIIN and int(_ms["stage"]) != 3) \
-			or _missed_sit.has(id)
+	return (not _ms.is_empty() and _ms["loser"] == id and float(_ms["t"]) >= MS_CHIIN) or _missed_sit.has(id)
 
 
 ## 見逃しの演出での表情(""なら、ふだんどおり): 振り向いてから、鬼はニヤニヤ、気づかなかった人は気まずい顔(チーンからは放心)
 func _ms_expression(id: int) -> String:
-	if _ms.is_empty() or int(_ms["stage"]) == 3:
+	if _ms.is_empty():
 		return ""
 	var t: float = _ms["t"]
 	if id == _ms["oni"] and t >= MS_LOOK:
@@ -441,23 +431,16 @@ func _update_missed_scene(state: GameState, delta: float) -> void:
 		# (2人を横から近くで映すので、文字は小さめ)
 		_pop(loser, tr("チーン…"), Color("C9C2B6"), 0.3)
 		_spawn_soul(loser)
-	elif stage == 2 and t >= MS_REPLAY:
-		# 3. 答え合わせのリプレイ「そのとき後ろでは…」(上からの視点)
-		_ms["stage"] = 3
-		_top_cam.fov = 60.0
-		_top_cam.look_at_from_position(Vector3(0, 11, 5.5), Vector3.ZERO)
-		_replay = MissedReplay.new()
-		add_child(_replay)
-		_replay.setup(state, _ms["result"], _top_cam, _actor_nodes, _ms["oni_from"])
-		_replay.finished.connect(_on_replay_finished)
-	elif stage == 3:
-		if _replay:
-			_replay.tick(delta)
-		if _replay and oni_node:
-			# 鬼はリプレイの中の場所を歩く(歩く向きを向く)
-			var a := _replay.oni_angle
-			oni_node.position = Vector3(sin(a), 0.0, cos(a)) * GameConfig.ONI_WALK_RADIUS
-			oni_node.rotation.y = atan2(-cos(a), sin(a))
+	elif stage == 2 and t >= MS_WALK:
+		# 3. 落とし物を頭にのせて、とぼとぼ真ん中へ(ここで結果カードを出してよい)
+		_end_close_up()
+		_ms["stage"] = 4
+		_ms["walking"] = true
+		_ms["walk_t"] = 0.0
+		_item_head_id = loser
+		_missed_sit[loser] = _ms["walk_from"]
+		_play_actor(loser, "trudge", -6.0, -16.0)
+		_ms_finish()
 	elif stage == 4:
 		_ms["walk_t"] = float(_ms["walk_t"]) + delta
 		var from: Vector3 = _ms["walk_from"]
@@ -522,36 +505,12 @@ func _face_point(m: CharacterModel) -> Array:
 	return [target, face]
 
 
-## リプレイが終わった: 落とし物を頭にのせて、とぼとぼ真ん中へ(ここで結果カードを出してよい)
-func _on_replay_finished() -> void:
-	if _ms.is_empty():
-		return
-	_end_replay()
-	var loser: int = _ms["loser"]
-	_ms["stage"] = 4
-	_ms["walking"] = true
-	_ms["walk_t"] = 0.0
-	_item_head_id = loser
-	_missed_sit[loser] = _ms["walk_from"]
-	_play_actor(loser, "trudge", -6.0, -16.0)
-	_ms_finish()
-
-
-func _end_replay() -> void:
-	if _replay:
-		_replay.queue_free()
-		_replay = null
+## 顔のアップ・2人を横から見るのをやめて、席のカメラと名札に戻す
+func _end_close_up() -> void:
 	if _seat_cam:
 		_seat_cam.make_current()
 	if _overlay:
 		_overlay.visible = visible
-
-
-## リプレイの間の鬼の姿勢(歩いているか)。リプレイ中でなければ ""
-func _replay_pose(id: int) -> String:
-	if _replay == null or _ms.is_empty() or id != _ms["oni"]:
-		return ""
-	return "walk" if _replay.oni_walking else "idle"
 
 
 ## 見逃した人の位置(とぼとぼ歩く途中・真ん中に座ったあと)と向き
@@ -627,10 +586,6 @@ func _apply_out_anim(a: GameState.Actor, node: Node3D, delta: float) -> void:
 
 ## 姿勢: 座っている人は座る、追いかけっこ中は走る、鬼は歩く(止まっていれば立つ)
 func _pose_of(state: GameState, a: GameState.Actor) -> String:
-	# 見逃しのリプレイの鬼: リプレイの中で歩く
-	var rp := _replay_pose(a.id)
-	if rp != "":
-		return rp
 	# 見逃した人: 演出の終わりにとぼとぼ歩いて、真ん中で体育座り
 	if _missed_sit.has(a.id):
 		return "walk" if _ms.has("walking") and _ms["loser"] == a.id else "floor"
