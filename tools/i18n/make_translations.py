@@ -270,7 +270,6 @@ EN = {
     "手下": "Helper",
     "バレバレ!": "Busted!",
     "だましきった!": "Fooled them all!",
-    "ちがうよ!": "Not me!",
     "チーン…": "Ding…",
     "音がガタガタ割れるときは「なめらか」を試してね": "If the sound crackles, try \"Smooth\"",
     "音の鳴らし方: %s ▶": "Sound mode: %s ▶",

@@ -5,8 +5,7 @@ extends CanvasLayer
 ##    (矢印と指マークは、発表のあとも次のラウンドまで残す)
 ## 2. ため: 画面を少し暗くしてドラムロール
 ## 3. 発表: 手下だった人にスポットライト。名札を紫に「手下」。「ジャジャーン!」。手下はニヤッと笑う
-##    (投票した全員が当てた手下は放心顔で「バレバレ!」、1票も入らなかった手下は「だましきった!」。
-##     票を集めたのに手下ではなかった人には「ちがうよ!」)
+##    (投票した全員が当てた手下は放心顔で「バレバレ!」、1票も入らなかった手下は「だましきった!」)
 ## 4. 点数: 手下に投票した人に「+1」。1票も入らなかった手下に「+1 だましきった!」
 ## このあと、ルールを動かす人が次のラウンドへ進める(GameState.reveal_left)。見た目だけ(状態は変えない)。
 
@@ -124,9 +123,6 @@ func _enter(step: int) -> void:
 				elif m in _fooled:
 					label = tr("だましきった!")
 				_pop(_pill_above(int(m), label, COLOR_PURPLE, Color.WHITE, 26, 2.3))
-			for id in _tally:
-				if not (id in _minions) and int(_tally[id]) > 0:
-					_pop(_pill_above(int(id), tr("ちがうよ!"), Color.WHITE, GameConfig.COLOR_INK, 22, 2.3))
 		3:
 			# 4. 点数
 			var any := false
