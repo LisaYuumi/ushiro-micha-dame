@@ -7,7 +7,8 @@ extends CanvasLayer
 ## 4. 誰が何を言ったか(落とした後に届いたスタンプを送った順に。送った人から線、吹き出し、ほんと/ウソのハンコ)
 ## 5. ウソつきにスポットライト(ウソがなければ「みんな正直だった!」)
 ## 6. このラウンドで入った点数
-## スタンプが届いていなければ 4 と 5 はとばす。秒数は GameConfig の REPLAY_*。
+## スタンプが1つも届いていなければ、4 と 5 の代わりに「だれも教えてくれなかった…」(落とされた人だけ明るく、風、ヒュ〜。
+## 後ろが見えていた人に「見てたのに…!」)。秒数は GameConfig の REPLAY_*。
 ## 見た目だけ(状態は読むだけ)。WorldView が毎フレーム tick を呼び、鬼の位置と落とし物の見え方を読む。
 ## 全員の画面で、同じ結果(result)から同じ流れになる。
 
@@ -79,6 +80,8 @@ var _ring_t := -1.0
 var _shown: Array = []
 var _placed: Array[Rect2] = []
 var _done := false
+## 風の演出の時計
+var _wind_t := -1.0
 
 
 func setup(state: GameState, res: Dictionary, cam: Camera3D, nodes: Dictionary, oni_from: Vector3) -> void:
@@ -108,6 +111,8 @@ func setup(state: GameState, res: Dictionary, cam: Camera3D, nodes: Dictionary, 
 	if not _stamps.is_empty():
 		_steps.append("stamps")
 		_steps.append("spot" if not _liars.is_empty() else "honest")
+	else:
+		_steps.append("nobody")
 	_steps.append("score")
 
 	_fx = ColorRect.new()
@@ -149,6 +154,8 @@ static func step_time(step_id: String) -> float:
 			return GameConfig.REPLAY_SPOT_TIME
 		"honest":
 			return GameConfig.REPLAY_HONEST_TIME
+		"nobody":
+			return GameConfig.REPLAY_NOBODY_TIME
 		"score":
 			return GameConfig.REPLAY_SCORE_TIME
 	return 0.0
@@ -173,7 +180,26 @@ static func total_time(res: Dictionary) -> float:
 			if not bool(st.get("truthful", true)):
 				lie = true
 		t += step_time("stamps") + step_time("spot" if lie else "honest")
+	else:
+		t += step_time("nobody")
 	return t
+
+
+## 落とされた人の後ろが見えていた人(鬼と本人は別。座っている人は両どなりを除く。抜けて真ん中にいる人は全員見える)
+static func watchers(state: GameState, loser_id: int) -> Array:
+	var out := []
+	var loser := state.get_actor(loser_id)
+	if loser == null:
+		return out
+	var seat := loser.seat_index if loser.seat_index >= 0 else loser.home_seat
+	if seat < 0:
+		return out
+	for a in state.actors:
+		if a.id == loser_id or a.id == state.oni_id:
+			continue
+		if a.role == GameState.Role.OUT or (a.role == GameState.Role.SEATED and a.seat_index >= 0 and state.can_see_behind(a.seat_index, seat)):
+			out.append(a.id)
+	return out
 
 
 func tick(delta: float) -> void:
@@ -218,6 +244,18 @@ func _next_step() -> void:
 			for id in _liars:
 				var p := _pill_above(id, tr("ウソつき!"), COLOR_LIE, Color.WHITE, 26)
 				_pop_in(p)
+		"nobody":
+			AudioDirector.sfx("hyuu", -3.0)
+			_wind_t = 0.0
+			_set_fx(0.0, 0.0, 0.55, [[_loser, 1.0]])
+			var t2 := _big_text(tr("だれも教えてくれなかった…"), 44, Color("D8E6F2"))
+			# (まん中は「見てたのに…!」の札と重なるので、上のほうに出す)
+			t2.position = Vector2((vp.x - t2.size.x) / 2.0, 70.0)
+			_placed.append(Rect2(t2.position, t2.size))
+			_pop_in(t2)
+			for id in watchers(_state, _loser):
+				var p2 := _pill_above(id, tr("見てたのに…!"), Color("6B5B95"), Color.WHITE, 20)
+				_pop_in(p2)
 		"honest":
 			AudioDirector.sfx("honest", -4.0)
 			var t := _big_text(tr("みんな正直だった!"), 50, Color("FFD24A"))
@@ -279,6 +317,8 @@ func _update_step(step_id: String, k: float) -> void:
 			var want := mini(n, int(floor(k * n)) + 1)
 			while _shown.size() < want:
 				_show_stamp(_stamps[_shown.size()])
+		"nobody":
+			_wind_t += get_process_delta_time()
 		"spot":
 			var holes := []
 			for id in _liars:
@@ -360,6 +400,21 @@ func _draw_canvas() -> void:
 		for s in _shown:
 			var from := _screen(_body(int(s["from"])))
 			_canvas.draw_dashed_line(from, to, COLOR_TRUE if s["truthful"] else COLOR_LIE, 4.0, 10.0)
+	# だれも教えてくれなかった: 落とされた人のまわりに、風のすじが横に流れる
+	if step_name() == "nobody" and _wind_t >= 0.0:
+		var c := _screen(_body(_loser))
+		var r := vp.y * 0.16
+		for i in 9:
+			var y := c.y - r + (2.0 * r) * (float(i) + 0.5) / 9.0 + sin(_wind_t * 3.0 + i) * 6.0
+			var phase := fposmod(_wind_t * 1.4 + float(i) * 0.37, 1.0)
+			var x := c.x - r * 1.8 + phase * r * 3.6
+			var ln := r * (0.35 + 0.25 * sin(float(i) * 1.7))
+			var a := sin(phase * PI) * 0.8
+			var col := Color(0.92, 0.96, 1.0, a)
+			_canvas.draw_line(Vector2(x, y), Vector2(x + ln, y - ln * 0.08), col, 3.0, true)
+			# くるっと巻く小さな渦
+			if i % 3 == 0:
+				_canvas.draw_arc(Vector2(x + ln, y - ln * 0.08 - 6.0), 6.0, PI * 0.5, PI * 2.0, 10, col, 2.5, true)
 	# 時間のバー(鬼の足取り → 落とした瞬間の印 → スタンプが届いた時間)
 	if step_name() in ["walk", "drop", "stamps"]:
 		var w := minf(vp.x * 0.6, 640.0)

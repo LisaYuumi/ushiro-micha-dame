@@ -934,6 +934,15 @@ def honest():
     return norm(out, 0.75)
 
 
+def hyuu():
+    # だれも教えてくれなかった「ヒュ〜」: さびしい風が、ふわっと吹いて抜けていく
+    d = 1.3
+    t = t_of(d)
+    wind = bandpass(noise(d), 500, 2200) * 0.5
+    whistle = lowpass(tone(glide(900, 520, d, 0.7) * (1.0 + 0.01 * np.sin(2 * np.pi * 5.0 * t)), d), 1500) * 0.35
+    return norm((wind + whistle) * env_ar(d, 0.25, 0.7), 0.7)
+
+
 SOUNDS = {
     "drop_0": drop_0, "drop_1": drop_1, "drop_2": drop_2, "drop_3": drop_3, "drop_4": drop_4,
     "step": step, "run_step": run_step,
@@ -954,7 +963,7 @@ SOUNDS = {
     "bgm_school_1": bgm_school_1, "bgm_school_2": bgm_school_2, "bgm_school_3": bgm_school_3,
     "look_zah": look_zah, "found": found, "gaan": gaan, "tonton": tonton, "chiin": chiin,
     "rewind_kyuru": rewind_kyuru, "replay_pon": replay_pon, "replay_don": replay_don, "jajaan": jajaan,
-    "honest": honest,
+    "honest": honest, "hyuu": hyuu,
 }
 
 

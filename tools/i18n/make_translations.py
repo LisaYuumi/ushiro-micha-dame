@@ -262,6 +262,8 @@ EN = {
     "一時停止": "Paused",
     "ウソつき!": "Liar!",
     "みんな正直だった!": "Everyone told the truth!",
+    "だれも教えてくれなかった…": "Nobody told them…",
+    "見てたのに…!": "You saw it…!",
     "トントン": "Tap tap",
     "チーン…": "Ding…",
     "ここで落とした!": "Dropped here!",

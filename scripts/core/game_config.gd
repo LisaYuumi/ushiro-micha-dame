@@ -229,6 +229,9 @@ const REPLAY_STAMPS_TIME := 2.0
 ## 5. ウソつきにスポットライト / ウソがなかったときの「みんな正直だった!」
 const REPLAY_SPOT_TIME := 1.0
 const REPLAY_HONEST_TIME := 0.8
+## スタンプが1つも届いていなかったとき(4・5の代わり): 落とされた人だけ明るく、風が吹いて「だれも教えてくれなかった…」。
+## 後ろが見えていた人に「見てたのに…!」
+const REPLAY_NOBODY_TIME := 1.3
 ## 6. このラウンドで入った点数
 const REPLAY_SCORE_TIME := 1.0
 ## ボットが投票するまでの時間(秒。この範囲でランダム)
