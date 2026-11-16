@@ -467,7 +467,7 @@ func _log_perf(delta: float) -> void:
 	_perf_phys_n = 0
 
 
-## 重い機種で 3D の細かさを自動で下げる(画面が細かいスマホや、GPU を使えていないブラウザだけ)
+## 重い機種で 3D の細かさを自動で下げる(画面が細かいスマホなどだけ)
 var _aq_step := 0
 var _aq_time := 0.0
 var _aq_frames := 0
@@ -485,8 +485,9 @@ func _auto_quality(delta: float) -> void:
 	_aq_frames = 0
 	if fps >= GameConfig.AUTO_QUALITY_FPS:
 		return
-	# (画面がふつうの細かさの PC は、細かさを下げるとかえって重くなることがあるので、下げない)
-	if Device.pixel_ratio() < 1.5 and not Device.light_mode():
+	# 画面が細かい(スマホなど)ときだけ下げる。GPU を使えていない PC では、粗く描いて引きのばすと
+	# かえって重くなり音も割れたことがあるので、下げない(docs/AI_BRIEF.md)
+	if Device.pixel_ratio() < 1.5 or Device.light_mode():
 		return
 	_aq_step += 1
 	var vp := get_tree().root

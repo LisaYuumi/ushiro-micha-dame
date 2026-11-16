@@ -12,7 +12,7 @@ const PLAYER_COUNT_MAX := 10
 const PLAYER_COUNT_DEFAULT := 8
 ## 届いたスタンプの送り主を「だれか」にする席の数(この数以下。5席 = 6人まで)
 const STAMP_ANON_MAX_SEATS := 5
-## 重い機種で、3D の細かさを自動で下げる(文字やボタンはそのまま)。
+## 重い機種(画面が細かいスマホなど。devicePixelRatio 1.5 以上)で、3D の細かさを自動で下げる(文字やボタンはそのまま)。
 ## 遊んでいる間 AUTO_QUALITY_WINDOW 秒ごとに平均のコマ数を見て、AUTO_QUALITY_FPS より少なければ一段下げる(上げはしない)
 const AUTO_QUALITY_FPS := 40.0
 const AUTO_QUALITY_WINDOW := 4.0
