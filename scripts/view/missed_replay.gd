@@ -4,7 +4,7 @@ extends CanvasLayer
 ## 1. 巻き戻し(セピア・走査線・キュルキュル)
 ## 2. 鬼の足取り(上から。足あとを残して2倍速。下に時間のバー)
 ## 3. ここで落とした!(スローにして一時停止。落とし物を丸で囲む。落とされた人以外は少し暗く)
-## 4. 誰が何を言ったか(届いたスタンプを送った順に。送った人から線、吹き出し、ほんと/ウソのハンコ)
+## 4. 誰が何を言ったか(落とした後に届いたスタンプを送った順に。送った人から線、吹き出し、ほんと/ウソのハンコ)
 ## 5. ウソつきにスポットライト(ウソがなければ「みんな正直だった!」)
 ## 6. このラウンドで入った点数
 ## スタンプが届いていなければ 4 と 5 はとばす。秒数は GameConfig の REPLAY_*。
@@ -42,7 +42,7 @@ void fragment() {
 
 const COLOR_TRUE := Color("2E9E5B")
 const COLOR_LIE := Color("E5483B")
-const COLOR_FOOT := Color(0.25, 0.18, 0.12, 0.55)
+const COLOR_FOOT := Color(0.22, 0.14, 0.08, 0.75)
 ## 時間のバーの、落とした瞬間の位置(0〜1)。そこまでが鬼の足取り、そのあとがスタンプが届いた時間
 const BAR_DROP := 0.62
 
@@ -100,7 +100,7 @@ func setup(state: GameState, res: Dictionary, cam: Camera3D, nodes: Dictionary, 
 	# 今の場所から、落とした場所の手前まで逆回りにもどる(巻き戻し)
 	_a_from = _a_start + fposmod(_a_from - _a_start, TAU)
 	oni_angle = _a_from
-	_stamps = res.get("missed_stamps", [])
+	_stamps = replay_stamps(res)
 	for st in _stamps:
 		if not bool(st.get("truthful", true)) and not (int(st["sender"]) in _liars):
 			_liars.append(int(st["sender"]))
@@ -154,10 +154,19 @@ static func step_time(step_id: String) -> float:
 	return 0.0
 
 
+## リプレイで出すスタンプ: 落とした後に届いたものだけ(落とす前の「平気」は、そのときは本当なので、出すとまぎらわしい)
+static func replay_stamps(res: Dictionary) -> Array:
+	var out := []
+	for st in res.get("missed_stamps", []):
+		if bool(st.get("after_drop", true)):
+			out.append(st)
+	return out
+
+
 ## リプレイ全体の秒数(この結果のとき)
 static func total_time(res: Dictionary) -> float:
 	var t := step_time("intro") + step_time("walk") + step_time("drop") + step_time("score")
-	var stamps: Array = res.get("missed_stamps", [])
+	var stamps: Array = replay_stamps(res)
 	if not stamps.is_empty():
 		var lie := false
 		for st in stamps:
@@ -339,7 +348,7 @@ func _draw_canvas() -> void:
 	# 足あと
 	for f in _feet:
 		if not _cam.is_position_behind(f):
-			_canvas.draw_circle(_screen(f), 5.0, COLOR_FOOT)
+			_canvas.draw_circle(_screen(f), 7.0, COLOR_FOOT)
 	# 落とし物を丸で囲む(ドクンと大きくなってから落ちつく)
 	if item_shown and step_name() == "drop":
 		var c := _screen(_drop_pos)

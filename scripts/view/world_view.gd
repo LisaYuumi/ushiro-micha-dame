@@ -438,7 +438,8 @@ func _update_missed_scene(state: GameState, delta: float) -> void:
 		# 2. 放心して、頭から魂がふわっと抜ける。間の抜けたラッパ「チーン」(みんな2人を横から見る)
 		_ms["stage"] = 2
 		_play_actor(loser, "chiin", -2.0, -8.0)
-		_pop(loser, tr("チーン…"), Color("C9C2B6"))
+		# (2人を横から近くで映すので、文字は小さめ)
+		_pop(loser, tr("チーン…"), Color("C9C2B6"), 0.3)
 		_spawn_soul(loser)
 	elif stage == 2 and t >= MS_REPLAY:
 		# 3. 答え合わせのリプレイ「そのとき後ろでは…」(上からの視点)
@@ -485,16 +486,23 @@ func _update_ms_camera(state: GameState) -> void:
 		var target: Vector3 = f[0]
 		var dir: Vector3 = f[1]
 		_top_cam.fov = 40.0
-		_top_cam.look_at_from_position(target + dir * 0.8 + Vector3(0, 0.04, 0), target)
+		# (少し下から見上げる: 鬼の帽子のつばで目がかくれないように)
+		_top_cam.look_at_from_position(target + dir * 0.85 + Vector3(0, -0.14, 0), target + Vector3(0, 0.02, 0))
 		return
-	# 2人を横から: 2人の真ん中を、輪の外側寄り・少し上から
+	# 2人を横から: 2人を結ぶ線の真横から、2人とも入る距離で(部屋の内側になる向きから)
 	var mid: Vector3 = ((lf[0] as Vector3) + (of[0] as Vector3)) / 2.0
 	var d: Vector3 = (of[0] as Vector3) - (lf[0] as Vector3)
 	d.y = 0.0
+	if d.length() < 0.05:
+		d = Vector3(mid.x, 0.0, mid.z)
 	var side := d.cross(Vector3.UP).normalized()
-	var out := Vector3(mid.x, 0.0, mid.z).normalized()
+	var dist := clampf(d.length() * 1.3 + 1.1, 2.0, 4.5)
+	# どちら側から映すかは、はじめに1回だけ決める(途中で反対側へ飛ばないように)
+	if not _ms.has("cam_side"):
+		_ms["cam_side"] = -1.0 if (mid + side * dist).length() > (mid - side * dist).length() else 1.0
+	side *= float(_ms["cam_side"])
 	_top_cam.fov = 45.0
-	_top_cam.look_at_from_position(mid + side * 1.7 + out * 0.7 + Vector3(0, 0.25, 0), mid + Vector3(0, -0.1, 0))
+	_top_cam.look_at_from_position(mid + side * dist + Vector3(0, 0.35, 0), mid + Vector3(0, -0.15, 0))
 
 
 ## 顔の位置(両目のまん中)と、顔の向き(水平)
@@ -767,7 +775,8 @@ static func _dust_mesh() -> SphereMesh:
 
 
 ## 頭の上に「!」「?」「★」がポンと出て、上に上がって消える
-func _pop(actor_id: int, text: String, color: Color) -> void:
+## size: 文字の大きさの倍率(近くから映すときは小さく)
+func _pop(actor_id: int, text: String, color: Color, size: float = 1.0) -> void:
 	var m := _actor_nodes.get(actor_id) as CharacterModel
 	if m == null:
 		return
@@ -775,7 +784,7 @@ func _pop(actor_id: int, text: String, color: Color) -> void:
 	l.text = text
 	l.font = HudFont.get_font()
 	l.font_size = 140
-	l.pixel_size = 0.006
+	l.pixel_size = 0.006 * size
 	l.outline_size = 24
 	l.outline_modulate = GameConfig.COLOR_INK
 	l.modulate = color

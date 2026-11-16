@@ -2004,6 +2004,9 @@ func _test_missed_replay_data() -> void:
 	_check(e.get("reason", "") == "missed", "(確認用)見逃し")
 	var list: Array = e.get("missed_stamps", [])
 	_check(not sent or (list.size() >= 1 and not list[0]["truthful"]), "気づかなかった人に届いた嘘のスタンプが結果に入る")
+	_check(not sent or bool(list[list.size() - 1].get("after_drop", false)), "落とした後に送ったスタンプには印がつく")
+	_check(MissedReplay.replay_stamps({"missed_stamps": [{"sender": 1, "kind": Stamps.SAFE, "truthful": true, "after_drop": false}]}).is_empty(),
+			"落とす前に送ったスタンプは、リプレイに出さない")
 	_check(e.has("drop_pos") and e.has("drop_angle"), "落とした場所が結果に入る")
 	_check(s.vote_left > GameConfig.VOTE_TIME, "見逃しの演出のぶん、投票の時間がのびる")
 	# 答え合わせのリプレイ: スタンプがなければ 4・5 をとばす。ウソがあればスポットライト、なければ「みんな正直だった!」
