@@ -613,46 +613,107 @@ def _shaker(d):
     return highpass(noise(dd), 5500) * env_ar(dd, 0.02, 0.06)
 
 
+def _lap_steel(f0, f1, d, slide=0.12, vib=0.012):
+    # ハワイアン・スチールギター: 前の高さ(f0)から目的の高さ(f1)へすべって入り、のばしながら ゆったりゆれる、あまい音
+    dd = d + 0.25
+    t = t_of(dd)
+    k = np.minimum(t / max(slide, 0.001), 1.0)
+    f = f0 + (f1 - f0) * (1.0 - (1.0 - k) ** 2)
+    f = f * (1.0 + vib * np.sin(2 * np.pi * 5.2 * t) * np.minimum(t / 0.35, 1.0))
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    w = sum((0.62 ** (h - 1)) * np.sin(h * ph) for h in range(1, 7))
+    w = lowpass(w, 2600)
+    env = np.minimum(t / 0.025, 1.0) * np.exp(-t / 1.6) * np.clip((dd - t) / 0.25, 0.0, 1.0)
+    return w * env * 0.6
+
+
+def _uke7_strum(root, kind, d, up=False):
+    # ウクレレのジャン(下ろす)/ジャカ(上げる: 高い弦から、少し小さく)。kind: "maj" / "min" / "7"
+    shape = {"maj": [0, 4, 7, 12], "min": [0, 3, 7, 12], "7": [0, 4, 10, 16]}[kind]
+    notes = [root + 12 + n for n in shape]
+    if up:
+        notes = notes[::-1]
+    total = d + 0.06
+    out = np.zeros(int(total * SR))
+    for k, n in enumerate(notes):
+        w = _uke(midi(n), d) * (0.7 if up else 1.0)
+        st = int(k * 0.011 * SR)
+        out[st: st + len(w)] += w[: len(out) - st]
+    return out
+
+
+def _ipu(d, slap=False):
+    # イプ(ひょうたんの太鼓): 低く こもった「ドゥン」/手のひらでたたく「パッ」
+    dd = min(d, 0.35)
+    if slap:
+        return mix(bandpass(noise(dd), 700, 2500) * env_exp(dd, 0.025), tone(330, dd) * env_exp(dd, 0.03) * 0.3)
+    return mix(thud(150, 80, dd, 0.09), lowpass(noise(dd), 400) * env_exp(dd, 0.04) * 0.4)
+
+
 def beach_start():
-    # 海辺のラウンド開始: スチールドラムのジングル(ド・ミ・ソ・ド〜、ソ・ラ・ド〜)
-    notes = [(65, 0.0), (69, 0.14), (72, 0.28), (77, 0.42), (72, 0.7), (74, 0.84), (77, 0.98)]
-    d = 2.0
+    # 海辺のラウンド開始: ウクレレのジャラ〜ンに、スチールギターが下から「ポワ〜ン」とすべり上がる
+    d = 2.2
     out = np.zeros(int(d * SR))
-    for n, st in notes:
-        out = out + at(_steel(midi(n), 0.4), st, d)
-    out = out + at(_shaker(0.1) * 0.5, 0.42, d) + at(_shaker(0.1) * 0.5, 0.98, d)
+    out = out + at(_uke7_strum(65, "maj", 1.2) * 0.5, 0.0, d)
+    out = out + at(_uke7_strum(65, "maj", 0.3, True) * 0.35, 0.22, d)
+    out = out + at(_lap_steel(midi(69), midi(77), 0.55, 0.18), 0.05, d)
+    out = out + at(_lap_steel(midi(76), midi(81), 1.2, 0.22, 0.016), 0.62, d)
+    out = out + at(pluck(midi(41), 1.0, 0.3, 0.25) * 0.5, 0.0, d)
     return norm(out, 0.8)
 
 
 def _bgm_beach(level):
-    # 海辺のラウンド中: ゆったりした南国の曲(ヘ長調)。ウクレレの裏打ちとスチールドラムのメロディ。
-    # 音を少し短く切って、のんびりの中にドキドキ感。ラウンドが進むほど楽器が増えて少し速くなる。鬼との距離では変えない
-    bpm = [96, 100, 106][level - 1]
+    # 海辺のラウンド中: ハワイアン(ヘ長調、はずむリズム)。ウクレレの「ジャン・ジャカ」、ベース、
+    # スチールギターのすべるメロディ。コードは F・D7・G7・C7 のハワイアンの決まった流れ。
+    # ラウンドが進むほど楽器が増えて少し速くなる。鬼との距離では変えない
+    bpm = [88, 92, 98][level - 1]
     bars = 8
-    prog = [(65, False), (70, False), (72, False), (65, False), (62, True), (70, False), (72, False), (65, False)]
-    melody = [77, 0, 76, 74, 72, 0, 69, 0, 70, 72, 74, 0, 72, 0, 0, 0,
-              69, 0, 70, 72, 74, 72, 70, 69, 67, 0, 69, 72, 65, 0, 0, 0]
+    prog = [(65, "maj"), (65, "maj"), (62, "7"), (62, "7"), (67, "7"), (60, "7"), (65, "maj"), (60, "7")]
+    # メロディ(1小節 4拍、1拍ずつ。0 は休み。-1 は前の音をのばす)
+    melody = [72, -1, 74, 72, 69, -1, -1, 0, 74, -1, 72, 69, 66, -1, -1, 0,
+              67, -1, 69, 70, 71, -1, 74, -1, 72, -1, -1, -1, 0, 69, 70, 72]
     parts = []
-    for b, (root, minor) in enumerate(prog):
-        # ウクレレ: 裏拍にジャカッ(レゲエのように)
-        for k in [0.5, 1.5, 2.5, 3.5]:
-            parts.append((b * 4 + k, 0.35, lambda d, r=root, m=minor: _uke_strum(r, m, d), 0.16))
-        # ベース(やわらかいはじいた音): 1拍目と3拍目
-        parts.append((b * 4, 0.9, lambda d, r=root: pluck(midi(r - 24), d, 0.2, 0.25), 0.4))
-        parts.append((b * 4 + 2, 0.9, lambda d, r=root: pluck(midi(r - 17), d, 0.2, 0.25), 0.3))
-        if level >= 2:
-            # シェイカー: 8分でシャカシャカ
-            for k in range(8):
-                parts.append((b * 4 + k * 0.5, 0.2, _shaker, 0.1 if k % 2 else 0.06))
+    swing = 2.0 / 3.0
+    for b, (root, kind) in enumerate(prog):
+        # ウクレレ: ジャン(1拍目)・ジャン(2拍目)・ジャカ(はねて)・ジャカ・ジャン(4拍目)・ジャカ
+        for pos, up in [(0, False), (1, False), (1 + swing, True), (2 + swing, True), (3, False), (3 + swing, True)]:
+            parts.append((b * 4 + pos, 0.4, lambda d, r=root, k=kind, u=up: _uke7_strum(r, k, d, u), 0.13 if not up else 0.1))
+        # ベース: 1拍目は根音、3拍目は5度(レベル3では4拍とも歩く)
         if level >= 3:
-            # 低い太鼓(ドン)と、スチールドラムの和音
-            parts.append((b * 4, 0.4, _kick, 0.3))
-            parts.append((b * 4 + 2.5, 0.4, _kick, 0.2))
-            for n in _chord_notes(root, minor):
-                parts.append((b * 4 + 1, 0.4, lambda d, n=n: _steel(midi(n), d), 0.04))
-    for i, n in enumerate(melody):
-        if n:
-            parts.append((i * 1.0, 0.5, lambda d, n=n: _steel(midi(n), d), 0.2))
+            walk = [0, 7, 9, 7] if kind != "7" else [0, 4, 7, 10]
+            for k, iv in enumerate(walk):
+                parts.append((b * 4 + k, 0.9, lambda d, r=root, iv=iv: pluck(midi(r - 24 + iv), d, 0.22, 0.25), 0.36))
+        else:
+            parts.append((b * 4, 1.8, lambda d, r=root: pluck(midi(r - 24), d, 0.25, 0.25), 0.42))
+            parts.append((b * 4 + 2, 1.8, lambda d, r=root: pluck(midi(r - 17), d, 0.25, 0.25), 0.32))
+        if level >= 2:
+            # イプ(ひょうたんの太鼓): ドゥン・パッ
+            parts.append((b * 4, 0.4, lambda d: _ipu(d), 0.32))
+            parts.append((b * 4 + 1 + swing, 0.3, lambda d: _ipu(d), 0.18))
+            parts.append((b * 4 + 2, 0.3, lambda d: _ipu(d, True), 0.2))
+            parts.append((b * 4 + 3, 0.3, lambda d: _ipu(d, True), 0.14))
+        if level >= 3:
+            # シェイカー(はねる8分)
+            for k in range(4):
+                parts.append((b * 4 + k, 0.2, _shaker, 0.07))
+                parts.append((b * 4 + k + swing, 0.2, _shaker, 0.05))
+    # スチールギター: のばす音は長く、前の音から(最初は全音下から)すべって入る
+    prev = None
+    i = 0
+    while i < len(melody):
+        n = melody[i]
+        if n > 0:
+            length = 1
+            while i + length < len(melody) and melody[i + length] == -1:
+                length += 1
+            f0 = midi(prev) if prev else midi(n - 2)
+            slide = 0.16 if prev is None or abs(n - prev) > 2 else 0.09
+            parts.append((i * 1.0, length * 0.92, lambda d, a=f0, b2=midi(n), s2=slide: _lap_steel(a, b2, d, s2), 0.3))
+            prev = n
+            i += length
+        else:
+            prev = None if n == 0 else prev
+            i += 1
     return norm(_render_song(bpm, bars, parts), 0.75)
 
 
