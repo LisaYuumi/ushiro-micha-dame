@@ -1384,18 +1384,15 @@ func _build_chair(pos: Vector3, yaw: float) -> Node3D:
 	chair.rotation.y = yaw
 	var wood := Color(0.55, 0.35, 0.2)
 	var metal := Color(0.4, 0.4, 0.42)
-	# 座面と背もたれ(背もたれは後ろ側 +Z)は角を丸く
-	var parts := [
-		[Vector3(0.5, 0.05, 0.5), Vector3(0, 0.45, 0), wood, 0.02],
-		[Vector3(0.5, 0.5, 0.05), Vector3(0, 0.72, 0.28), wood, 0.02],
-	]
+	# 座面と背もたれ(背もたれは後ろ側 +Z)と、4本の脚。
+	# 部品ごとに描くと椅子1つで12回描くので、色ごとに1つの形にまとめる(木と金属で、塗りと輪郭線の4回)
+	var batch := StaticBatch.new()
+	batch.add_box(Vector3(0.5, 0.05, 0.5), Transform3D(Basis.IDENTITY, Vector3(0, 0.45, 0)), wood, GameConfig.OUTLINE_WIDTH)
+	batch.add_box(Vector3(0.5, 0.5, 0.05), Transform3D(Basis.IDENTITY, Vector3(0, 0.72, 0.28)), wood, GameConfig.OUTLINE_WIDTH)
 	for x in [-0.22, 0.22]:
 		for z in [-0.22, 0.22]:
-			parts.append([Vector3(0.04, 0.45, 0.04), Vector3(x, 0.225, z), metal, 0.01])
-	for p2 in parts:
-		var mi := Toon.mesh(StaticBatch.chamfer_mesh(p2[0], p2[3]), p2[2])
-		mi.position = p2[1]
-		chair.add_child(mi)
+			batch.add_box(Vector3(0.04, 0.45, 0.04), Transform3D(Basis.IDENTITY, Vector3(x, 0.225, z)), metal, GameConfig.OUTLINE_WIDTH)
+	batch.build(chair)
 	add_child(chair)
 	return chair
 

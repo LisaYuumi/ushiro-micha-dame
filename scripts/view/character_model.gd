@@ -350,13 +350,19 @@ func _build_rig() -> void:
 			_kneel_bones[k] = deg_to_rad(KNEEL_BEND[bone_name])
 
 
-## 骨にくっつける体の部品: 丸い頭、カプセルの胴、短い手足(指なし)。全部同じ体の色
+## 骨にくっつける体の部品: 丸い頭、カプセルの胴、短い手足(指なし)。全部同じ体の色。
+## 部品ごとに描くと 1人で約30回描くことになり重いので、全部を「骨といっしょに動く1つの形」(スキンメッシュ)に
+## まとめる。描くのは塗りと輪郭線の2回だけ。それぞれの部品は1本の骨にだけついていく(曲がらない)
+var _body_parts: Array = []
+
+
 func _build_body(color: Color) -> void:
 	var line := GameConfig.OUTLINE_WIDTH / BODY_SCALE
+	_body_parts.clear()
 	var head_mesh := SphereMesh.new()
 	head_mesh.radius = HEAD_RADIUS
 	head_mesh.height = HEAD_RADIUS * 2.0
-	_attach("DEF-head", _mesh(head_mesh, color, line), _head_transform())
+	_body_parts.append(["DEF-head", head_mesh, _head_transform()])
 	# 胴: 腰から首まで。お腹は丸く
 	_limb("DEF-spine.001", "DEF-hips", "DEF-neck", 0.19, color, line)
 	# 腕・脚(関節から次の関節まで)
@@ -371,7 +377,59 @@ func _build_body(color: Color) -> void:
 		hand.radius = 0.075
 		hand.height = 0.15
 		var at := Transform3D(Basis.IDENTITY, _rest_pos("DEF-hand." + side) + _bone_dir("DEF-hand." + side) * 0.05)
-		_attach("DEF-hand." + side, _mesh(hand, color, line), at)
+		_body_parts.append(["DEF-hand." + side, hand, at])
+	_build_skinned_body(color, line)
+
+
+## 集めた部品(骨の名前・形・立った形のときの位置)を、1つのスキンメッシュにする
+func _build_skinned_body(color: Color, line: float) -> void:
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var bones := PackedInt32Array()
+	var weights := PackedFloat32Array()
+	var idx := PackedInt32Array()
+	var skin := Skin.new()
+	var bind_of := {}
+	for part in _body_parts:
+		var bone_name: String = part[0]
+		var m: PrimitiveMesh = part[1]
+		var xf: Transform3D = part[2]
+		Toon.lighten(m)
+		if not bind_of.has(bone_name):
+			var bi := _skel.find_bone(bone_name)
+			bind_of[bone_name] = skin.get_bind_count()
+			skin.add_named_bind(bone_name, _skel.get_bone_global_rest(bi).affine_inverse())
+		var b: int = bind_of[bone_name]
+		var arr := m.get_mesh_arrays()
+		var pv: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		var pn: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
+		var pi: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+		var base := verts.size()
+		var nb := xf.basis.inverse().transposed()
+		for k in pv.size():
+			verts.append(xf * pv[k])
+			norms.append((nb * pn[k]).normalized())
+			bones.append_array(PackedInt32Array([b, 0, 0, 0]))
+			weights.append_array(PackedFloat32Array([1.0, 0.0, 0.0, 0.0]))
+		for k in pi:
+			idx.append(base + k)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = norms
+	arrays[Mesh.ARRAY_BONES] = bones
+	arrays[Mesh.ARRAY_WEIGHTS] = weights
+	arrays[Mesh.ARRAY_INDEX] = idx
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var mi := _mesh(mesh, color, line)
+	mi.name = "Body"
+	_skel.add_child(mi)
+	mi.skin = skin
+	mi.skeleton = NodePath("..")
+	# 動いても見えなくならないように、見える範囲(画面の外かの判定)は大きめに
+	mi.custom_aabb = AABB(Vector3(-1.2, -0.6, -1.2), Vector3(2.4, 2.8, 2.4))
+	_body_parts.clear()
 
 
 const COLOR_STRAW := Color("EAC66A")
@@ -690,7 +748,7 @@ func _limb(bone: String, from: String, to: String, radius: float, color: Color, 
 		x = y.cross(Vector3.RIGHT)
 	x = x.normalized()
 	var b3 := Basis(x, y, x.cross(y).normalized())
-	_attach(bone, _mesh(cap, color, line), Transform3D(b3, (a + b) / 2.0))
+	_body_parts.append([bone, cap, Transform3D(b3, (a + b) / 2.0)])
 
 
 ## 骨組みの座標で決めた位置(立った形のとき)に node を置き、骨 bone といっしょに動くようにする。

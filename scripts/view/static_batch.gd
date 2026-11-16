@@ -1,6 +1,7 @@
 class_name StaticBatch
 extends RefCounted
-## 動かない背景の箱を、色ごとに1つの形(メッシュ)にまとめて描く(スマホで軽くするため)。
+## 動かない背景の箱を、1つの形(メッシュ)にまとめて描く(スマホで軽くするため)。
+## 色は頂点に持たせるので、色がちがっても、輪郭線の太さが同じならまとめられる(描くのは太さごとに塗りと線の2回)。
 ## 輪郭線は、箱ごとの中心からふくらませる(まとめても線が切れないように、中心を頂点に持たせる)。
 
 ## 立体感: 床に近いほど少し暗く(この高さ(メートル)で元の明るさ)、いちばん下の明るさ
@@ -11,7 +12,7 @@ const JITTER := 0.05
 ## 角を丸める(面取りする)大きさ(メートル)
 const BEVEL := 0.035
 
-## 色と輪郭線の太さ -> {"color", "outline", "v": 頂点, "n": 法線, "c": 箱の中心, "k": 頂点の明るさ, "i": 番号}
+## 輪郭線の太さ -> {"outline", "v": 頂点, "n": 法線, "c": 箱の中心, "k": 頂点の色(RGB が色、A が明るさ), "i": 番号}
 var _groups := {}
 
 static var _box_cache := {}
@@ -19,9 +20,9 @@ static var _box_cache := {}
 
 ## 箱を1つ足す(xf: 箱の中心の位置と向き。まとめた形の座標で)
 func add_box(size: Vector3, xf: Transform3D, color: Color, outline: float) -> void:
-	var key := "%s|%.3f" % [color.to_html(), outline]
+	var key := "%.3f" % outline
 	if not _groups.has(key):
-		_groups[key] = {"color": color, "outline": outline, "v": PackedVector3Array(), "n": PackedVector3Array(),
+		_groups[key] = {"outline": outline, "v": PackedVector3Array(), "n": PackedVector3Array(),
 				"c": PackedFloat32Array(), "k": PackedColorArray(), "i": PackedInt32Array()}
 	var g: Dictionary = _groups[key]
 	# 輪郭線のある物は角を少し丸める(面取り)。薄い物(紙・線)はそのまま
@@ -48,6 +49,7 @@ func add_box(size: Vector3, xf: Transform3D, color: Color, outline: float) -> vo
 	var jitter := 1.0 + (fmod(h, 1.0) * 2.0 - 1.0) * JITTER
 	# 薄い物(床板・貼り紙など)は床に近くても暗くしない
 	var ao := size.y > 0.12
+	# (材質の色は白にして、頂点の色の RGB に色、A に明るさを入れる。シェーダーで色を明るさの決まりに直してかける)
 	for k in verts.size():
 		var p := xf * (verts[k] * scale_v)
 		v.append(p)
@@ -56,7 +58,10 @@ func add_box(size: Vector3, xf: Transform3D, color: Color, outline: float) -> vo
 		var b := jitter
 		if ao:
 			b *= lerpf(AO_FLOOR, 1.0, clampf(p.y / AO_HEIGHT, 0.0, 1.0))
-		kk.append(Color(b, b, b))
+		# (前は明るさを頂点の色の RGB に入れていて、Godot が明るさの決まりに直してからかけていた。同じ見た目になるように
+		# 直した値を A に入れる。1 を少しこえることがあるので 1.1 でわって入れ、シェーダーで 1.1 をかけてもどす)
+		var bl := pow(b, 2.2)
+		kk.append(Color(color.r, color.g, color.b, clampf(bl / 1.1, 0.0, 1.0)))
 	for k in idx:
 		ii.append(base + k)
 	g["v"] = v
@@ -82,7 +87,7 @@ func build(parent: Node3D) -> void:
 				Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT)
 		var mi := MeshInstance3D.new()
 		mi.mesh = mesh
-		mi.material_override = Toon.material_batched(g["color"], g["outline"])
+		mi.material_override = Toon.material_batched(Color.WHITE, g["outline"])
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		parent.add_child(mi)
 	_groups.clear()

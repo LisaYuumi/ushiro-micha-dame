@@ -97,7 +97,8 @@ void vertex() {
 }
 
 void fragment() {
-	ALBEDO = albedo.rgb * COLOR.rgb;
+	// 頂点の色: RGB が箱の色(Godot が明るさの決まりに直して渡す)、A が明るさ(床に近いほど暗い・部品ごとの色むら)
+	ALBEDO = albedo.rgb * COLOR.rgb * (COLOR.a * 1.1);
 	EMISSION = vec3(0.0015, 0.0024, 0.007) * (1.0 - dark_bright);
 }
 
