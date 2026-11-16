@@ -68,6 +68,7 @@ func _ready() -> void:
 	_build_view()
 	# 結果カードで、手下だと思う人の札をタップした
 	hud.vote_pressed.connect(_on_vote_pressed)
+	hud.skip_vote_pressed.connect(_on_skip_vote)
 	# 見逃しの演出
 	view.missed_scene_done.connect(_on_missed_scene_done)
 	lobby.solo_pressed.connect(_on_solo)
@@ -289,6 +290,13 @@ func _refresh_round() -> void:
 
 
 func _refresh_round_inner() -> void:
+	_seen_serial = state.round_serial
+	_my_vote = -1
+	if _reveal and is_instance_valid(_reveal):
+		_reveal.queue_free()
+	_reveal = null
+	hud.set_vote_ui(false)
+	hud.hide_result_card()
 	bots.reset()
 	_missed_result = {}
 	_round_start_scores = state.scores.duplicate()
@@ -333,6 +341,10 @@ func _physics_process(delta: float) -> void:
 				slow.append("%s %dms" % [e.get("type", "?"), ms])
 		if mode == Mode.HOST:
 			_send_to_guests(events, delta)
+		# 発表のあと、自動で次のラウンドになった: 画面を作り直す
+		if state.round_serial != _seen_serial and not state.match_over:
+			_refresh_round()
+			hud.show_message(tr("ラウンド %d: %s") % [state.round_index + 1, state.item_name()], Color(0.3, 0.3, 0.3), 2.0)
 	if _stamp_target >= 0 and (state.get_actor(_stamp_target) == null or state.get_actor(_stamp_target).role != GameState.Role.SEATED
 			or (state.phase != GameState.Phase.WALKING and state.phase != GameState.Phase.DROPPED)):
 		_close_picker()
@@ -369,11 +381,27 @@ func _physics_process(delta: float) -> void:
 			(me.role == GameState.Role.SEATED or out) and state.phase == GameState.Phase.CHASE, out, runner)
 	# スティックは、鬼が歩いているときと、追いかけっこで走っているとき(左右によける)
 	touch.set_stick_visible(me.role == GameState.Role.ONI or runner)
+	# 手下を当てる投票(教室のまま)と発表: 少し高いところから全員を映し、名札を出す
+	var voting := showing_result and state.voting_open and not state.match_over
+	var revealing := showing_result and not state.voting_open and state.reveal_left > 0.0 and not state.match_over
+	view.set_vote_view(voting or revealing)
+	if voting:
+		var hint := tr("あやしい人をタップして投票!")
+		if state.is_minion(me.id):
+			hint = tr("あなたは手下。バレないように!")
+		elif _my_vote >= 0:
+			hint = tr("%s に投票した(入れ直せる)") % _short_name(_my_vote)
+		hud.set_vote_ui(true, state.votes.size(), state.voter_count(), hint, mode != Mode.GUEST, state.can_skip_vote())
+	else:
+		hud.set_vote_ui(false)
 	var ov := view.get_overlay()
 	if ov:
 		# 牛乳がかかっている間は名札も見えない(鬼の名札で場所がわからないように)。吹き出しは出したまま
-		ov.visible = not showing_result
-		ov.set_tags_hidden(state.is_milked(me))
+		ov.visible = not showing_result or voting or revealing
+		ov.set_tags_hidden(state.is_milked(me) and not showing_result)
+		if showing_result:
+			ov.set_voted(state.votes.keys() if voting else [])
+			ov.set_send_target(_my_vote if voting else -1, tr("あなたの票"))
 	# 左上の札(鬼の周回・自分の点数)を毎回更新する(参加者の点数は状態といっしょに届く)
 	_update_help()
 	# 重かったときは、何をしていたかをコンソールに出す(調べる用)
@@ -541,8 +569,19 @@ func _update_my_stamps() -> void:
 		})
 	hud.show_my_stamps(list)
 
-## 見逃しの演出が終わった(またはタップでとばした): 結果の音と結果カード
+## 見逃しの演出が終わった(またはタップでとばした): 結果の音と見出し
 var _missed_result := {}
+## 投票: 自分が入れた人(印を出す。入れ直せる)と、発表の演出
+var _my_vote := -1
+var _reveal: VoteReveal
+## ルールを動かす人(ひとり・ホスト)が、最後に画面を作ったラウンド(発表のあと自動で次のラウンドになったら作り直す)
+var _seen_serial := -1
+
+
+## ルーム主の「発表へ」(投票が始まって5秒たってから押せる)
+func _on_skip_vote() -> void:
+	if mode != Mode.GUEST:
+		state.skip_vote()
 
 
 func _on_missed_scene_done() -> void:
@@ -641,6 +680,9 @@ func _unhandled_input(event: InputEvent) -> void:
 func _on_restart_pressed() -> void:
 	if state.match_over:
 		_start_round()
+	elif state.phase == GameState.Phase.RESULT and (state.voting_open or state.vote_wait > 0.0):
+		# (確認用のキー: 投票をすぐ締めきって発表へ)
+		state.close_vote()
 	elif state.phase == GameState.Phase.RESULT:
 		if state.next_round():
 			_refresh_round()
@@ -730,6 +772,18 @@ func _close_studio() -> void:
 func _on_tap(pos: Vector2) -> void:
 	var ov := view.get_overlay()
 	if ov == null:
+		return
+	# 手下を当てる投票: 人(か名札)をタップすると、その人に投票(全員がそろうまで入れ直せる)
+	if state.phase == GameState.Phase.RESULT:
+		var me_id := state.local_player_id
+		if state.voting_open and state.can_vote(me_id):
+			var vid := ov.tag_hit(pos)
+			if vid < 0:
+				vid = view.pick_any_actor(state, pos)
+			if vid in state.vote_candidates(me_id):
+				_my_vote = vid
+				AudioDirector.click()
+				cmds.cast_vote(me_id, vid)
 		return
 	# 下のまん中の言葉のボタン
 	var kind := hud.send_panel_hit(pos)
@@ -860,12 +914,16 @@ func _show_event(e: Dictionary) -> void:
 		"minion_count":
 			if int(e["count"]) >= 2:
 				hud.show_message(tr("今回は手下が2人!\n(だれかはひみつ)"), Color(0.55, 0.2, 0.7), 2.2)
+		"vote_start":
+			_my_vote = -1
 		"vote_result":
-			var correct: Array = e.get("correct", [])
-			hud.apply_vote_result(correct, e.get("scores", {}))
-			if me in correct:
-				hud.show_message(tr("手下を当てた! +%d点") % GameConfig.SCORE_VOTE_CORRECT, Color(0.1, 0.6, 0.4), 1.6)
-				audio.play("win", -8.0)
+			# 発表: 票が飛ぶ → ため → 手下にスポットライト → 点数(このあと自動で次のラウンドへ)
+			_my_vote = -1
+			if _reveal and is_instance_valid(_reveal):
+				_reveal.queue_free()
+			_reveal = VoteReveal.new()
+			add_child(_reveal)
+			_reveal.setup(state, e, view, view.get_overlay())
 			_update_help()
 		"stamp":
 			if e["target"] == me:
@@ -986,7 +1044,7 @@ func _play_result_sounds(r: Dictionary) -> void:
 	get_tree().create_timer(0.45).timeout.connect(func() -> void: audio.play(jingle, vol))
 
 
-## ラウンドが終わった: 可愛い結果カード(見出し・一言・がまんや手下の発表・全員の点数)
+## ラウンドが終わった: 結果のページは出さず、教室のまま見出しと一言をポンと出す(このあと手下を当てる投票)
 func _show_result(r: Dictionary) -> void:
 	var me := state.local_player_id
 	var win := Color("FFB020")
@@ -1042,59 +1100,11 @@ func _show_result(r: Dictionary) -> void:
 			else:
 				title = tr("全員お手つき…")
 				sub = tr("鬼のかち! みんな振り向きすぎ!")
-	var notes := []
-	# 手下は「手下はだれ?」のカードをめくると見られる
-	# 手下が2人のときは、2人とも出る
-	var minions: Array = r.get("minions", [])
-	if minions.is_empty() and int(r.get("minion", -1)) >= 0:
-		minions = [int(r["minion"])]
-	var bonuses: Dictionary = r.get("minion_bonuses", {})
-	var reveal := {}
-	if not minions.is_empty():
-		var people := []
-		for m in minions:
-			var ma := state.get_actor(m)
-			# 見逃しのラウンド: この手下が、気づかなかった人に送ったウソのスタンプ(手下のカードをめくるとわかる)
-			var lies := []
-			for st in r.get("missed_stamps", []):
-				if st["sender"] == m and not st["truthful"]:
-					lies.append(HeadOverlay.stamp_text(state, m, st["kind"]))
-			people.append({
-				"name": _short_name(m),
-				"color": ma.color if ma else Color.WHITE,
-				"is_me": m == me,
-				"bonus": bool(bonuses.get(m, r.get("minion_bonus", false))),
-				"lies": lies,
-			})
-		reveal = {"people": people}
-	# 手下を当てる投票(手下以外の全員。鬼も)。自分と鬼以外の札をタップできる
-	# (見逃しの演出のあとに出すこともあるので、今の状態で決める)
-	var voting: bool = state.voting_open
-	var can_vote := voting and not (me in minions)
-	# 全員の点数(この試合の合計。点の多い順、このラウンドで増えた分つき)
-	var scores: Dictionary = r.get("scores", state.scores)
-	var ids := scores.keys()
-	ids.sort_custom(func(a, b): return scores[a] > scores[b])
-	var rows := []
-	for id in ids:
-		var row := _score_row_for(id, scores, true)
-		if can_vote and id != me and id != state.oni_id:
-			row["id"] = id
-		if id == state.oni_id:
-			# 鬼の札には「鬼」と出す(鬼は手下ではないので、投票できない。投票中は薄くする)
-			row["mark"] = tr("鬼")
-			row["no_vote"] = can_vote
-		rows.append(row)
-	var vote := {"open": voting, "can_vote": can_vote}
-	var last := state.round_index + 1 >= GameConfig.ROUNDS_PER_MATCH
-	var next_text := tr("さいごの結果へ") if last else tr("次のラウンド(%s)へ") % Items.name_of(state.round_index + 1, state.stage)
 	hud.hide_message()
 	if r["winner"] == me:
 		hud.confetti()
-	if mode == Mode.GUEST:
-		hud.show_result_card(title, sub, notes, color, rows, tr("ホストが「次へ」を押すと") + next_text, "", reveal, vote)
-	else:
-		hud.show_result_card(title, sub, notes, color, rows, "", tr("次へ ▶ ") + next_text, reveal, vote)
+	hud.show_banner(title, color, GameConfig.VOTE_INTRO_TIME - 0.2, 72)
+	hud.show_message(sub, Color(0.3, 0.3, 0.3), GameConfig.VOTE_INTRO_TIME - 0.2)
 
 
 ## 結果カードで、手下だと思う人に投票した

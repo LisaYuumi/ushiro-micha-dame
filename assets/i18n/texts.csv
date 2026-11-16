@@ -266,6 +266,18 @@ the minion…"
 ウソ,ウソ,Lie
 ウソ: %s,ウソ: %s,Lied: %s
 トントン,トントン,Tap tap
+鬼の手下は誰?,鬼の手下は誰?,Who is the Oni's helper?
+%d/%d人 投票済み,%d/%d人 投票済み,%d/%d voted
+発表へ ▶,発表へ ▶,Reveal ▶
+あやしい人をタップして投票!,あやしい人をタップして投票!,Tap a suspect to vote!
+あなたは手下。バレないように!,あなたは手下。バレないように!,You are the helper. Don't get caught!
+%s に投票した(入れ直せる),%s に投票した(入れ直せる),Voted for %s (you can change it)
+あなたの票,あなたの票,Your vote
+手下!,手下!,Helper!
+手下,手下,Helper
+バレバレ!,バレバレ!,Busted!
+だましきった!,だましきった!,Fooled them all!
+ちがうよ!,ちがうよ!,Not me!
 チーン…,チーン…,Ding…
 音がガタガタ割れるときは「なめらか」を試してね,音がガタガタ割れるときは「なめらか」を試してね,"If the sound crackles, try ""Smooth"""
 音の鳴らし方: %s ▶,音の鳴らし方: %s ▶,Sound mode: %s ▶

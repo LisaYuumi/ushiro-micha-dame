@@ -176,10 +176,14 @@ var minion_id: int:
 		minion_ids = [v] if v >= 0 else []
 ## このラウンドの手下の人数(鬼だけが知る。ほかの人には勝敗が出るまで -1)
 var minion_count: int = 0
-## 手下を当てる投票(勝敗が出たあと): 受けつけ中か・残り時間・だれがだれに投票したか
+## 手下を当てる投票(勝敗が出たあと、教室のまま):
+## 勝ち負けの演出の残り(この間は投票前)/ 受けつけ中か / 始まってからの秒数 / だれがだれに投票したか(入れ直せる)/
+## 発表の演出の残り(0 になったら次のラウンドへ)
+var vote_wait: float = 0.0
 var voting_open: bool = false
-var vote_left: float = 0.0
+var vote_elapsed: float = 0.0
 var votes: Dictionary = {}
+var reveal_left: float = -1.0
 ## このラウンドで、人ごとの嘘のスタンプの数(ボットが投票の参考にする)
 var lie_counts: Dictionary = {}
 ## 人ごとの、自分で決めたスタンプの言葉(id -> {種類: 言葉})。ない人・ない種類は初期の言葉
@@ -447,6 +451,9 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	# 鬼には、手下の人数だけ知らせる(だれかは知らない)
 	events.append({"type": "minion_count", "count": count, "private_to": oni})
 	voting_open = false
+	vote_wait = 0.0
+	vote_elapsed = 0.0
+	reveal_left = -1.0
 	votes = {}
 	lie_counts = {}
 	stamp_log = []
@@ -454,10 +461,7 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 
 ## 時間を delta 秒すすめる。
 func tick(delta: float) -> void:
-	if voting_open:
-		vote_left -= delta
-		if vote_left <= 0.0:
-			close_vote()
+	_tick_vote(delta)
 	_tick_stamps(delta)
 	for i in seat_pass_age.size():
 		seat_pass_age[i] += delta
@@ -1106,8 +1110,11 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"minion_count": count_shown,
 		"last_minion_ids": last_minion_ids,
 		"voting_open": voting_open,
-		"vote_left": vote_left,
+		"vote_wait": vote_wait,
+		"vote_elapsed": vote_elapsed,
+		"reveal_left": reveal_left,
 		"voted": votes.keys(),
+		"voter_count": voter_count(),
 	}
 
 
@@ -1174,7 +1181,10 @@ func apply_snapshot(s: Dictionary) -> void:
 	minion_count = s.get("minion_count", -1)
 	last_minion_ids = s.get("last_minion_ids", [])
 	voting_open = s.get("voting_open", false)
-	vote_left = s.get("vote_left", 0.0)
+	vote_wait = s.get("vote_wait", 0.0)
+	_snap_voter_count = int(s.get("voter_count", -1))
+	vote_elapsed = s.get("vote_elapsed", 0.0)
+	reveal_left = s.get("reveal_left", -1.0)
 	votes = {}
 	for v in s.get("voted", []):
 		votes[v] = -1
@@ -1413,9 +1423,63 @@ func _check_obstacles(a: Actor) -> void:
 		return
 
 
-## 手下を当てる投票ができる人(手下以外の全員。鬼も)
+## 勝敗のあと: 演出 → 投票 → 発表 → 次のラウンド(ルールを動かす人だけが進める)
+func _tick_vote(delta: float) -> void:
+	if phase != Phase.RESULT or match_over:
+		return
+	if vote_wait > 0.0:
+		vote_wait -= delta
+		if vote_wait <= 0.0:
+			vote_wait = 0.0
+			voting_open = true
+			vote_elapsed = 0.0
+			events.append({"type": "vote_start"})
+	elif voting_open:
+		vote_elapsed += delta
+		if vote_elapsed >= GameConfig.VOTE_TIMEOUT:
+			close_vote()
+	elif reveal_left > 0.0:
+		reveal_left -= delta
+		if reveal_left <= 0.0:
+			reveal_left = -1.0
+			next_round()
+
+
+## 発表の演出の長さ(この間は次のラウンドへ進まない)
+static func reveal_time() -> float:
+	return GameConfig.REVEAL_ARROWS_TIME + GameConfig.REVEAL_DRUM_TIME + GameConfig.REVEAL_SHOW_TIME \
+			+ GameConfig.REVEAL_POINTS_TIME + GameConfig.REVEAL_HOLD_TIME
+
+
+## 手下を当てる投票ができる人(手下以外の全員。鬼も: 鬼は手下がだれか知らない)。全員がそろうまでは入れ直せる
 func can_vote(actor_id: int) -> bool:
-	return voting_open and get_actor(actor_id) != null and not is_minion(actor_id) and not votes.has(actor_id)
+	return voting_open and get_actor(actor_id) != null and not is_minion(actor_id)
+
+
+## 投票する人の数(手下以外の全員)。参加者は手下がだれか知らないので、ホストから届いた数
+var _snap_voter_count := -1
+
+
+func voter_count() -> int:
+	if _snap_voter_count >= 0:
+		return _snap_voter_count
+	var n := 0
+	for a in actors:
+		if not is_minion(a.id):
+			n += 1
+	return n
+
+
+## ルーム主の「発表へ」: 投票が始まって VOTE_SKIP_DELAY 秒たっていれば、投票していない人がいても発表へ
+func can_skip_vote() -> bool:
+	return voting_open and vote_elapsed >= GameConfig.VOTE_SKIP_DELAY
+
+
+func skip_vote() -> bool:
+	if not can_skip_vote():
+		return false
+	close_vote()
+	return true
 
 
 ## 投票の相手にできる人(自分と鬼以外。鬼は手下ではないので)
@@ -1427,7 +1491,7 @@ func vote_candidates(voter_id: int) -> Array:
 	return out
 
 
-## 手下だと思う人に投票する(1人だけ)。全員が投票したら発表。投票できたら true
+## 手下だと思う人に投票する(1人だけ。入れ直すと前の票は消える)。全員が投票したら発表。投票できたら true
 func cast_vote(voter_id: int, target_id: int) -> bool:
 	if not can_vote(voter_id) or not (target_id in vote_candidates(voter_id)):
 		return false
@@ -1442,22 +1506,38 @@ func cast_vote(voter_id: int, target_id: int) -> bool:
 	return true
 
 
-## 投票を締めきって発表する: 手下に当てた人(手下が2人なら、どちらかに当てた人)に +SCORE_VOTE_CORRECT
+## 投票を締めきって発表する: 手下に当てた人(手下が2人なら、どちらかに当てた人)に +SCORE_VOTE_CORRECT。
+## 手下ごとに: 1票も入らなかったら「だましきった!」で手下に +SCORE_MINION_FOOLED、投票した全員が入れたら「バレバレ!」。
+## 投票していない人は、投票なし。発表の演出のあと、次のラウンドへ
 func close_vote() -> void:
-	if not voting_open:
+	if not voting_open and vote_wait <= 0.0:
 		return
 	voting_open = false
+	vote_wait = 0.0
 	var correct := []
+	var tally := {}
 	for voter in votes:
-		if is_minion(votes[voter]):
+		var target: int = votes[voter]
+		tally[target] = int(tally.get(target, 0)) + 1
+		if is_minion(target):
 			correct.append(voter)
 			scores[voter] = scores.get(voter, 0) + GameConfig.SCORE_VOTE_CORRECT
+	var fooled := []
+	var busted := []
+	for m in minion_ids:
+		var got: int = int(tally.get(m, 0))
+		if got == 0:
+			fooled.append(m)
+			scores[m] = scores.get(m, 0) + GameConfig.SCORE_MINION_FOOLED
+		elif got == votes.size():
+			busted.append(m)
 	result["voting"] = false
 	result["votes"] = votes.duplicate()
 	result["vote_correct"] = correct
 	result["scores"] = scores.duplicate()
-	events.append({"type": "vote_result", "votes": votes.duplicate(), "correct": correct,
-			"minions": minion_ids.duplicate(), "scores": scores.duplicate()})
+	reveal_left = reveal_time()
+	events.append({"type": "vote_result", "votes": votes.duplicate(), "correct": correct, "tally": tally,
+			"minions": minion_ids.duplicate(), "fooled": fooled, "busted": busted, "scores": scores.duplicate()})
 
 
 ## 停電が終わって電気がつく(停電中でなければ何もしない)
@@ -1496,10 +1576,12 @@ func _finish(winner_id: int, loser_id: int, reason: String) -> void:
 	result["minion_bonus"] = minion_bonus
 	result["minion_bonuses"] = bonuses
 	last_minion_ids = minion_ids.duplicate()
-	# 手下を当てる投票を始める(手下以外の全員。鬼も)。全員が投票するか、時間が来たら発表
+	# 勝ち負けの演出を見せてから、手下を当てる投票を始める(手下以外の全員。鬼も)
 	votes = {}
-	voting_open = true
-	vote_left = GameConfig.VOTE_TIME
+	voting_open = false
+	vote_elapsed = 0.0
+	reveal_left = -1.0
+	vote_wait = GameConfig.VOTE_INTRO_TIME
 	if reason == "missed":
 		# 見逃しの答え合わせ: 気づかなかった人に届いたスタンプ(送った人・言葉・ホントかウソか)と、落とした場所。
 		# 演出のぶん、投票の時間をのばす
@@ -1510,7 +1592,7 @@ func _finish(winner_id: int, loser_id: int, reason: String) -> void:
 		result["missed_stamps"] = to_loser
 		result["drop_angle"] = drop_angle
 		result["drop_pos"] = handkerchief_position
-		vote_left += GameConfig.MISSED_SCENE_TIME
+		vote_wait = GameConfig.MISSED_SCENE_TIME
 	result["voting"] = true
 	result["scores"] = scores.duplicate()
 	for a in actors:

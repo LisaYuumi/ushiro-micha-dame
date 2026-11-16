@@ -25,6 +25,9 @@ var _marker: PanelContainer
 var _tag_rects := {}
 ## 牛乳で前が白い: 名札を隠す
 var _tags_hidden := false
+## 投票した人(名札にチェック)と、発表された手下(名札を紫に「手下」)
+var _voted := {}
+var _revealed := {}
 
 
 func build(state: GameState, models: Dictionary, show_personality: bool) -> void:
@@ -60,7 +63,10 @@ func build(state: GameState, models: Dictionary, show_personality: bool) -> void
 			bubbles.append(b)
 			styles.append(st)
 			labels.append(l)
-		_tags[a.id] = {"panel": p, "model": models[a.id], "bubbles": bubbles, "styles": styles, "labels": labels}
+		_tags[a.id] = {"panel": p, "model": models[a.id], "bubbles": bubbles, "styles": styles, "labels": labels,
+				"name": tag_name, "style": p.get_theme_stylebox("panel"), "mark": ""}
+	_voted.clear()
+	_revealed.clear()
 	_marker = UiStyle.pill(Locale.t("送る相手") + " ▼", 20, true)
 	(_marker.get_child(0) as Label).add_theme_color_override("font_color", GameConfig.COLOR_PAPER)
 	_marker.visible = false
@@ -68,9 +74,55 @@ func build(state: GameState, models: Dictionary, show_personality: bool) -> void
 	_target = -1
 
 
-## スタンプを送る相手を選ぶ(-1 でやめる)。その人の名札の上に「送る相手」の印が出る
-func set_send_target(id: int) -> void:
+## スタンプを送る相手を選ぶ(-1 でやめる)。その人の名札の上に「送る相手」の印が出る。
+## text: 印の文字(投票では「あなたの票」)
+func set_send_target(id: int, text: String = "") -> void:
 	_target = id
+	if _marker:
+		var want := (text if text != "" else Locale.t("送る相手")) + " ▼"
+		var l := _marker.get_child(0) as Label
+		if l.text != want:
+			l.text = want
+
+
+## 投票した人の名札にチェックをつける(だれに入れたかは出さない)
+func set_voted(ids: Array) -> void:
+	var now := {}
+	for id in ids:
+		now[int(id)] = true
+	if now == _voted:
+		return
+	_voted = now
+	_refresh_marks()
+
+
+## 発表: 手下だった人の名札を紫にして「手下」をつける(空の配列で元に戻す)
+func set_revealed(ids: Array) -> void:
+	_revealed.clear()
+	for id in ids:
+		_revealed[int(id)] = true
+	_refresh_marks()
+
+
+func _refresh_marks() -> void:
+	for id in _tags:
+		var t: Dictionary = _tags[id]
+		var l := (t["panel"] as PanelContainer).get_child(0) as Label
+		var text: String = t["name"]
+		var purple := _revealed.has(id)
+		if purple:
+			text = Locale.t("手下") + " " + text
+		elif _voted.has(id):
+			text = "✓ " + text
+		if l.text != text:
+			l.text = text
+		if purple:
+			var st := UiStyle.box(Color(0.55, 0.2, 0.7), true, 14, 3)
+			(t["panel"] as PanelContainer).add_theme_stylebox_override("panel", st)
+			UiStyle.set_font_color(l, Color.WHITE)
+		else:
+			(t["panel"] as PanelContainer).add_theme_stylebox_override("panel", t["style"])
+			UiStyle.set_font_color(l, Color("2E9E5B") if _voted.has(id) else GameConfig.COLOR_INK)
 
 
 func send_target() -> int:

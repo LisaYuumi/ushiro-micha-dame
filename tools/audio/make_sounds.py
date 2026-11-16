@@ -953,6 +953,43 @@ def chiin():
     return norm(out, 0.85)
 
 
+def vote_don():
+    # 投票の発表「ドン!」: 票が一斉に飛ぶ。低く重い、どんっ
+    d = 0.45
+    return norm(mix(thud(150, 60, d, 0.12), lowpass(noise(d), 700) * env_exp(d, 0.03) * 0.6), 0.9)
+
+
+def drumroll():
+    # ため: 小太鼓のドラムロール(だんだん大きく)
+    d = 0.6
+    out = np.zeros(int(d * SR))
+    k = 0
+    tt = 0.0
+    while tt < d - 0.05:
+        hit = mix(bandpass(noise(0.06), 900, 5000) * env_exp(0.06, 0.02), tone(200, 0.06) * env_exp(0.06, 0.015) * 0.3)
+        out = out + at(hit * (0.4 + 0.6 * tt / d) * (1.0 if k % 2 == 0 else 0.8), tt, d)
+        tt += 0.035
+        k += 1
+    return norm(out, 0.75)
+
+
+def jajaan():
+    # 手下の発表「ジャジャーン!」: 短い2つの和音と、のばす和音
+    d = 1.1
+    out = np.zeros(int(d * SR))
+    for st, ln, root in [(0.0, 0.12, 62), (0.16, 0.85, 65)]:
+        for k in (0, 4, 7, 12):
+            out = out + at(_brass(midi(root + k), ln) * 0.4, st, d)
+    out = out + at(lowpass(noise(0.5), 3000) * env_exp(0.5, 0.15) * 0.3, 0.16, d)
+    return norm(out, 0.85)
+
+
+def vote_pon():
+    # 点数「ポン」: 軽く高い、ぽんっ
+    d = 0.22
+    return norm(mix(thud(720, 420, d, 0.05), click(0.03, 1500, 5000, 0.006) * 0.4), 0.8)
+
+
 SOUNDS = {
     "drop_0": drop_0, "drop_1": drop_1, "drop_2": drop_2, "drop_3": drop_3, "drop_4": drop_4,
     "step": step, "run_step": run_step,
@@ -972,6 +1009,7 @@ SOUNDS = {
     "bgm_beach_1": bgm_beach_1, "bgm_beach_2": bgm_beach_2, "bgm_beach_3": bgm_beach_3,
     "bgm_school_1": bgm_school_1, "bgm_school_2": bgm_school_2, "bgm_school_3": bgm_school_3,
     "look_zah": look_zah, "found": found, "gaan": gaan, "tonton": tonton, "chiin": chiin,
+    "vote_don": vote_don, "drumroll": drumroll, "jajaan": jajaan, "vote_pon": vote_pon,
 }
 
 

@@ -1784,26 +1784,37 @@ func _test_two_minions() -> void:
 		_check(s5.minion_ids.size() == 1, "6人以下なら手下は1人")
 
 
-## ラウンドのあと、手下以外の全員(鬼も)で手下を当てる投票。当たれば +2
+## ラウンドのあと、教室のまま、手下以外の全員(鬼も)で手下を当てる投票。
+## 勝ち負けの演出のあとに始まり、全員がそろうまで入れ直せる。当てた人 +1、手下に1票も入らなければ手下 +1(だましきった)。
+## 発表の演出のあと、自動で次のラウンドへ
 func _test_minion_vote() -> void:
 	var s := GameState.new()
 	s.start_match(63)
 	var minion := s.get_actor_at_seat((s.drop_target_seat + 2) % GameConfig.SEAT_COUNT)
 	s.minion_ids = [minion.id]
 	var e := _run_until(s, "result", 200.0)
-	_check(e.get("voting", false) and s.voting_open, "ラウンドのあとに投票が始まる")
+	_check(not e.is_empty() and not s.voting_open and s.vote_wait > 0.0, "勝ち負けの演出の間は、まだ投票しない")
+	var vs := _run_until(s, "vote_start", GameConfig.MISSED_SCENE_TIME + 1.0)
+	_check(not vs.is_empty() and s.voting_open, "演出のあとに投票が始まる")
 	_check(not s.can_vote(minion.id), "手下は投票できない")
-	_check(s.can_vote(s.oni_id), "鬼も投票できる")
+	_check(s.can_vote(s.oni_id), "鬼も投票できる(鬼は手下がだれか知らない)")
 	_check(not (s.oni_id in s.vote_candidates(minion.id)) and not (minion.id in s.vote_candidates(minion.id)),
 			"投票の相手に、鬼と自分は入らない")
+	_check(not s.can_skip_vote(), "「発表へ」は、始まってすぐは押せない")
 	var before: Dictionary = s.scores.duplicate()
 	var voters := []
 	for a in s.actors:
 		if not s.is_minion(a.id):
 			voters.append(a.id)
-	# 1人目は手下に当てる、ほかははずす
-	_check(s.cast_vote(voters[0], minion.id if voters[0] != minion.id else voters[1]), "投票できる")
-	_check(not s.cast_vote(voters[0], minion.id), "2回は投票できない")
+	_check(voters.size() == s.voter_count(), "投票する人の数")
+	var wrong0 := -1
+	for c in s.vote_candidates(voters[0]):
+		if c != minion.id:
+			wrong0 = c
+			break
+	# 1人目は、はずれに入れてから手下に入れ直す
+	_check(s.cast_vote(voters[0], wrong0), "投票できる")
+	_check(s.cast_vote(voters[0], minion.id) and s.votes[voters[0]] == minion.id, "全員がそろうまでは入れ直せる")
 	_check(s.snapshot(voters[1])["voted"].has(voters[0]), "だれが投票したかは状態で届く(だれに入れたかは届かない)")
 	_check(not s.snapshot(voters[1]).has("votes"), "だれに入れたかは、発表まで届かない")
 	var result_ev := {}
@@ -1817,45 +1828,68 @@ func _test_minion_vote() -> void:
 	for ev in s.take_events():
 		if ev["type"] == "vote_result":
 			result_ev = ev
-	_check(not result_ev.is_empty() and not s.voting_open, "全員が投票したら発表")
+	_check(not result_ev.is_empty() and not s.voting_open, "全員が投票したら、すぐ発表")
 	_check(result_ev.get("correct", []) == [voters[0]], "当てた人だけが当たり")
 	_check(s.scores[voters[0]] == before[voters[0]] + GameConfig.SCORE_VOTE_CORRECT, "当てたら +%d" % GameConfig.SCORE_VOTE_CORRECT)
 	_check(s.scores[voters[1]] == before[voters[1]], "はずれは 0 点")
+	_check(int((result_ev.get("tally", {}) as Dictionary).get(minion.id, 0)) == 1, "票の数が発表に入る")
+	_check(result_ev.get("fooled", []).is_empty() and result_ev.get("busted", []).is_empty(), "1票だけなら、だましきってもバレバレでもない")
+	var round_before := s.round_index
+	_run_until(s, "round_start", GameState.reveal_time() + 1.0)
+	_check(s.round_index == round_before + 1 and s.phase != GameState.Phase.RESULT, "発表の演出のあと、自動で次のラウンドへ")
 
-	# 手下が2人: どちらかに当たれば +2。時間が来たら締めきる
+	# だれも手下に入れなかった: 手下に +1(だましきった!)。ルーム主の「発表へ」は5秒たってから
 	var s2 := GameState.new()
 	s2.start_match(63)
 	var ma := s2.get_actor_at_seat((s2.drop_target_seat + 2) % GameConfig.SEAT_COUNT)
 	var mb := s2.get_actor_at_seat((s2.drop_target_seat + 4) % GameConfig.SEAT_COUNT)
 	s2.minion_ids = [ma.id, mb.id]
-	_run_until(s2, "result", 200.0)
+	_run_until(s2, "vote_start", 200.0)
 	var b2: Dictionary = s2.scores.duplicate()
 	s2.cast_vote(s2.oni_id, mb.id)
 	_check(s2.voting_open, "まだ投票していない人がいれば、発表しない")
-	var r2 := _run_until(s2, "vote_result", GameConfig.VOTE_TIME + GameConfig.MISSED_SCENE_TIME + 1.0)
-	_check(not r2.is_empty(), "時間が来たら発表")
+	_check(not s2.skip_vote(), "始まってすぐは「発表へ」できない")
+	for i in int((GameConfig.VOTE_SKIP_DELAY + 0.2) / STEP):
+		s2.tick(STEP)
+	_check(s2.skip_vote() and not s2.voting_open, "5秒たったら「発表へ」で、投票していない人がいても発表")
+	var r2 := {}
+	for ev in s2.take_events():
+		if ev["type"] == "vote_result":
+			r2 = ev
 	_check(s2.scores[s2.oni_id] == b2[s2.oni_id] + GameConfig.SCORE_VOTE_CORRECT, "手下が2人なら、どちらに当てても +%d" % GameConfig.SCORE_VOTE_CORRECT)
+	_check(r2.get("fooled", []) == [ma.id] and s2.scores[ma.id] == b2[ma.id] + GameConfig.SCORE_MINION_FOOLED,
+			"1票も入らなかった手下は「だましきった!」で +%d" % GameConfig.SCORE_MINION_FOOLED)
+	_check(r2.get("busted", []) == [mb.id], "投票した全員が入れた手下は「バレバレ!」")
 
-	# 次のラウンドへ進むと、投票は締めきられる
+	# 画面には出さないが、2分たったら自動で発表
 	var s3 := GameState.new()
 	s3.start_match(63)
-	_run_until(s3, "result", 200.0)
-	s3.next_round()
-	_check(not s3.voting_open, "次のラウンドで投票は終わる")
+	_run_until(s3, "vote_start", 200.0)
+	var r3 := _run_until(s3, "vote_result", GameConfig.VOTE_TIMEOUT + 1.0)
+	_check(not r3.is_empty(), "2分たったら自動で発表")
 
-	# ボットも投票する
+	# ボットも数秒で投票する(1回だけ)
 	var s4 := GameState.new()
 	s4.start_match(63)
 	var brain := BotBrain.new()
-	_run_until(s4, "result", 200.0)
+	_run_until(s4, "vote_start", 200.0)
 	# 人(ボットでない人)は先に投票しておく
 	for a in s4.actors:
 		if not a.is_bot and s4.can_vote(a.id):
 			s4.cast_vote(a.id, s4.vote_candidates(a.id)[0])
-	for i in int(6.0 / STEP):
+	for i in int((GameConfig.BOT_VOTE_DELAY_MAX + 1.0) / STEP):
 		brain.update(s4, STEP)
 		s4.tick(STEP)
-	_check(not s4.voting_open, "ボットだけなら、ボットが全員投票して発表される")
+	_check(not s4.voting_open, "ボットが全員投票して発表される")
+
+	# 最後のラウンドの発表のあとは、試合おわり
+	var s5 := GameState.new()
+	s5.start_match(63)
+	s5.round_index = GameConfig.ROUNDS_PER_MATCH - 1
+	_run_until(s5, "vote_start", 200.0)
+	s5.close_vote()
+	var mo := _run_until(s5, "match_over", GameState.reveal_time() + 1.0)
+	_check(not mo.is_empty() and s5.match_over, "最後のラウンドの発表のあとは、試合おわり")
 
 
 ## 舞台: 海辺の落とし物と、状態で届く舞台
@@ -2005,7 +2039,7 @@ func _test_missed_replay_data() -> void:
 	var list: Array = e.get("missed_stamps", [])
 	_check(not sent or (list.size() >= 1 and not list[0]["truthful"]), "気づかなかった人に届いた嘘のスタンプが結果に入る")
 	_check(e.has("drop_pos") and e.has("drop_angle"), "落とした場所が結果に入る")
-	_check(s.vote_left > GameConfig.VOTE_TIME, "見逃しの演出のぶん、投票の時間がのびる")
+	_check(s.vote_wait >= GameConfig.MISSED_SCENE_TIME - 0.01, "見逃しの演出のぶん、投票を始めるのを遅らせる")
 	# 演出(振り向き・顔のアップ・チーン)は、のばした投票の時間におさまる
 	var scene := GameConfig.MISSED_LOOK_TIME + GameConfig.MISSED_TURN_TIME + GameConfig.MISSED_FACE_TIME + GameConfig.MISSED_CHIIN_TIME
 	_check(scene + 1.0 <= GameConfig.MISSED_SCENE_TIME, "見逃しの演出は %.1f 秒(投票をのばす %.1f 秒におさまる)" % [scene, GameConfig.MISSED_SCENE_TIME])

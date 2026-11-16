@@ -190,6 +190,9 @@ func build(state: GameState) -> void:
 	_ms.clear()
 	_item_head_id = -1
 	_missed_sit.clear()
+	_reveal_faces.clear()
+	if _vote_view:
+		_vote_view = false
 	_shake_left = 0.0
 	_obstacle_nodes.clear()
 	_milk_nodes.clear()
@@ -292,6 +295,7 @@ func sync(state: GameState, delta: float) -> void:
 			_update_milk(state, a, model)
 	_update_missed_scene(state, delta)
 	_update_seat_camera(state, delta)
+	_update_vote_view(state, delta)
 	if _overlay:
 		_overlay.update(state, get_viewport().get_camera_3d())
 	if _blackout:
@@ -638,11 +642,17 @@ func _update_expression(state: GameState, a: GameState.Actor, model: CharacterMo
 	var ms_expr := _ms_expression(a.id)
 	if ms_expr != "":
 		expr = ms_expr
+	# 手下の発表: 手下はニヤッ、バレバレなら放心
+	var rf: String = _reveal_faces.get(a.id, "")
+	if rf == "smirk":
+		expr = CharacterModel.SMIRK
+	elif rf == "dazed":
+		expr = CharacterModel.NORMAL
 	model.set_expression(expr)
 	# お手つきの回数で、顔がだんだん崩れていく(3回目は放心)
 	# お手つきで抜けた人は放心の顔(ズッコケてから、体育座りしている間も)
 	var dazed := _dazed.has(a.id) or a.otetsuki_count >= GameConfig.OTETSUKI_DAZED_COUNT or a.role == GameState.Role.OUT \
-			or _ms_dazed(a.id)
+			or _ms_dazed(a.id) or rf == "dazed"
 	model.set_fluster(CharacterModel.FLUSTER_MAX if dazed else mini(a.otetsuki_count, 2))
 	# 振り向いた瞬間にピョンと跳ねる
 	if a.looking_back and not _was_looking.get(a.id, false):
@@ -1920,6 +1930,93 @@ func set_stamp_target(state: GameState, id: int) -> void:
 		# ふわっと明るくなったり暗くなったりする
 		var k := 1.0 + 0.06 * sin(_clock * 6.0)
 		_stamp_ring.scale = Vector3(k, 1.0, k)
+
+
+# --- 手下を当てる投票(教室のまま) ---
+## 投票と発表の間は、自分の席のうしろの少し高いところから、輪の全員が見えるように映す(なめらかに動く)
+var _vote_view := false
+var _vote_view_t := 0.0
+var _vote_from := Transform3D.IDENTITY
+## 発表で変える表情(id -> "smirk" / "dazed")
+var _reveal_faces := {}
+
+
+func set_vote_view(on: bool) -> void:
+	if on == _vote_view:
+		return
+	_vote_view = on
+	_vote_view_t = 0.0
+	if on:
+		var cam := get_viewport().get_camera_3d()
+		_vote_from = cam.global_transform if cam else _seat_cam.global_transform
+		_top_cam.fov = 55.0
+		_top_cam.global_transform = _vote_from
+		_top_cam.make_current()
+	else:
+		_reveal_faces.clear()
+		if _seat_cam:
+			_seat_cam.make_current()
+
+
+func is_vote_view() -> bool:
+	return _vote_view
+
+
+func _update_vote_view(state: GameState, delta: float) -> void:
+	if not _vote_view:
+		return
+	_vote_view_t += delta
+	var me := state.get_local_player()
+	var base := Vector3(0, 0, 1)
+	if me:
+		var p := me.position
+		if me.role == GameState.Role.OUT and me.home_seat >= 0 and me.home_seat < state.seat_positions.size():
+			p = state.seat_positions[me.home_seat]
+		elif me.role == GameState.Role.SEATED and me.seat_index >= 0:
+			p = state.seat_positions[me.seat_index]
+		if Vector2(p.x, p.z).length() > 0.3:
+			base = Vector3(p.x, 0.0, p.z).normalized()
+	# (上の「鬼の手下は誰?」の札の下に輪が入るように、少し遠く・奥をねらう)
+	var want := Transform3D.IDENTITY.translated(base * (GameConfig.RING_RADIUS + 3.6) + Vector3(0, 4.0, 0))
+	want = want.looking_at(Vector3(0, 1.0, 0) - base * 1.6, Vector3.UP)
+	var k := clampf(_vote_view_t / 0.7, 0.0, 1.0)
+	k = k * k * (3.0 - 2.0 * k)
+	_top_cam.global_transform = _vote_from.interpolate_with(want, k)
+
+
+## 画面のこの位置にいる人の id(自分以外。だれでも。いなければ -1)。投票でタップした人
+func pick_any_actor(state: GameState, screen_pos: Vector2) -> int:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return -1
+	var best := -1
+	var best_dist := 80.0
+	for a in state.actors:
+		if a.id == state.local_player_id:
+			continue
+		var node: Node3D = _actor_nodes.get(a.id)
+		if node == null:
+			continue
+		for h in [0.5, 0.9, 1.35]:
+			var p: Vector3 = node.global_position + Vector3(0, h, 0)
+			if cam.is_position_behind(p):
+				continue
+			var d := cam.unproject_position(p).distance_to(screen_pos)
+			if d < best_dist:
+				best_dist = d
+				best = a.id
+	return best
+
+
+## 発表の表情: 手下はニヤッと笑う(smirk)、バレバレの手下は放心(dazed)。空で元に戻す
+func set_reveal_faces(faces: Dictionary) -> void:
+	_reveal_faces = faces.duplicate()
+
+
+## 画面の上の位置(人の頭の上・体のまん中)。発表の矢印や指マークに使う
+func actor_point(id: int, height: float) -> Vector3:
+	var node: Node3D = _actor_nodes.get(id)
+	return (node.global_position if node else Vector3.ZERO) + Vector3(0, height, 0)
 
 
 ## 頭の上の名札とスタンプ(2D)

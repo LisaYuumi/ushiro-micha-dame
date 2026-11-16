@@ -43,6 +43,15 @@ var _card_back: Control
 var _flipping := false
 ## 手下を当てる投票: 得点の札(id -> {"panel", "style", "score", "delta", "col", "base"})・投票中か・自分が投票できるか・自分の投票・案内の札
 signal vote_pressed(target_id: int)
+## ルーム主の「発表へ」を押した
+signal skip_vote_pressed
+## 教室のままの投票: 上の「鬼の手下は誰?」と「4/6人 投票済み」、ルーム主の「発表へ」
+var _vote_box: VBoxContainer
+var _vote_panel: PanelContainer
+var _vote_title: Label
+var _vote_count: PanelContainer
+var _vote_hint: Label
+var _skip_button: Button
 var _chips := {}
 var _vote_open := false
 var _can_vote := false
@@ -500,6 +509,12 @@ func _input(event: InputEvent) -> void:
 	if not tap:
 		return
 	var pos: Vector2 = event.position
+	if _skip_button and _skip_button.is_visible_in_tree() and not _skip_button.disabled \
+			and _skip_button.get_global_rect().grow(6.0).has_point(pos):
+		AudioDirector.click()
+		skip_vote_pressed.emit()
+		get_viewport().set_input_as_handled()
+		return
 	if _next_button and _next_button.is_visible_in_tree() and _next_button.get_global_rect().has_point(pos):
 		if event is InputEventScreenTouch:
 			_press_next()
@@ -1147,6 +1162,76 @@ func _build_stamp_display() -> void:
 	add_child(_badge)
 	_badge.position = Vector2(UiStyle.SAFE, 72)
 	_badge.visible = false
+
+
+## 教室のままの投票の表示。show: 投票中か / voted・total: 投票した人数 / hint: 下の小さな案内 /
+## skip: ルーム主の「発表へ」を出すか / skip_ready: 押せるか(始まって5秒たったか)
+func set_vote_ui(show: bool, voted: int = 0, total: int = 0, hint: String = "", skip: bool = false, skip_ready: bool = false) -> void:
+	if _vote_box == null:
+		if not show:
+			return
+		_build_vote_ui()
+	_vote_panel.visible = show
+	_skip_button.visible = show and skip
+	if not show:
+		return
+	var count_text := tr("%d/%d人 投票済み") % [voted, total]
+	var cl := _vote_count.get_child(0) as Label
+	if cl.text != count_text:
+		cl.text = count_text
+	if _vote_hint.text != hint:
+		_vote_hint.text = hint
+	if _skip_button.disabled == skip_ready:
+		_skip_button.disabled = not skip_ready
+		_skip_button.modulate.a = 1.0 if skip_ready else 0.5
+
+
+func _build_vote_ui() -> void:
+	# 名札より上に出す(上の層)。白い札にまとめて、うしろの名札と重なっても読めるように
+	var panel := PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var st := UiStyle.box(Color(1, 1, 1, 0.92), true, 20, 4)
+	st.content_margin_left = 22
+	st.content_margin_right = 22
+	st.content_margin_top = 4
+	st.content_margin_bottom = 8
+	panel.add_theme_stylebox_override("panel", st)
+	panel.anchor_left = 0.5
+	panel.anchor_right = 0.5
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.offset_top = 56
+	_top.add_child(panel)
+	_vote_box = VBoxContainer.new()
+	_vote_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_vote_box.add_theme_constant_override("separation", 2)
+	panel.add_child(_vote_box)
+	_vote_panel = panel
+	_vote_title = _make_label(40, Color(0.55, 0.2, 0.7))
+	_vote_title.text = tr("鬼の手下は誰?")
+	_vote_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_vote_title.add_theme_constant_override("outline_size", 12)
+	_vote_box.add_child(_vote_title)
+	_vote_count = UiStyle.pill("", 22)
+	_vote_count.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_vote_box.add_child(_vote_count)
+	_vote_hint = _make_label(20, GameConfig.COLOR_INK)
+	_vote_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_vote_box.add_child(_vote_hint)
+	_skip_button = Button.new()
+	_skip_button.text = tr("発表へ ▶")
+	_skip_button.custom_minimum_size = Vector2(240, 66)
+	UiStyle.button(_skip_button, true, 28)
+	_skip_button.pressed.connect(func() -> void: skip_vote_pressed.emit())
+	_skip_button.anchor_left = 0.5
+	_skip_button.anchor_right = 0.5
+	_skip_button.anchor_top = 1.0
+	_skip_button.anchor_bottom = 1.0
+	_skip_button.offset_left = -120
+	_skip_button.offset_right = 120
+	_skip_button.offset_top = -66 - UiStyle.SAFE
+	_skip_button.offset_bottom = -UiStyle.SAFE
+	_skip_button.visible = false
+	_top.add_child(_skip_button)
 
 
 func _make_label(size: int, color: Color) -> Label:

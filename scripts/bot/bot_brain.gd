@@ -60,11 +60,13 @@ func update(state: GameState, delta: float) -> void:
 				_update_banana(state, a, delta)
 
 
-## 勝敗のあとの投票: ボットも、少し考えてから手下だと思う人に投票する。
-## このラウンドで嘘のスタンプをたくさん送った人(鬼をのぞく)を選びやすい。手がかりがなければ当てずっぽう
+## 勝敗のあとの投票: ボットも、数秒考えてから手下だと思う人に投票する(1回だけ)。
+## このラウンドで嘘のスタンプを送った人(鬼をのぞく)を選びやすい。とくに自分に嘘を送ってきた人は2倍あやしい。
+## 手がかりがなければ当てずっぽう
 func _update_votes(state: GameState, delta: float) -> void:
 	for a in state.actors:
-		if not a.is_bot or not state.can_vote(a.id):
+		# (人は入れ直せるが、ボットは1回だけ投票する)
+		if not a.is_bot or not state.can_vote(a.id) or state.votes.has(a.id):
 			continue
 		if not _vote_left.has(a.id):
 			_vote_left[a.id] = rng.randf_range(GameConfig.BOT_VOTE_DELAY_MIN, GameConfig.BOT_VOTE_DELAY_MAX)
@@ -75,10 +77,14 @@ func _update_votes(state: GameState, delta: float) -> void:
 		var cands: Array = state.vote_candidates(a.id)
 		if cands.is_empty():
 			continue
+		var to_me := {}
+		for st in state.stamp_log:
+			if int(st["target"]) == a.id and not bool(st.get("truthful", true)):
+				to_me[int(st["sender"])] = int(to_me.get(int(st["sender"]), 0)) + 1
 		var best := -1
 		var best_lies := 0
 		for c in cands:
-			var n: int = int(state.lie_counts.get(c, 0))
+			var n: int = int(state.lie_counts.get(c, 0)) + int(to_me.get(c, 0))
 			if n > best_lies or (n == best_lies and n > 0 and rng.randf() < 0.5):
 				best = c
 				best_lies = n

@@ -209,10 +209,23 @@ const SCORE_DECEIVE_ONI := 1
 ## 8人のとき(席がこの数以上)、手下が2人になる確率
 const MINION_TWO_MIN_SEATS := 7
 const MINION_TWO_CHANCE := 0.33
-## 勝敗のあとの、手下を当てる投票: 当たった人の点数と、投票の時間(秒。全員が投票したらすぐ発表)
-const SCORE_VOTE_CORRECT := 2
-const VOTE_TIME := 20.0
-## 見逃しの演出(トントン→振り向く→顔のアップ→放心→とぼとぼ)のぶん、投票の時間をのばす(秒)
+## 勝敗のあとの、手下を当てる投票(教室のまま。話し合いの時間を兼ねる。残り時間は出さない)
+## 手下に投票した人の点数 / 手下に1票も入らなかったときの手下の点数(だましきった!)
+const SCORE_VOTE_CORRECT := 1
+const SCORE_MINION_FOOLED := 1
+## 勝ち負けの演出(見出しの文字)を見せてから投票を始めるまでの秒数(見逃しのときは MISSED_SCENE_TIME)
+const VOTE_INTRO_TIME := 2.2
+## ルーム主の「発表へ」は、投票が始まってこの秒数たってから押せる(押し間違いを防ぐ)
+const VOTE_SKIP_DELAY := 5.0
+## 画面には出さないが、投票が始まってこの秒数たったら自動で発表へ(ルーム主がいなくなったときの安全策)
+const VOTE_TIMEOUT := 120.0
+## 発表の演出の秒数: 票が飛ぶ / ため(ドラムロール) / 手下の発表 / 点数 / 次のラウンドへ進むまでの余韻
+const REVEAL_ARROWS_TIME := 1.0
+const REVEAL_DRUM_TIME := 0.5
+const REVEAL_SHOW_TIME := 1.0
+const REVEAL_POINTS_TIME := 0.5
+const REVEAL_HOLD_TIME := 1.0
+## 見逃しの演出(トントン→振り向く→顔のアップ→放心→とぼとぼ)のぶん、投票を始めるのを遅らせる(秒)
 ## (下の演出の秒数の合計より長くしておく)
 const MISSED_SCENE_TIME := 6.0
 ## 見逃しの演出の秒数: トントンから振り向きはじめるまで / 振り向いてから顔のアップまで / 顔のアップ / 放心(チーン)

@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(281)
+## 一覧(293)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -231,6 +231,18 @@
 | ウソ | Lie |
 | ウソ: %s | Lied: %s |
 | トントン | Tap tap |
+| 鬼の手下は誰? | Who is the Oni's helper? |
+| %d/%d人 投票済み | %d/%d voted |
+| 発表へ ▶ | Reveal ▶ |
+| あやしい人をタップして投票! | Tap a suspect to vote! |
+| あなたは手下。バレないように! | You are the helper. Don't get caught! |
+| %s に投票した(入れ直せる) | Voted for %s (you can change it) |
+| あなたの票 | Your vote |
+| 手下! | Helper! |
+| 手下 | Helper |
+| バレバレ! | Busted! |
+| だましきった! | Fooled them all! |
+| ちがうよ! | Not me! |
 | チーン… | Ding… |
 | 音がガタガタ割れるときは「なめらか」を試してね | If the sound crackles, try "Smooth" |
 | 音の鳴らし方: %s ▶ | Sound mode: %s ▶ |
