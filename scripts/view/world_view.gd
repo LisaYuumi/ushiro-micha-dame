@@ -1976,6 +1976,9 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 				face = c / float(eyes.size()) - head
 			face.y = 0.0
 			face = face.normalized() if face.length() > 0.001 else Vector3.FORWARD
+			if not _out_anim[me.id].has("dbg"):
+				_out_anim[me.id]["dbg"] = true
+				print("face dbg: eyes=%d face=%s basis_z=%s head=%s cam_from=%s" % [eyes.size(), str(face), str(model.global_transform.basis.z), str(head), str(_seat_cam.global_position)])
 			var t_face: float = _out_anim[me.id]["t"]
 			# 顔のアップから、崩れ落ちるときは少し引いて、下がる体を追う
 			var pull := clampf((t_face - OUT_FACE_TIME) / OUT_FALL_TIME, 0.0, 1.0)
