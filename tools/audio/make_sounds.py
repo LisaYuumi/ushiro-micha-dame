@@ -578,6 +578,96 @@ def _bgm_school(level):
     return norm(_render_song(bpm, bars, parts), 0.75)
 
 
+# --- 海辺: スチールドラム・ウクレレ・シェイカーの南国の音 ---
+
+def _steel(freq, d):
+    # スチールドラム: 金属の太鼓をポワンとたたいた音(倍音が少しずれていて、音の頭が少し上から下がる)
+    dd = min(d + 0.3, 1.2)
+    t = t_of(dd)
+    f = freq * (1.0 + 0.012 * np.exp(-t / 0.03))
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    w = (np.sin(ph) * np.exp(-t / 0.45) + 0.5 * np.sin(2.0 * ph) * np.exp(-t / 0.25)
+         + 0.25 * np.sin(3.02 * ph) * np.exp(-t / 0.12) + 0.12 * np.sin(4.1 * ph) * np.exp(-t / 0.06))
+    return w * np.minimum(t / 0.004, 1.0)
+
+
+def _uke(freq, d):
+    # ウクレレ: ナイロン弦の、明るくて軽いはじいた音
+    return pluck(freq, min(d, 0.6), 0.18, 0.55)
+
+
+def _uke_strum(root, minor, d):
+    # ウクレレのジャカッ(4本の弦を少しずつずらして鳴らす)
+    notes = [root + 12 + n for n in ([0, 3, 7, 12] if minor else [0, 4, 7, 12])]
+    total = d + 0.06
+    out = np.zeros(int(total * SR))
+    for k, n in enumerate(notes):
+        w = _uke(midi(n), d)
+        st = int(k * 0.012 * SR)
+        out[st: st + len(w)] += w[: len(out) - st]
+    return out
+
+
+def _shaker(d):
+    dd = min(d, 0.09)
+    return highpass(noise(dd), 5500) * env_ar(dd, 0.02, 0.06)
+
+
+def beach_start():
+    # 海辺のラウンド開始: スチールドラムのジングル(ド・ミ・ソ・ド〜、ソ・ラ・ド〜)
+    notes = [(65, 0.0), (69, 0.14), (72, 0.28), (77, 0.42), (72, 0.7), (74, 0.84), (77, 0.98)]
+    d = 2.0
+    out = np.zeros(int(d * SR))
+    for n, st in notes:
+        out = out + at(_steel(midi(n), 0.4), st, d)
+    out = out + at(_shaker(0.1) * 0.5, 0.42, d) + at(_shaker(0.1) * 0.5, 0.98, d)
+    return norm(out, 0.8)
+
+
+def _bgm_beach(level):
+    # 海辺のラウンド中: ゆったりした南国の曲(ヘ長調)。ウクレレの裏打ちとスチールドラムのメロディ。
+    # 音を少し短く切って、のんびりの中にドキドキ感。ラウンドが進むほど楽器が増えて少し速くなる。鬼との距離では変えない
+    bpm = [96, 100, 106][level - 1]
+    bars = 8
+    prog = [(65, False), (70, False), (72, False), (65, False), (62, True), (70, False), (72, False), (65, False)]
+    melody = [77, 0, 76, 74, 72, 0, 69, 0, 70, 72, 74, 0, 72, 0, 0, 0,
+              69, 0, 70, 72, 74, 72, 70, 69, 67, 0, 69, 72, 65, 0, 0, 0]
+    parts = []
+    for b, (root, minor) in enumerate(prog):
+        # ウクレレ: 裏拍にジャカッ(レゲエのように)
+        for k in [0.5, 1.5, 2.5, 3.5]:
+            parts.append((b * 4 + k, 0.35, lambda d, r=root, m=minor: _uke_strum(r, m, d), 0.16))
+        # ベース(やわらかいはじいた音): 1拍目と3拍目
+        parts.append((b * 4, 0.9, lambda d, r=root: pluck(midi(r - 24), d, 0.2, 0.25), 0.4))
+        parts.append((b * 4 + 2, 0.9, lambda d, r=root: pluck(midi(r - 17), d, 0.2, 0.25), 0.3))
+        if level >= 2:
+            # シェイカー: 8分でシャカシャカ
+            for k in range(8):
+                parts.append((b * 4 + k * 0.5, 0.2, _shaker, 0.1 if k % 2 else 0.06))
+        if level >= 3:
+            # 低い太鼓(ドン)と、スチールドラムの和音
+            parts.append((b * 4, 0.4, _kick, 0.3))
+            parts.append((b * 4 + 2.5, 0.4, _kick, 0.2))
+            for n in _chord_notes(root, minor):
+                parts.append((b * 4 + 1, 0.4, lambda d, n=n: _steel(midi(n), d), 0.04))
+    for i, n in enumerate(melody):
+        if n:
+            parts.append((i * 1.0, 0.5, lambda d, n=n: _steel(midi(n), d), 0.2))
+    return norm(_render_song(bpm, bars, parts), 0.75)
+
+
+def bgm_beach_1():
+    return _bgm_beach(1)
+
+
+def bgm_beach_2():
+    return _bgm_beach(2)
+
+
+def bgm_beach_3():
+    return _bgm_beach(3)
+
+
 def bgm_school_1():
     return _bgm_school(1)
 
@@ -817,6 +907,8 @@ SOUNDS = {
     "drop_beach_3": drop_beach_3, "drop_beach_4": drop_beach_4,
     "step_sand": step_sand, "run_step_sand": run_step_sand, "amb_beach": amb_beach,
     "eraser_pon": eraser_pon,
+    "beach_start": beach_start,
+    "bgm_beach_1": bgm_beach_1, "bgm_beach_2": bgm_beach_2, "bgm_beach_3": bgm_beach_3,
     "bgm_school_1": bgm_school_1, "bgm_school_2": bgm_school_2, "bgm_school_3": bgm_school_3,
     "look_zah": look_zah, "found": found, "gaan": gaan, "tonton": tonton, "chiin": chiin,
 }

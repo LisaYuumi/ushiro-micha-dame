@@ -412,7 +412,7 @@ func _update_music(delta: float) -> void:
 		match state.phase:
 			GameState.Phase.WALKING, GameState.Phase.DROPPED:
 				# 教室は小学校っぽい曲(リコーダー・木琴・鍵盤ハーモニカ)、海辺は今までの曲
-				want = ("bgm_round_%d" if state.stage == "beach" else "bgm_school_%d") % _round_level()
+				want = ("bgm_beach_%d" if state.stage == "beach" else "bgm_school_%d") % _round_level()
 			GameState.Phase.CHASE:
 				want = "bgm_chase"
 			_:
@@ -506,12 +506,11 @@ func _send_to_guests(events: Array, delta: float) -> void:
 func _update_my_stamps() -> void:
 	var list := []
 	for st in state.active_stamps.get(state.local_player_id, []):
-		var sender := state.get_actor(st["sender"])
 		list.append({
 			"kind": st["kind"],
 			"text": HeadOverlay.stamp_text(state, st["sender"], st["kind"]),
 			"sender": HeadOverlay.sender_name(state, st["sender"]),
-			"sender_color": sender.color if sender else Color.WHITE,
+			"sender_color": HeadOverlay.sender_color(state, st["sender"]),
 		})
 	hud.show_my_stamps(list)
 
@@ -537,7 +536,8 @@ func _on_missed_replay(r: Dictionary) -> void:
 		var a := state.get_actor(sender)
 		var truthful: bool = st["truthful"]
 		lines.append({
-			"text": "%s:%s" % [HeadOverlay.sender_name(state, sender), HeadOverlay.stamp_text(state, sender, st["kind"])],
+			# (答え合わせなので、5人のときも送った人の名前を出す)
+			"text": "%s:%s" % [_name(sender) if sender != state.local_player_id else tr("あなた"), HeadOverlay.stamp_text(state, sender, st["kind"])],
 			"color": a.color if a else Color.WHITE,
 			"tag": tr("ホント") if truthful else tr("ウソ"),
 			"tag_color": Color("2E9E5B") if truthful else Color("E5483B"),
@@ -947,7 +947,8 @@ func _show_event(e: Dictionary) -> void:
 			_show_match_result()
 		"round_start":
 			# ラウンド開始: 学校のチャイムのような音
-			audio.play("chime", -6.0)
+			# (海辺はスチールドラムのジングル)
+			audio.play("beach_start" if state.stage == "beach" else "chime", -6.0)
 		"blackout":
 			# 停電イベント(音は WorldView が鳴らす)
 			hud.show_message(tr("停電!"), Color(0.15, 0.15, 0.35), 1.8)

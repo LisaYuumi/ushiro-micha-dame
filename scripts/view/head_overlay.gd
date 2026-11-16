@@ -153,7 +153,7 @@ func update(state: GameState, cam: Camera3D) -> void:
 				continue
 			var st: Dictionary = list[i]
 			var sender := state.get_actor(st["sender"])
-			var col: Color = sender.color if sender else Color.WHITE
+			var col: Color = sender_color(state, st["sender"])
 			UiStyle.set_bg(t["styles"][i] as StyleBoxFlat, col)
 			var l: Label = t["labels"][i]
 			l.text = "%s:%s" % [sender_name(state, st["sender"]), stamp_text(state, st["sender"], st["kind"])]
@@ -191,12 +191,27 @@ static func stamp_text(state: GameState, sender: int, kind: String) -> String:
 	return Texts.stamp(kind, word)
 
 
+## 5人のとき(4席)は、正面の人の後ろしか見えないので、スタンプの送り主は「だれか」にする(鬼と自分は別)
+static func is_anonymous(state: GameState, id: int) -> bool:
+	return state.seat_count <= 4 and id != state.oni_id and id != state.local_player_id
+
+
+## 吹き出しの色: 送った人の体の色(送り主を出さないときは灰色)
+static func sender_color(state: GameState, id: int) -> Color:
+	if is_anonymous(state, id):
+		return Color("B7B1A7")
+	var a := state.get_actor(id)
+	return a.color if a else Color.WHITE
+
+
 ## 吹き出しに出す、送った人の名前(自分は「あなた」、鬼は「鬼」、ボットの性格は出さない)
 static func sender_name(state: GameState, id: int) -> String:
 	if id == state.local_player_id:
 		return Locale.t("あなた")
 	if id == state.oni_id:
 		return Locale.t("鬼")
+	if is_anonymous(state, id):
+		return Locale.t("だれか")
 	var a := state.get_actor(id)
 	if a == null:
 		return "?"

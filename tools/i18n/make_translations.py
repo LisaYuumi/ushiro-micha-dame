@@ -255,6 +255,7 @@ EN = {
     "ガーン!": "Oh no!",
     "画面のゆれ: %s": "Screen shake: %s",
     "ホント": "True",
+    "だれか": "Someone",
     "ウソ": "Lie",
     "%s に届いたスタンプ": "Stamps sent to %s",
     "ウソ: %s": "Lied: %s",
