@@ -120,6 +120,17 @@ func update(state: GameState, cam: Camera3D) -> void:
 			p.visible = false
 			continue
 		var r := Rect2(sp - Vector2(sz.x / 2.0, sz.y), sz)
+		if r.position.y < TOP_LIMIT:
+			# 頭の上に名札の場所がない(近くて頭が画面の上のほうに大きく映っている): 顔にかぶらないように、頭の横に出す
+			var head := anchor - Vector3(0, CharacterModel.HEAD_RADIUS + 0.22, 0)
+			if not cam.is_position_behind(head):
+				var hc := cam.unproject_position(head)
+				var edge := cam.unproject_position(head + cam.global_transform.basis.x * CharacterModel.HEAD_RADIUS * 1.15)
+				var rad := absf(edge.x - hc.x)
+				var right_x := hc.x + rad + 6.0
+				var left_x := hc.x - rad - 6.0 - sz.x
+				var x := right_x if right_x + sz.x <= vp.x - UiStyle.SAFE or left_x < UiStyle.SAFE else left_x
+				r.position = Vector2(x, hc.y - sz.y / 2.0)
 		r.position.x = clampf(r.position.x, UiStyle.SAFE, vp.x - UiStyle.SAFE - sz.x)
 		r.position.y = clampf(r.position.y, TOP_LIMIT, vp.y - sz.y - 8.0)
 		# 重なったら上へずらす。上の端に当たるときは下へずらす
