@@ -1050,6 +1050,10 @@ func _show_result(r: Dictionary) -> void:
 		var row := _score_row_for(id, scores, true)
 		if can_vote and id != me and id != state.oni_id:
 			row["id"] = id
+		if id == state.oni_id:
+			# 鬼の札には「鬼」と出す(鬼は手下ではないので、投票できない。投票中は薄くする)
+			row["mark"] = tr("鬼")
+			row["no_vote"] = can_vote
 		rows.append(row)
 	var vote := {"open": voting, "can_vote": can_vote}
 	var last := state.round_index + 1 >= GameConfig.ROUNDS_PER_MATCH

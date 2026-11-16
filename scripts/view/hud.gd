@@ -47,6 +47,8 @@ var _chips := {}
 var _vote_open := false
 var _can_vote := false
 var _my_vote := -1
+## 投票中に薄くしている札(鬼の札。投票できないので)。発表で元に戻す
+var _no_vote_chips: Array[Control] = []
 var _card_hint_label: Label
 ## 役のお知らせカード(手下になったときなど)。しばらくすると消える
 var _popup: PanelContainer
@@ -169,7 +171,7 @@ func set_round_info(round_text: String, item_text: String, extra_text: String, s
 
 ## 結果カードを出す。
 ## title: 大きい見出し / sub: その下の一言 / notes: 小さい札(がまん・手下の発表など)/ color: 見出しの色 /
-## rows: [{"name", "color", "score", "delta", "me", "mark"}](この順に並べる)/ footer: いちばん下の案内
+## rows: [{"name", "color", "score", "delta", "me", "mark", "id"(投票できる札), "no_vote"(投票中は薄くする札)}](この順に並べる)/ footer: いちばん下の案内
 ## next_label: 「次へ」ボタンの文字("" なら出さない。ホストとひとりのときだけ出す)
 ## rows の札に "id" があれば、投票のときにタップできる
 ## minion: {"people": [{"name", "color", "is_me", "bonus"}]}(手下が2人なら2つ)。あれば、左に得点表、右に裏向きの手下のカードを出す。
@@ -320,6 +322,7 @@ func hide_result_card() -> void:
 		_card_back = null
 		_flipping = false
 	_chips.clear()
+	_no_vote_chips.clear()
 	_vote_open = false
 	_card_hint_label = null
 
@@ -549,6 +552,9 @@ func _score_chip(r: Dictionary) -> PanelContainer:
 	col.add_child(dl)
 	if r.has("id"):
 		_chips[int(r["id"])] = {"panel": panel, "style": st, "score": sc, "delta": dl, "col": col, "base": r}
+	if r.get("no_vote", false) and _vote_open:
+		panel.modulate.a = 0.45
+		_no_vote_chips.append(panel)
 	return panel
 
 
@@ -592,6 +598,10 @@ func apply_vote_result(correct: Array, scores: Dictionary) -> void:
 	if not _vote_open and _chips.is_empty():
 		return
 	_vote_open = false
+	for p in _no_vote_chips:
+		if is_instance_valid(p):
+			p.modulate.a = 1.0
+	_no_vote_chips.clear()
 	for id in _chips:
 		var c: Dictionary = _chips[id]
 		if scores.has(id):
