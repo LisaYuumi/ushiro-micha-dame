@@ -59,6 +59,7 @@ func _initialize() -> void:
 	_test_banana_can_be_dodged()
 	_test_bots_throw_bananas()
 	_test_who_can_see_behind_whom()
+	_test_stamp_sender_hidden_up_to_six()
 	_test_miss_goes_out()
 	_test_milk()
 	_test_deceiving_scores()
@@ -1158,8 +1159,23 @@ func _test_bots_throw_bananas() -> void:
 
 
 func _test_who_can_see_behind_whom() -> void:
-	for players in GameConfig.PLAYER_COUNT_OPTIONS:
+	for players in range(GameConfig.PLAYER_COUNT_MIN, GameConfig.PLAYER_COUNT_MAX + 1):
 		_check_visibility(players - 1)
+
+
+func _test_stamp_sender_hidden_up_to_six() -> void:
+	# 6人まで(5席まで)は、鬼と自分以外のスタンプの送り主は「だれか」。7人からは名前が出る
+	for players in range(GameConfig.PLAYER_COUNT_MIN, GameConfig.PLAYER_COUNT_MAX + 1):
+		var g := GameState.new()
+		g.start_match(3, false, players - 1)
+		_check(g.actors.size() == players, "%d人で遊べる" % players)
+		var other := -1
+		for a in g.actors:
+			if a.id != g.oni_id and a.id != g.local_player_id:
+				other = a.id
+				break
+		_check(HeadOverlay.is_anonymous(g, other) == (players <= 6), "%d人: 送り主を隠すのは6人まで" % players)
+		_check(not HeadOverlay.is_anonymous(g, g.oni_id), "鬼のスタンプは「鬼」と出る")
 
 
 func _check_visibility(n: int) -> void:

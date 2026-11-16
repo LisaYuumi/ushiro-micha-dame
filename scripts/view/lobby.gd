@@ -23,8 +23,11 @@ var _join_box: VBoxContainer
 var _host_box: VBoxContainer
 var _code := ""
 ## 遊ぶ人数(鬼をふくむ全員の数)。ひとりで遊ぶとき・部屋を作るときに使う
-var players: int = GameConfig.PLAYER_COUNT_OPTIONS[0]
-var _players_button: Button
+var players: int = GameConfig.PLAYER_COUNT_DEFAULT
+## 人数の「− 8人 +」
+var _players_label_btn: Label
+var _players_minus: Button
+var _players_plus: Button
 ## 舞台(タップで変える。この端末に保存)
 var _stage_button: Button
 ## スマホの指で押せるように、ボタンは自分で当たり判定をする
@@ -135,8 +138,23 @@ func _ready() -> void:
 	opts.add_theme_constant_override("separation", 10)
 	menu_grid.add_child(opts)
 	var half := Vector2(0, (big.y - 10.0) / 2.0)
-	_players_button = _button("", func() -> void: _toggle_players(), half)
-	opts.add_child(_players_button)
+	# 人数: 「−」「+」で1人ずつ(5〜10人)
+	var prow := HBoxContainer.new()
+	prow.add_theme_constant_override("separation", 6)
+	opts.add_child(prow)
+	_players_minus = _button("−", func() -> void: _change_players(-1), Vector2(64, half.y))
+	prow.add_child(_players_minus)
+	var mid := PanelContainer.new()
+	mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mid.add_theme_stylebox_override("panel", UiStyle.box(GameConfig.COLOR_PAPER, false, 14, 3))
+	_players_label_btn = UiStyle.label("", 26, GameConfig.COLOR_INK)
+	_players_label_btn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_players_label_btn.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	mid.add_child(_players_label_btn)
+	prow.add_child(mid)
+	_players_plus = _button("+", func() -> void: _change_players(1), Vector2(64, half.y))
+	prow.add_child(_players_plus)
 	_stage_button = _button("", func() -> void: _toggle_stage(), half)
 	opts.add_child(_stage_button)
 	_update_players_button()
@@ -565,9 +583,8 @@ func _update_profile() -> void:
 			_color_buttons[i].add_theme_stylebox_override(k, st)
 
 
-func _toggle_players() -> void:
-	var opts: Array = GameConfig.PLAYER_COUNT_OPTIONS
-	players = opts[(opts.find(players) + 1) % opts.size()]
+func _change_players(d: int) -> void:
+	players = clampi(players + d, GameConfig.PLAYER_COUNT_MIN, GameConfig.PLAYER_COUNT_MAX)
 	_update_players_button()
 
 
@@ -599,7 +616,10 @@ func refresh_texts() -> void:
 
 
 func _update_players_button() -> void:
-	_players_button.text = tr("人数: %d人 ▶") % players
+	_players_label_btn.text = tr("人数: %d人") % players
+	# 端まで来たら、その向きのボタンは薄くする
+	_players_minus.disabled = players <= GameConfig.PLAYER_COUNT_MIN
+	_players_plus.disabled = players >= GameConfig.PLAYER_COUNT_MAX
 
 
 func show_menu() -> void:

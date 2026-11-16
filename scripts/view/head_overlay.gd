@@ -202,9 +202,9 @@ static func stamp_text(state: GameState, sender: int, kind: String) -> String:
 	return Texts.stamp(kind, word)
 
 
-## 5人のとき(4席)は、正面の人の後ろしか見えないので、スタンプの送り主は「だれか」にする(鬼と自分は別)
+## 人数が少ないとき(6人まで)は、見える後ろが少ないので、スタンプの送り主は「だれか」にする(鬼と自分は別)
 static func is_anonymous(state: GameState, id: int) -> bool:
-	return state.seat_count <= 4 and id != state.oni_id and id != state.local_player_id
+	return state.seat_count <= GameConfig.STAMP_ANON_MAX_SEATS and id != state.oni_id and id != state.local_player_id
 
 
 ## 吹き出しの色: 送った人の体の色(送り主を出さないときは灰色)

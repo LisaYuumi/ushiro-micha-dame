@@ -6,8 +6,12 @@ extends RefCounted
 # --- 配置 ---
 ## 席の数(座る人の数。鬼は別に1人なので、全部で SEAT_COUNT + 1 人。企画書は4〜8人)
 const SEAT_COUNT := 7
-## 選べる人数(全員の数 = 席 + 鬼1人)。ロビーで選ぶ
-const PLAYER_COUNT_OPTIONS := [8, 5]
+## 選べる人数(全員の数 = 席 + 鬼1人)。ロビーの「− 8人 +」で1人ずつ選ぶ
+const PLAYER_COUNT_MIN := 5
+const PLAYER_COUNT_MAX := 10
+const PLAYER_COUNT_DEFAULT := 8
+## 届いたスタンプの送り主を「だれか」にする席の数(この数以下。5席 = 6人まで)
+const STAMP_ANON_MAX_SEATS := 5
 ## 席が並ぶ輪の半径(メートル)
 const RING_RADIUS := 3.0
 ## 鬼が歩く輪の半径(席の輪より外側)

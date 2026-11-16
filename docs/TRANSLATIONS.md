@@ -194,7 +194,7 @@
 | 水鉄砲でかけられた! | You got squirted! |
 | %s に水鉄砲! | Squirted %s! |
 | 舞台: %s ▶ | Stage: %s ▶ |
-| 人数: %d人 ▶ | Players: %d ▶ |
+| 人数: %d人 | Players: %d |
 | きせかえ ▶ | Dress up ▶ |
 | 帽子 | Hat |
 | メガネ | Glasses |
