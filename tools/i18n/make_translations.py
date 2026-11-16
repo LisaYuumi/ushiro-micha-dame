@@ -260,6 +260,8 @@ EN = {
     "鬼の手下は誰?": "Who is the Oni's helper?",
     "%d/%d人 投票済み": "%d/%d voted",
     "発表へ ▶": "Reveal ▶",
+    "次へ ▶": "Next ▶",
+    "ルーム主が「次へ」を押すのを待っています": "Waiting for the host to press Next",
     "あやしい人をタップして投票!": "Tap a suspect to vote!",
     "あなたは手下。バレないように!": "You are the helper. Don't get caught!",
     "%s に投票した(入れ直せる)": "Voted for %s (you can change it)",

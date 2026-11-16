@@ -296,6 +296,7 @@ func _refresh_round_inner() -> void:
 		_reveal.queue_free()
 	_reveal = null
 	hud.set_vote_ui(false)
+	hud.set_next_ui(false, false)
 	hud.hide_result_card()
 	bots.reset()
 	_missed_result = {}
@@ -383,8 +384,10 @@ func _physics_process(delta: float) -> void:
 	touch.set_stick_visible(me.role == GameState.Role.ONI or runner)
 	# 手下を当てる投票(教室のまま)と発表: 少し高いところから全員を映し、名札を出す
 	var voting := showing_result and state.voting_open and not state.match_over
-	var revealing := showing_result and not state.voting_open and state.reveal_left > 0.0 and not state.match_over
+	var revealing := showing_result and not state.voting_open and state.reveal_left >= 0.0 and not state.match_over
 	view.set_vote_view(voting or revealing)
+	# 発表が終わったら、ルーム主が「次へ」を押すまで、手下が出た画面のまま待つ
+	var waiting_next := state.can_go_next()
 	if voting:
 		var hint := tr("あやしい人をタップして投票!")
 		if state.is_minion(me.id):
@@ -392,8 +395,11 @@ func _physics_process(delta: float) -> void:
 		elif _my_vote >= 0:
 			hint = tr("%s に投票した(入れ直せる)") % _short_name(_my_vote)
 		hud.set_vote_ui(true, state.votes.size(), state.voter_count(), hint, mode != Mode.GUEST, state.can_skip_vote())
+	elif waiting_next:
+		hud.set_next_ui(true, mode != Mode.GUEST)
 	else:
 		hud.set_vote_ui(false)
+		hud.set_next_ui(false, false)
 	var ov := view.get_overlay()
 	if ov:
 		# 牛乳がかかっている間は名札も見えない(鬼の名札で場所がわからないように)。吹き出しは出したまま
@@ -578,10 +584,14 @@ var _reveal: VoteReveal
 var _seen_serial := -1
 
 
-## ルーム主の「発表へ」(投票が始まって5秒たってから押せる)
+## ルーム主の「発表へ」(投票が始まって5秒たってから押せる)と、発表のあとの「次へ」
 func _on_skip_vote() -> void:
-	if mode != Mode.GUEST:
+	if mode == Mode.GUEST:
+		return
+	if state.voting_open:
 		state.skip_vote()
+	elif state.can_go_next():
+		_on_restart_pressed()
 
 
 func _on_missed_scene_done() -> void:

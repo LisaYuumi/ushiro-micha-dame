@@ -48,6 +48,7 @@ signal skip_vote_pressed
 ## 教室のままの投票: 上の「鬼の手下は誰?」と「4/6人 投票済み」、ルーム主の「発表へ」
 var _vote_box: VBoxContainer
 var _vote_panel: PanelContainer
+var _next_wait: PanelContainer
 var _vote_title: Label
 var _vote_count: PanelContainer
 var _vote_hint: Label
@@ -1164,6 +1165,35 @@ func _build_stamp_display() -> void:
 	_badge.visible = false
 
 
+## 発表のあと: ルーム主には「次へ ▶」、ほかの人には「ルーム主が「次へ」を押すのを待っています」
+func set_next_ui(show: bool, host: bool) -> void:
+	if _vote_panel == null:
+		if not show:
+			return
+		_build_vote_ui()
+	if not show:
+		if _next_wait:
+			_next_wait.visible = false
+		return
+	_vote_panel.visible = false
+	_skip_button.visible = host
+	if _skip_button.text != tr("次へ ▶"):
+		_skip_button.text = tr("次へ ▶")
+	_skip_button.disabled = false
+	_skip_button.modulate.a = 1.0
+	if _next_wait == null:
+		_next_wait = UiStyle.pill(tr("ルーム主が「次へ」を押すのを待っています"), 22)
+		_next_wait.anchor_left = 0.5
+		_next_wait.anchor_right = 0.5
+		_next_wait.anchor_top = 1.0
+		_next_wait.anchor_bottom = 1.0
+		_next_wait.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		_next_wait.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		_next_wait.offset_bottom = -UiStyle.SAFE
+		_top.add_child(_next_wait)
+	_next_wait.visible = not host
+
+
 ## 教室のままの投票の表示。show: 投票中か / voted・total: 投票した人数 / hint: 下の小さな案内 /
 ## skip: ルーム主の「発表へ」を出すか / skip_ready: 押せるか(始まって5秒たったか)
 func set_vote_ui(show: bool, voted: int = 0, total: int = 0, hint: String = "", skip: bool = false, skip_ready: bool = false) -> void:
@@ -1175,6 +1205,8 @@ func set_vote_ui(show: bool, voted: int = 0, total: int = 0, hint: String = "", 
 	_skip_button.visible = show and skip
 	if not show:
 		return
+	if _skip_button.text != tr("発表へ ▶"):
+		_skip_button.text = tr("発表へ ▶")
 	var count_text := tr("%d/%d人 投票済み") % [voted, total]
 	var cl := _vote_count.get_child(0) as Label
 	if cl.text != count_text:

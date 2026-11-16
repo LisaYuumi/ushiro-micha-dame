@@ -1786,7 +1786,7 @@ func _test_two_minions() -> void:
 
 ## ラウンドのあと、教室のまま、手下以外の全員(鬼も)で手下を当てる投票。
 ## 勝ち負けの演出のあとに始まり、全員がそろうまで入れ直せる。当てた人 +1、手下に1票も入らなければ手下 +1(だましきった)。
-## 発表の演出のあと、自動で次のラウンドへ
+## 発表の演出のあとは、ルーム主が「次へ」を押すまで進まない
 func _test_minion_vote() -> void:
 	var s := GameState.new()
 	s.start_match(63)
@@ -1835,8 +1835,10 @@ func _test_minion_vote() -> void:
 	_check(int((result_ev.get("tally", {}) as Dictionary).get(minion.id, 0)) == 1, "票の数が発表に入る")
 	_check(result_ev.get("fooled", []).is_empty() and result_ev.get("busted", []).is_empty(), "1票だけなら、だましきってもバレバレでもない")
 	var round_before := s.round_index
-	_run_until(s, "round_start", GameState.reveal_time() + 1.0)
-	_check(s.round_index == round_before + 1 and s.phase != GameState.Phase.RESULT, "発表の演出のあと、自動で次のラウンドへ")
+	_check(not s.can_go_next(), "発表の演出の間は「次へ」を出さない")
+	var auto := _run_until(s, "round_start", GameState.reveal_time() + 30.0)
+	_check(auto.is_empty() and s.phase == GameState.Phase.RESULT and s.can_go_next(), "発表のあとは自動で進まず、「次へ」を待つ")
+	_check(s.next_round() and s.round_index == round_before + 1, "「次へ」で次のラウンドへ")
 
 	# だれも手下に入れなかった: 手下に +1(だましきった!)。ルーム主の「発表へ」は5秒たってから
 	var s2 := GameState.new()
@@ -1888,8 +1890,9 @@ func _test_minion_vote() -> void:
 	s5.round_index = GameConfig.ROUNDS_PER_MATCH - 1
 	_run_until(s5, "vote_start", 200.0)
 	s5.close_vote()
-	var mo := _run_until(s5, "match_over", GameState.reveal_time() + 1.0)
-	_check(not mo.is_empty() and s5.match_over, "最後のラウンドの発表のあとは、試合おわり")
+	_run_until(s5, "match_over", GameState.reveal_time() + 1.0)
+	_check(not s5.match_over and s5.can_go_next(), "最後のラウンドも、発表のあとは「次へ」を待つ")
+	_check(not s5.next_round() and s5.match_over, "最後のラウンドの「次へ」で、試合おわり")
 
 
 ## 舞台: 海辺の落とし物と、状態で届く舞台

@@ -219,12 +219,13 @@ const VOTE_INTRO_TIME := 2.2
 const VOTE_SKIP_DELAY := 5.0
 ## 画面には出さないが、投票が始まってこの秒数たったら自動で発表へ(ルーム主がいなくなったときの安全策)
 const VOTE_TIMEOUT := 120.0
-## 発表の演出の秒数: 票が飛ぶ / ため(ドラムロール) / 手下の発表 / 点数 / 次のラウンドへ進むまでの余韻
+## 発表の演出の秒数: 票が飛ぶ / ため(ドラムロール) / 手下の発表 / 点数 / ルーム主の「次へ」が出るまでの余韻
+## (発表のあとは、ルーム主が「次へ」を押すまで、手下が出た画面のまま待つ)
 const REVEAL_ARROWS_TIME := 1.0
 const REVEAL_DRUM_TIME := 0.5
 const REVEAL_SHOW_TIME := 1.0
 const REVEAL_POINTS_TIME := 0.5
-const REVEAL_HOLD_TIME := 1.0
+const REVEAL_HOLD_TIME := 0.4
 ## 見逃しの演出(トントン→振り向く→顔のアップ→放心→とぼとぼ)のぶん、投票を始めるのを遅らせる(秒)
 ## (下の演出の秒数の合計より長くしておく)
 const MISSED_SCENE_TIME := 6.0

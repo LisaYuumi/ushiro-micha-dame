@@ -178,7 +178,7 @@ var minion_id: int:
 var minion_count: int = 0
 ## 手下を当てる投票(勝敗が出たあと、教室のまま):
 ## 勝ち負けの演出の残り(この間は投票前)/ 受けつけ中か / 始まってからの秒数 / だれがだれに投票したか(入れ直せる)/
-## 発表の演出の残り(0 になったら次のラウンドへ)
+## 発表の演出の残り(-1 = まだ発表していない / 0 = 演出が終わり、ルーム主の「次へ」を待っている)
 var vote_wait: float = 0.0
 var voting_open: bool = false
 var vote_elapsed: float = 0.0
@@ -1439,13 +1439,16 @@ func _tick_vote(delta: float) -> void:
 		if vote_elapsed >= GameConfig.VOTE_TIMEOUT:
 			close_vote()
 	elif reveal_left > 0.0:
-		reveal_left -= delta
-		if reveal_left <= 0.0:
-			reveal_left = -1.0
-			next_round()
+		# 発表の演出が終わったら、ルーム主が「次へ」を押すまで待つ(自動では進まない)
+		reveal_left = maxf(reveal_left - delta, 0.0)
 
 
-## 発表の演出の長さ(この間は次のラウンドへ進まない)
+## 発表の演出が終わって、ルーム主の「次へ」を待っているか
+func can_go_next() -> bool:
+	return phase == Phase.RESULT and not match_over and not voting_open and vote_wait <= 0.0 and reveal_left == 0.0
+
+
+## 発表の演出の長さ(この間は「次へ」を出さない)
 static func reveal_time() -> float:
 	return GameConfig.REVEAL_ARROWS_TIME + GameConfig.REVEAL_DRUM_TIME + GameConfig.REVEAL_SHOW_TIME \
 			+ GameConfig.REVEAL_POINTS_TIME + GameConfig.REVEAL_HOLD_TIME
@@ -1508,7 +1511,7 @@ func cast_vote(voter_id: int, target_id: int) -> bool:
 
 ## 投票を締めきって発表する: 手下に当てた人(手下が2人なら、どちらかに当てた人)に +SCORE_VOTE_CORRECT。
 ## 手下ごとに: 1票も入らなかったら「だましきった!」で手下に +SCORE_MINION_FOOLED、投票した全員が入れたら「バレバレ!」。
-## 投票していない人は、投票なし。発表の演出のあと、次のラウンドへ
+## 投票していない人は、投票なし。発表の演出のあと、ルーム主の「次へ」で次のラウンドへ
 func close_vote() -> void:
 	if not voting_open and vote_wait <= 0.0:
 		return
