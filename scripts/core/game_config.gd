@@ -112,8 +112,8 @@ const BOT_DODGE_MISS := 0.25
 # --- ボット ---
 ## 後ろにハンカチを落とされたボットが気づくまでの時間(秒)。この範囲でランダム。
 ## 鬼がもう一周してくるまで(約46秒)に気づかなければ見逃し
-const BOT_NOTICE_TIME_MIN := 1.5
-const BOT_NOTICE_TIME_MAX := 40.0
+const BOT_NOTICE_TIME_MIN := 10.0
+const BOT_NOTICE_TIME_MAX := 46.0
 
 # --- 追いかけるときのカメラ ---
 ## 自分が追いかけるとき、カメラを輪の外側のどれだけ後ろ・上に置くか(メートル)
