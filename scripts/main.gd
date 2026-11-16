@@ -910,8 +910,9 @@ func _show_event(e: Dictionary) -> void:
 		"out":
 			if e["actor"] == me:
 				# ハズレ: 「ガーン!」(画面のゆれと音は WorldView)。そのあと、どうなったかの説明
-				hud.show_banner(tr("ガーン!"), Color("6EA8F0"), 0.7)
-				get_tree().create_timer(0.7).timeout.connect(func() -> void:
+				hud.show_banner(tr("ガーン!"), Color("6EA8F0"), 0.9)
+				# 自分の顔のアップと崩れ落ちるところを見せてから、説明を出す
+				get_tree().create_timer(1.6).timeout.connect(func() -> void:
 					hud.show_message(tr("お手つき!\n真ん中でお休み(このラウンド0点)"), Color(0.85, 0.1, 0.1), 1.6))
 				_close_picker()
 				_update_help()

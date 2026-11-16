@@ -138,6 +138,8 @@ var _missed_sit := {}
 const OUT_FALL_TIME := 1.1
 const OUT_RISE_TIME := 0.35
 const OUT_WALK_SPEED := 1.1
+## お手つきの本人の画面: まず自分の顔を大きく映す時間(そのあと、崩れ落ちるところまで寄ったまま見せる)
+const OUT_FACE_TIME := 0.6
 ## 画面のゆれ(お手つきの本人の画面。⚙メニューでオフにできる)
 var _shake_left := 0.0
 const SHAKE_TIME := 0.4
@@ -274,7 +276,8 @@ func sync(state: GameState, delta: float) -> void:
 				# 転んで止まっている間は、前にばったり倒れている(お手つきの演出中は、後ろへズッコケる)
 				if _out_anim.has(a.id):
 					# お手つき: ひざから崩れ落ちる
-					model.set_kneel(float(_out_anim[a.id]["t"]) < OUT_FALL_TIME)
+					var ot: float = float(_out_anim[a.id]["t"]) - float(_out_anim[a.id].get("d", 0.0))
+					model.set_kneel(ot >= 0.0 and ot < OUT_FALL_TIME)
 					model.set_down(false)
 				else:
 					model.set_kneel(false)
@@ -508,7 +511,7 @@ func _apply_out_anim(a: GameState.Actor, node: Node3D, delta: float) -> void:
 	var t: float = an["t"]
 	var from: Vector3 = an["from"]
 	var to: Vector3 = an["to"]
-	var walk_start := OUT_FALL_TIME + OUT_RISE_TIME
+	var walk_start := OUT_FALL_TIME + OUT_RISE_TIME + float(an.get("d", 0.0))
 	if t < walk_start:
 		node.position = from
 		return
@@ -535,7 +538,7 @@ func _pose_of(state: GameState, a: GameState.Actor) -> String:
 		# お手つきの演出中: ズッコケている間は立った姿、そのあと真ん中まで歩く
 		if _out_anim.has(a.id):
 			var t: float = _out_anim[a.id]["t"]
-			if t < OUT_FALL_TIME + OUT_RISE_TIME:
+			if t < OUT_FALL_TIME + OUT_RISE_TIME + float(_out_anim[a.id].get("d", 0.0)):
 				return "idle"
 			return "walk"
 		# お手つきで抜けた人は、真ん中で体育座り
@@ -729,7 +732,9 @@ func on_event(e: Dictionary) -> void:
 			var node: Node3D = _actor_nodes.get(who)
 			var a := _room_state.get_actor(who) if _room_state else null
 			if node and a:
-				_out_anim[who] = {"t": 0.0, "from": node.position, "to": a.position}
+				# 本人の画面では、まず顔を大きく映してから崩れ落ちる(そのぶん遅らせる)
+				var d := OUT_FACE_TIME if who == _room_state.local_player_id else 0.0
+				_out_anim[who] = {"t": 0.0, "from": node.position, "to": a.position, "d": d}
 			if who == _room_state.local_player_id and Profile.screen_shake:
 				_shake_left = SHAKE_TIME
 			get_tree().create_timer(OUT_FALL_TIME + OUT_RISE_TIME).timeout.connect(func() -> void: _play_actor(who, "trudge", -6.0, -16.0))
@@ -1342,7 +1347,7 @@ func _build_character(a: GameState.Actor, is_self: bool) -> Node3D:
 func _build_oni_shadow() -> void:
 	# 人の形の影(胴と頭。ふちはぼんやり)を、床に置いた板に貼る。頭は板の -Z の側
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(1.0, 2.4)
+	plane.size = Vector2(1.0, 1.8)
 	_oni_shadow_mat = StandardMaterial3D.new()
 	_oni_shadow_mat.albedo_color = Color(0, 0, 0, 0)
 	_oni_shadow_mat.albedo_texture = _shadow_texture()
@@ -1411,10 +1416,10 @@ func _update_oni_shadow(state: GameState) -> void:
 	var toward := atan2(rel.x, rel.z)
 	var side := clampf(rel.dot(right) / maxf(dist, 0.01), -1.0, 1.0)
 	_oni_shadow.rotation.y = lerp_angle(me.yaw, toward, 0.5)
-	var length := 1.0 + 0.6 * near
+	var length := 0.85 + 0.35 * near
 	_oni_shadow.scale = Vector3(0.7 + 0.3 * near, 1.0, length)
 	# 自分の前(輪の内側)の床に、頭が前・足もとが自分の側になるように置く
-	_oni_shadow.position = me.position - back * (0.5 + 1.2 * length * 0.5) + right * side * 0.35 + Vector3(0, 0.03, 0)
+	_oni_shadow.position = me.position - back * (0.5 + 0.9 * length) + right * side * 0.35 + Vector3(0, 0.03, 0)
 	_oni_shadow_mat.albedo_color = Color(0, 0, 0, GameConfig.ONI_SHADOW_ALPHA * (0.4 + 0.6 * near))
 
 
@@ -1952,6 +1957,24 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 	_seat_cam.v_offset = randf_range(-amp, amp)
 	# 座っているときは自分の体を映さない。立ち上がって追いかけるときは映す
 	var self_bit := 1 << (SELF_LAYER - 1)
+	if me.role == GameState.Role.OUT and _out_anim.has(me.id) \
+			and float(_out_anim[me.id]["t"]) < OUT_FACE_TIME + OUT_FALL_TIME * 0.9:
+		# お手つき直後: 自分の顔の正面にカメラを寄せて、放心の顔を大きく映す。そのまま崩れ落ちるところを見せる
+		var model := _actor_nodes.get(me.id) as CharacterModel
+		if model:
+			_seat_cam.cull_mask = 0xFFFFF & ~(1 << (CEILING_LAYER - 1))
+			_seat_cam.keep_aspect = Camera3D.KEEP_HEIGHT
+			_seat_cam.fov = 40.0
+			var head := model.bone_world("DEF-head").origin
+			var face := -model.global_transform.basis.z
+			face.y = 0.0
+			face = face.normalized()
+			var t_face: float = _out_anim[me.id]["t"]
+			# 顔のアップから、崩れ落ちるときは少し引いて、下がる体を追う
+			var pull := clampf((t_face - OUT_FACE_TIME) / OUT_FALL_TIME, 0.0, 1.0)
+			var eye := head + face * lerpf(0.75, 1.6, pull) + Vector3(0, lerpf(0.05, 0.35, pull), 0)
+			_seat_cam.look_at_from_position(eye, head + Vector3(0, -0.25 * pull, 0))
+			return
 	if me.role == GameState.Role.OUT:
 		# お手つきで抜けた: 真ん中の上の高いところから、輪の全員の後ろを見下ろす(天井は映さない)
 		_seat_cam.cull_mask = 0xFFFFF & ~(1 << (CEILING_LAYER - 1))
