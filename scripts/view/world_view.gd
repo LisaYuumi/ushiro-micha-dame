@@ -1966,22 +1966,24 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 			_seat_cam.keep_aspect = Camera3D.KEEP_HEIGHT
 			_seat_cam.fov = 40.0
 			var head := model.bone_world("DEF-head").origin
-			# 顔の向き: 頭のまん中から目へ向かう向き(体の向きの決まりにたよらない)
+			# 顔の向き: 頭のまん中から目へ向かう向き(体の向きの決まりにたよらない)。ねらうのは両目のまん中
 			var face := -model.global_transform.basis.z
 			var eyes := model.eye_points()
+			var target := head + Vector3(0, CharacterModel.HEAD_LIFT, 0)
 			if eyes.size() > 0:
 				var c := Vector3.ZERO
 				for e in eyes:
 					c += e
-				face = c / float(eyes.size()) - head
+				target = c / float(eyes.size())
+				face = target - head
 			face.y = 0.0
 			face = face.normalized() if face.length() > 0.001 else Vector3.FORWARD
 			var t_face: float = _out_anim[me.id]["t"]
 			# 顔のアップから、崩れ落ちるときは少し引いて、下がる体を追う
 			var pull := clampf((t_face - OUT_FACE_TIME) / OUT_FALL_TIME, 0.0, 1.0)
 			# (崩れ落ちるときは頭が前にたれるので、カメラを下げて、下から顔を見上げる)
-			var eye := head + face * lerpf(0.75, 1.1, pull) + Vector3(0, lerpf(0.0, -0.45, pull), 0)
-			_seat_cam.look_at_from_position(eye, head + Vector3(0, -0.15 * pull, 0))
+			var eye := target + face * lerpf(0.85, 1.2, pull) + Vector3(0, lerpf(0.0, -0.35, pull), 0)
+			_seat_cam.look_at_from_position(eye, target + Vector3(0, -0.1 * pull, 0))
 			return
 	if me.role == GameState.Role.OUT:
 		# お手つきで抜けた: 真ん中の上の高いところから、輪の全員の後ろを見下ろす(天井は映さない)
