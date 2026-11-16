@@ -2,6 +2,7 @@ class_name VoteReveal
 extends CanvasLayer
 ## 手下を当てる投票の発表(教室のまま。みんなの画面で同じ流れ)。秒数は GameConfig の REVEAL_*。
 ## 1. 票が飛ぶ: 「ドン!」で、投票した人から選んだ人へ、その人の色の矢印を一斉に。票を集めた人の頭の上に、票の数だけ指マーク
+##    (矢印と指マークは、発表のあとも次のラウンドまで残す)
 ## 2. ため: 画面を少し暗くしてドラムロール
 ## 3. 発表: 手下だった人にスポットライト。名札を紫に「手下」。「ジャジャーン!」。手下はニヤッと笑う
 ##    (投票した全員が当てた手下は放心顔で「バレバレ!」、1票も入らなかった手下は「だましきった!」。
@@ -166,8 +167,8 @@ func _draw_canvas() -> void:
 		return
 	var vp := get_viewport().get_visible_rect().size
 	var line := maxf(5.0, vp.y * 0.009)
-	# 矢印(票が飛ぶ・ため): 飛んでいく(0.25秒で伸びる)
-	if _step <= 1:
+	# 矢印: 飛んでいく(0.25秒で伸びる)。手下の発表のあとも、だれがだれに入れたか見えるように残す
+	if _step >= 0:
 		var grow := clampf(_t / 0.25, 0.0, 1.0)
 		for voter in _votes:
 			var a := _state.get_actor(int(voter))
