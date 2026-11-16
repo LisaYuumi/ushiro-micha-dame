@@ -13,6 +13,9 @@ const SELF_LAYER := 2
 const HIDDEN_LAYER := 3
 
 var _actor_nodes := {} # id -> Node3D
+## 教室の椅子(席の番号の順)。お手つきの顔のアップの間は、自分の椅子を隠す(背もたれが顔にかぶらないように)
+var _chairs: Array[Node3D] = []
+var _hidden_chair := -1
 var _seat_cam: Camera3D
 ## 席のカメラの、ふだんの横の見える幅(お手つきで抜けて上から見ている間は変える)
 var _seat_fov := 100.0
@@ -200,10 +203,12 @@ func build(state: GameState) -> void:
 		# 砂浜には椅子がないので、座る場所に丸いあとをつける
 		for i in state.seat_positions.size():
 			BeachStage.seat_mark(self, state.seat_positions[i])
-	else:
+	_chairs.clear()
+	_hidden_chair = -1
+	if not _beach:
 		_build_floor()
 		for i in state.seat_positions.size():
-			_build_chair(state.seat_positions[i], state.seat_yaws[i])
+			_chairs.append(_build_chair(state.seat_positions[i], state.seat_yaws[i]))
 	for a in state.actors:
 		var is_self: bool = a.id == state.local_player_id
 		var key: String = _model_key(a, is_self)
@@ -1308,7 +1313,17 @@ func _part(size: Vector3, pos: Vector3, color: Color, outline: float = GameConfi
 	(parent if parent else self).add_child(mi)
 
 
-func _build_chair(pos: Vector3, yaw: float) -> void:
+func _set_hidden_chair(idx: int) -> void:
+	if idx == _hidden_chair:
+		return
+	if _hidden_chair >= 0 and _hidden_chair < _chairs.size() and is_instance_valid(_chairs[_hidden_chair]):
+		_chairs[_hidden_chair].visible = true
+	_hidden_chair = idx
+	if idx >= 0 and idx < _chairs.size() and is_instance_valid(_chairs[idx]):
+		_chairs[idx].visible = false
+
+
+func _build_chair(pos: Vector3, yaw: float) -> Node3D:
 	var chair := Node3D.new()
 	chair.position = pos
 	chair.rotation.y = yaw
@@ -1327,6 +1342,7 @@ func _build_chair(pos: Vector3, yaw: float) -> void:
 		mi.position = p2[1]
 		chair.add_child(mi)
 	add_child(chair)
+	return chair
 
 
 ## 仮のキャラクター(体・顔・表情は CharacterModel)
@@ -1957,8 +1973,11 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 	_seat_cam.v_offset = randf_range(-amp, amp)
 	# 座っているときは自分の体を映さない。立ち上がって追いかけるときは映す
 	var self_bit := 1 << (SELF_LAYER - 1)
-	if me.role == GameState.Role.OUT and _out_anim.has(me.id) \
-			and float(_out_anim[me.id]["t"]) < OUT_FACE_TIME + OUT_FALL_TIME * 0.9:
+	var close_up := me.role == GameState.Role.OUT and _out_anim.has(me.id) \
+			and float(_out_anim[me.id]["t"]) < OUT_FACE_TIME + OUT_FALL_TIME * 0.9
+	# 顔のアップの間は、自分の椅子を隠す(カメラと顔の間に背もたれが入って、顔にかぶるので)
+	_set_hidden_chair(me.home_seat if close_up else -1)
+	if close_up:
 		# お手つき直後: 自分の顔の正面にカメラを寄せて、放心の顔を大きく映す。そのまま崩れ落ちるところを見せる
 		var model := _actor_nodes.get(me.id) as CharacterModel
 		if model:
