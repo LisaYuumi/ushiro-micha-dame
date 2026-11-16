@@ -1966,9 +1966,16 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 			_seat_cam.keep_aspect = Camera3D.KEEP_HEIGHT
 			_seat_cam.fov = 40.0
 			var head := model.bone_world("DEF-head").origin
+			# 顔の向き: 頭のまん中から目へ向かう向き(体の向きの決まりにたよらない)
 			var face := -model.global_transform.basis.z
+			var eyes := model.eye_points()
+			if eyes.size() > 0:
+				var c := Vector3.ZERO
+				for e in eyes:
+					c += e
+				face = c / float(eyes.size()) - head
 			face.y = 0.0
-			face = face.normalized()
+			face = face.normalized() if face.length() > 0.001 else Vector3.FORWARD
 			var t_face: float = _out_anim[me.id]["t"]
 			# 顔のアップから、崩れ落ちるときは少し引いて、下がる体を追う
 			var pull := clampf((t_face - OUT_FACE_TIME) / OUT_FALL_TIME, 0.0, 1.0)
