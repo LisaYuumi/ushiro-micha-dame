@@ -27,6 +27,7 @@ const KEYS := {
 	"debug_slip": [KEY_K],
 	"menu": [KEY_TAB],
 	"photo_mode": [KEY_P],
+	"hide_ui": [KEY_H],
 	"debug_finish": [KEY_J],
 	"debug_milk": [KEY_L],
 	"debug_blackout_next": [KEY_G],

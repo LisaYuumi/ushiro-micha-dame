@@ -2029,6 +2029,8 @@ func set_shown(v: bool) -> void:
 	visible = v
 	if _overlay:
 		_overlay.visible = v
+	if _blackout:
+		_blackout.visible = v and _blackout._on
 	if v and _seat_cam:
 		_seat_cam.make_current()
 

@@ -140,17 +140,39 @@ func _check_photo_mode() -> void:
 			_check(_main._studio != null and not _main.view.visible, "撮影モードが開き、ゲームの画面が隠れる")
 		145:
 			var st: PhotoStudio = _main._studio
+			_check(st._view != null and st._state.actors.size() == PhotoStudio.SEATS + 1, "撮影モード: 撮影用の教室に8人")
+			_check(st._state != _main.state, "撮影モード: ゲームの状態とは別の状態で撮る")
+			for cam in PhotoStudio.CAMERAS:
+				st._pick(func(v: String) -> void: st._cam_mode = v, cam)
+				st._apply_camera()
 			for pose in PhotoStudio.POSES:
-				st._pick(func(v: String) -> void: st._pose = v, pose)
-			st._pick(func(v: String) -> void: st._direction = v, "後ろ")
-			st._pick(func(v: String) -> void: st._expression = PhotoStudio.EXPRESSIONS.find(v), "放心")
-			st._pick_color(Profile.COLORS[9])
-			st._next_background()
-			_check(st._models.size() == 1, "撮影モード: キャラが1体")
+				st._pick(func(v: String) -> void: st._poses[st._selected().id] = v, pose)
+				st._process(0.05)
+			for face in PhotoStudio.FACES:
+				st._pick(func(v: String) -> void: st._faces[st._selected().id] = v, face)
+				st._process(0.05)
+			for item in PhotoStudio.ITEMS:
+				st._item = item
+				st._process(0.05)
+			_check(st._view._handkerchief.visible, "撮影モード: 落とし物を背中の後ろに置ける")
+			st._pick_actor(1)
+			st._apply_to_all()
 		150:
-			_main._studio._toggle_ring()
-			_check(_main._studio._models.size() == PhotoStudio.RING_PEOPLE, "撮影モード: 輪の場面は %d 人" % PhotoStudio.RING_PEOPLE)
-			_main._studio._set_ui_hidden(true)
+			var st2: PhotoStudio = _main._studio
+			st2._transparent = true
+			st2._apply_background()
+			var hidden_room := false
+			for c in st2._view.get_children():
+				if c is MeshInstance3D and not (c as MeshInstance3D).visible:
+					hidden_room = true
+			_check(hidden_room, "撮影モード: キャラだけ(背景を消す)")
+			st2._transparent = false
+			st2._apply_background()
+			st2._stage = "beach"
+			st2._rebuild_scene()
+			_check(st2._view._beach, "撮影モード: 海辺の場面")
+			st2._set_ui_hidden(true)
+			_check(not st2._panel.visible, "撮影モード: UIを消せる")
 		160:
 			_main._studio._close()
 			_check(_main._studio == null and _main.view.visible, "撮影モードからもどれる")

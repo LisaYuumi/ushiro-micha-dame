@@ -403,7 +403,7 @@ func _physics_process(delta: float) -> void:
 	var ov := view.get_overlay()
 	if ov:
 		# 牛乳がかかっている間は名札も見えない(鬼の名札で場所がわからないように)。吹き出しは出したまま
-		ov.visible = not showing_result or voting or revealing
+		ov.visible = (not showing_result or voting or revealing) and not _play_ui_hidden
 		ov.set_tags_hidden(state.is_milked(me) and not showing_result)
 		if showing_result:
 			ov.set_voted(state.votes.keys() if voting else [])
@@ -533,6 +533,9 @@ func _auto_quality(delta: float) -> void:
 func _process(delta: float) -> void:
 	_log_perf(delta)
 	_auto_quality(delta)
+	if _play_ui_hidden and _hold_start >= 0 and Time.get_ticks_msec() - _hold_start > 800:
+		_hold_start = -1
+		_set_play_ui_hidden(false)
 	_update_music(delta)
 	if _studio:
 		return
@@ -605,6 +608,7 @@ func _on_missed_scene_done() -> void:
 
 ## 見逃しの演出中は、画面のどこをタップしてもとばせる
 func _input(event: InputEvent) -> void:
+	_check_ui_hold(event)
 	if not view.is_missed_scene_playing():
 		return
 	var tap: bool = (event is InputEventScreenTouch and event.pressed) \
@@ -617,7 +621,9 @@ func _input(event: InputEvent) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if _studio:
 		return
-	if event.is_action_pressed("photo_mode"):
+	if event.is_action_pressed("hide_ui") and mode != Mode.LOBBY:
+		_set_play_ui_hidden(not _play_ui_hidden)
+	elif event.is_action_pressed("photo_mode"):
 		_open_studio()
 	elif event.is_action_pressed("debug_top_camera"):
 		view.toggle_top_camera()
@@ -749,6 +755,47 @@ func _score_row_for(id: int, scores: Dictionary, delta: bool) -> Dictionary:
 	}
 
 
+## 遊んでいる画面の UI を全部消す(撮影用: スクリーンショット・紹介動画)。見た目だけで、ゲームの進行は変わらない。
+## PC は H キー、スマホは⚙メニューから。消している間は、画面を長押し(0.8秒)すると戻る
+var _play_ui_hidden := false
+var _hold_start := -1
+var _hold_pos := Vector2.ZERO
+
+
+func _set_play_ui_hidden(v: bool) -> void:
+	_play_ui_hidden = v
+	_set_ui_tree_visible(hud, not v)
+	_set_ui_tree_visible(touch, not v)
+	if _reveal and is_instance_valid(_reveal):
+		_reveal.visible = not v
+	var ov := view.get_overlay()
+	if ov:
+		ov.visible = not v
+	if v:
+		touch.close_menu()
+
+
+## CanvasLayer を、中に入っている CanvasLayer(上に重ねる札など)もまとめて出す/隠す
+## (CanvasLayer の visible は、中の CanvasLayer には効かないので)
+func _set_ui_tree_visible(layer: CanvasLayer, v: bool) -> void:
+	layer.visible = v
+	for c in layer.find_children("*", "CanvasLayer", true, false):
+		(c as CanvasLayer).visible = v
+
+
+## UI を消している間の長押し(スマホで戻すため)
+func _check_ui_hold(event: InputEvent) -> void:
+	if not _play_ui_hidden:
+		return
+	if event is InputEventScreenTouch:
+		var t := event as InputEventScreenTouch
+		_hold_start = Time.get_ticks_msec() if t.pressed else -1
+		_hold_pos = t.position
+	elif event is InputEventScreenDrag and _hold_start >= 0:
+		if (event as InputEventScreenDrag).position.distance_to(_hold_pos) > 30.0:
+			_hold_start = -1
+
+
 ## 撮影モードを開く(ゲームは止まる)。オンライン対戦中は、ほかの人のゲームも止まってしまうので開かない
 func _open_studio() -> void:
 	if _studio or not GameConfig.SHOW_PHOTO_MODE:
@@ -761,8 +808,10 @@ func _open_studio() -> void:
 	add_child(_studio)
 	_studio.closed.connect(_close_studio)
 	view.set_shown(false)
-	hud.visible = false
-	touch.visible = false
+	_set_ui_tree_visible(hud, false)
+	_set_ui_tree_visible(touch, false)
+	if _reveal and is_instance_valid(_reveal):
+		_reveal.visible = false
 	_lobby_was_visible = lobby.visible
 	lobby.visible = false
 
@@ -773,8 +822,10 @@ func _close_studio() -> void:
 	_studio.queue_free()
 	_studio = null
 	view.set_shown(true)
-	hud.visible = true
-	touch.visible = true
+	_set_ui_tree_visible(hud, not _play_ui_hidden)
+	_set_ui_tree_visible(touch, not _play_ui_hidden)
+	if _reveal and is_instance_valid(_reveal):
+		_reveal.visible = not _play_ui_hidden
 	lobby.visible = _lobby_was_visible
 
 
