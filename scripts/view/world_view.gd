@@ -729,6 +729,117 @@ func _item_part(size: Vector3, pos: Vector3, color: Color, outline: float, bevel
 	_handkerchief.add_child(mi)
 
 
+## 落とし物の部品(好きな形)を置く
+func _item_mesh(mesh: Mesh, pos: Vector3, color: Color, outline: float, rot: Vector3 = Vector3.ZERO, scale_v: Vector3 = Vector3.ONE) -> MeshInstance3D:
+	var mi := Toon.mesh(mesh, color, outline)
+	mi.position = pos
+	mi.rotation = rot
+	mi.scale = scale_v
+	_handkerchief.add_child(mi)
+	return mi
+
+
+## 上履き: 赤いゴム底、白い布の本体、丸い青いゴムのつま先、甲のゴムバンド、足を入れる口、かかとのつまみと名前の布
+## (スタンプの絵と同じ色。つま先は -Z)
+func _build_shoe() -> void:
+	# (小さいので、ふちどりは細めにする。角のある形はふちどりにすき間ができるので、丸い形で作る)
+	var line := 0.018
+	# 赤いゴム底(平たくつぶした長い丸)
+	var sole := CapsuleMesh.new()
+	sole.radius = 0.125
+	sole.height = 0.52
+	sole.radial_segments = 16
+	sole.rings = 4
+	_item_mesh(sole, Vector3(0, 0.022, 0), Color("D9483B"), line, Vector3(PI / 2.0, 0, 0), Vector3(1.0, 1.0, 0.18))
+	# 白い布の本体(かかと側。ぽってりした長い丸)
+	var body := CapsuleMesh.new()
+	body.radius = 0.112
+	body.height = 0.36
+	body.radial_segments = 16
+	body.rings = 4
+	_item_mesh(body, Vector3(0, 0.085, 0.07), Color.WHITE, line, Vector3(PI / 2.0, 0, 0), Vector3(1.0, 1.0, 0.55))
+	# 丸い青いゴムのつま先
+	var toe := SphereMesh.new()
+	toe.radius = 0.12
+	toe.height = 0.24
+	toe.radial_segments = 16
+	toe.rings = 8
+	_item_mesh(toe, Vector3(0, 0.075, -0.13), COLOR_SHOE_RUBBER, line, Vector3.ZERO, Vector3(0.96, 0.5, 1.05))
+	# 甲のゴムバンド(本体をぐるっと巻く青い帯)
+	var band := CylinderMesh.new()
+	band.top_radius = 0.118
+	band.bottom_radius = 0.118
+	band.height = 0.05
+	band.radial_segments = 16
+	_item_mesh(band, Vector3(0, 0.085, -0.005), COLOR_SHOE_RUBBER, 0.01, Vector3(PI / 2.0, 0, 0), Vector3(1.0, 1.0, 0.57))
+	# 足を入れる口(内側は灰色)
+	var mouth := CylinderMesh.new()
+	mouth.top_radius = 0.085
+	mouth.bottom_radius = 0.085
+	mouth.height = 0.008
+	mouth.radial_segments = 16
+	_item_mesh(mouth, Vector3(0, 0.146, 0.1), Color("6A6A74"), 0.0, Vector3.ZERO, Vector3(0.78, 1.0, 1.15))
+	# かかとのつまみ(青)と、名前を書く白い布(黒い線)
+	var tab := CapsuleMesh.new()
+	tab.radius = 0.02
+	tab.height = 0.07
+	_item_mesh(tab, Vector3(0, 0.14, 0.235), COLOR_SHOE_RUBBER, 0.01)
+	_item_part(Vector3(0.1, 0.045, 0.006), Vector3(0, 0.085, 0.245), Color("FFFDF5"), 0.006)
+	_item_part(Vector3(0.07, 0.006, 0.004), Vector3(0, 0.085, 0.25), Color("3A3633"), 0.0)
+
+
+## 学校の机: うすい木目色の天板(ふちは濃い木)、灰色の金属の脚と横の棒、天板の下の物入れ、横のかばんのフック
+func _build_desk() -> void:
+	var metal := Color("8E989F")
+	# 天板
+	_item_part(Vector3(0.6, 0.03, 0.45), Vector3(0, 0.685, 0), Color("EBD7AE"), ITEM_OUTLINE, 0.01)
+	_item_part(Vector3(0.61, 0.02, 0.46), Vector3(0, 0.662, 0), Color("B07A4A"), 0.02, 0.006)
+	# 物入れ(天板の下の、前があいた箱)
+	_item_part(Vector3(0.52, 0.012, 0.36), Vector3(0, 0.57, 0.02), metal, 0.02)
+	_item_part(Vector3(0.52, 0.09, 0.012), Vector3(0, 0.615, 0.2), metal, 0.02)
+	for sx in [-0.255, 0.255]:
+		_item_part(Vector3(0.012, 0.09, 0.36), Vector3(sx, 0.615, 0.02), metal, 0.02)
+	# 中に入っている教科書(すこし見える)
+	_item_part(Vector3(0.2, 0.04, 0.26), Vector3(-0.1, 0.6, 0.03), Color("6A92D0"), 0.012, 0.005)
+	_item_part(Vector3(0.18, 0.03, 0.24), Vector3(0.12, 0.592, 0.04), Color("E5B94E"), 0.012, 0.005)
+	# 脚(四すみ)と、下の横の棒、ゴムの足
+	for sx in [-0.27, 0.27]:
+		for sz in [-0.19, 0.19]:
+			_item_part(Vector3(0.03, 0.64, 0.03), Vector3(sx, 0.33, sz), metal, 0.02, 0.006)
+			_item_part(Vector3(0.04, 0.02, 0.04), Vector3(sx, 0.01, sz), Color("3A3633"), 0.012, 0.006)
+		_item_part(Vector3(0.025, 0.025, 0.38), Vector3(sx, 0.14, 0), metal, 0.015)
+	_item_part(Vector3(0.54, 0.025, 0.025), Vector3(0, 0.14, 0.19), metal, 0.015)
+	# かばんのフック(横)
+	_item_part(Vector3(0.012, 0.05, 0.012), Vector3(0.29, 0.6, 0.0), Color("C9CED6"), 0.008)
+	_item_part(Vector3(0.03, 0.012, 0.012), Vector3(0.302, 0.58, 0.0), Color("C9CED6"), 0.008)
+
+
+## 教卓: 木の箱(前の板は一段明るい色で、ふちどりの飾り)、少しはみ出す天板、下の台。
+## 上に出席簿と、チョークの箱
+func _build_podium() -> void:
+	var wood := Color("8B5A33")
+	_item_part(Vector3(0.9, 0.08, 0.5), Vector3(0, 0.04, 0), wood.darkened(0.25), ITEM_OUTLINE, 0.015)
+	_item_part(Vector3(0.84, 0.86, 0.44), Vector3(0, 0.5, 0), wood, ITEM_OUTLINE, 0.02)
+	# 前の板(-Z)と、ふちどり
+	_item_part(Vector3(0.68, 0.62, 0.02), Vector3(0, 0.5, -0.225), wood.lightened(0.15), 0.02, 0.008)
+	_item_part(Vector3(0.56, 0.5, 0.02), Vector3(0, 0.5, -0.232), wood.lightened(0.05), 0.015, 0.006)
+	# 前の板の、学校のマーク(丸い金の飾り)
+	var badge := CylinderMesh.new()
+	badge.top_radius = 0.07
+	badge.bottom_radius = 0.07
+	badge.height = 0.012
+	badge.radial_segments = 16
+	_item_mesh(badge, Vector3(0, 0.58, -0.245), Color("E9B949"), 0.012, Vector3(PI / 2.0, 0, 0))
+	# 天板(少しはみ出す)
+	_item_part(Vector3(0.98, 0.05, 0.58), Vector3(0, 0.955, 0), Color("B67A45"), ITEM_OUTLINE, 0.015)
+	# 出席簿(青い表紙)と、チョークの箱(白いチョーク)
+	_item_part(Vector3(0.26, 0.03, 0.34), Vector3(-0.2, 0.995, 0.02), Color("3F6FD0"), 0.015, 0.006)
+	_item_part(Vector3(0.24, 0.022, 0.32), Vector3(-0.2, 0.99, 0.02), Color("FFFDF5"), 0.0)
+	_item_part(Vector3(0.16, 0.05, 0.08), Vector3(0.22, 1.005, -0.08), Color("F2C14E"), 0.015, 0.006)
+	for k in 3:
+		_item_part(Vector3(0.025, 0.025, 0.07), Vector3(0.18 + k * 0.035, 1.04, -0.08), Color.WHITE, 0.008)
+
+
 ## 足もとのぼんやりした丸い影(まん中が濃く、外にいくほど薄い)
 func _make_blob(size: Vector2) -> MeshInstance3D:
 	if _blob_mat == null:
@@ -2146,14 +2257,11 @@ func _build_handkerchief(state: GameState) -> void:
 					_item_part(Vector3(0.44, 0.006, 0.05), Vector3(0, fy + face * 0.006, k), Color.WHITE, 0.0)
 					_item_part(Vector3(0.05, 0.006, 0.44), Vector3(k, fy + face * 0.007, 0), Color.WHITE, 0.0)
 		1:
-			# 上履き: 赤い底、丸い白い本体、青いゴムのつま先、甲のゴムバンド、足を入れる口、かかとのつまみ
-			# (スタンプの絵と同じ色。つま先は -Z)
-			_item_part(Vector3(0.24, 0.035, 0.5), Vector3(0, 0.018, 0), Color("D9483B"), ITEM_OUTLINE, 0.03)
-			_item_part(Vector3(0.23, 0.12, 0.48), Vector3(0, 0.09, 0.0), Color.WHITE, ITEM_OUTLINE, 0.055)
-			_item_part(Vector3(0.24, 0.115, 0.17), Vector3(0, 0.085, -0.165), COLOR_SHOE_RUBBER, ITEM_OUTLINE, 0.055)
-			_item_part(Vector3(0.245, 0.045, 0.07), Vector3(0, 0.13, -0.02), COLOR_SHOE_RUBBER, 0.02, 0.015)
-			_item_part(Vector3(0.15, 0.012, 0.2), Vector3(0, 0.152, 0.11), Color("4A4A52"), 0.0, 0.004)
-			_item_part(Vector3(0.08, 0.06, 0.03), Vector3(0, 0.16, 0.235), COLOR_SHOE_RUBBER, 0.015, 0.01)
+			_build_shoe()
+		3:
+			_build_desk()
+		4:
+			_build_podium()
 		_:
 			_item_part(size, Vector3(0, size.y / 2.0, 0), shape[1], ITEM_OUTLINE)
 	_handkerchief.visible = false
