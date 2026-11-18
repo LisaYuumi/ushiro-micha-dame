@@ -2215,8 +2215,10 @@ func _carry_night_item(m: CharacterModel, body: Basis, back: Vector3) -> void:
 				# 絵は体と腕のあいだ(脇の下にはさむ)。腕は絵の外側に下ろす(CharacterModel.set_tuck)
 				_set_tucker(m)
 				var shoulder := m.bone_world("DEF-upper_arm.R").origin
-				var b := body * Basis(Vector3.UP, PI / 2.0)
-				_handkerchief.transform = Transform3D(b.scaled(Vector3.ONE * 0.85), shoulder + Vector3(0, -0.6, 0))
+				# 絵は横にする(額縁の面のまわりに90度)。落とし物の原点は下の端なので、真ん中を脇の下に合わせる
+				var b := (body * Basis(Vector3.UP, PI / 2.0) * Basis(Vector3.BACK, PI / 2.0)).scaled(Vector3.ONE * 0.85)
+				var center := shoulder + Vector3(0, -0.22, 0)
+				_handkerchief.transform = Transform3D(b, center - b * Vector3(0, NightStage.ITEM_SIZES[3].y / 2.0, 0))
 			else:
 				var b2 := body * Basis(Vector3.UP, PI) * Basis(Vector3.RIGHT, -PI / 2.0)
 				_handkerchief.transform = Transform3D(b2.scaled(Vector3.ONE * 0.85), chest + right * 0.25 - back * 0.3 + Vector3(0, -0.2, 0))
