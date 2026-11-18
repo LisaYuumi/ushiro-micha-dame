@@ -188,11 +188,21 @@ static func _build_mona_lisa(item: Node3D, parts: Dictionary) -> void:
 	hand.height = 0.06
 	add.call(hand, Vector3(-0.03, -0.27, 0.066), Color("E8C49A"), 0.004, Vector3(1.4, 0.8, 0.3))
 	add.call(hand, Vector3(0.035, -0.25, 0.07), Color("F0CFA6"), 0.004, Vector3(1.4, 0.8, 0.3))
-	# 髪(長い黒髪が肩まで)と、うすいベール
+	# 髪: 頭の上と、顔の左右に肩まで垂れる2束(あごの下には来ないように。首が見える)と、うすいベール
+	var hair_col := Color("3A2A1E")
 	var hair := SphereMesh.new()
-	hair.radius = 0.13
-	hair.height = 0.34
-	add.call(hair, Vector3(0, 0.04, 0.052), Color("3A2A1E"), 0.0, Vector3(1.0, 1.15, 0.12))
+	hair.radius = 0.12
+	hair.height = 0.24
+	add.call(hair, Vector3(0, 0.1, 0.052), hair_col, 0.0, Vector3(1.05, 0.95, 0.12))
+	for sx in [-1.0, 1.0]:
+		var strand := CapsuleMesh.new()
+		strand.radius = 0.035
+		strand.height = 0.26
+		add.call(strand, Vector3(sx * 0.082, -0.0, 0.052), hair_col, 0.0, Vector3(1.0, 1.0, 0.25), Vector3(0, 0, sx * -0.06))
+	# 首(肌色。あごの下から服まで)
+	var throat := BoxMesh.new()
+	throat.size = Vector3(0.06, 0.08, 0.004)
+	add.call(throat, Vector3(0, -0.05, 0.06), Color("E8C49A"), 0.0)
 	var veil := SphereMesh.new()
 	veil.radius = 0.12
 	veil.height = 0.14
