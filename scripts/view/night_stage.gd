@@ -4,7 +4,7 @@ extends RefCounted
 ## - 懐中電灯: 床で光り続ける(暗い席で目立ち、明るい席では月の光にまぎれる)
 ## - メトロノーム: 床で振り子がゆれて「カチ、カチ」と小さく鳴る
 ## - モナリザ: 額縁に入った絵。床に置かれると、目がゆっくりこっちを見て、目がキラッと光る(暗い席でも見える)
-## - ガイコツ: 丸っこいにっこり顔。落とすとバラバラに崩れ、拾うと元の形に戻って抱えて走る
+## - ガイコツ: 丸っこい体に、ふつうのガイコツの顔。落とすとバラバラに崩れ、拾うと元の形に戻って抱えて走る
 ## 部品は item(WorldView の _handkerchief)の下に置く(見え方のルールで隠すため)。
 ## いつも見せる部品(モナリザの目の光)には meta "always_visible" をつける。
 
@@ -249,7 +249,7 @@ static func _build_mona_lisa(item: Node3D, parts: Dictionary) -> void:
 	parts["glints"] = glints
 
 
-## ガイコツ(理科室の標本。丸っこくてかわいい): 大きな丸い頭(にっこり顔・ほっぺ)、つぶがつながった背骨、
+## ガイコツ(理科室の標本。丸っこい): 大きな丸い頭(ふつうのガイコツの顔)、つぶがつながった背骨、
 ## 弓なりのあばら骨、骨盤、ひじとひざに丸い関節のある手足、丸い手と足。
 ## 組み立てた形(body)と、床でバラバラに崩れた形(pile)の2つを作り、どちらかだけ出す
 static func _build_skeleton(item: Node3D, parts: Dictionary) -> void:
@@ -359,7 +359,7 @@ static func _rib(parent: Node3D, pos: Vector3, r: float) -> void:
 	parent.add_child(m)
 
 
-## 丸い頭: 白い玉に、にっこりした目(^ ^)、小さな鼻の穴、笑った口と、ほっぺ
+## 頭: 白い丸い頭と、少し細いあご。ふつうのガイコツの顔(黒い丸い目の穴、三角の鼻の穴、上下の歯のならび)
 static func _skull(parent: Node3D, pos: Vector3, rot: Vector3) -> void:
 	var head := Node3D.new()
 	head.position = pos
@@ -371,52 +371,50 @@ static func _skull(parent: Node3D, pos: Vector3, rot: Vector3) -> void:
 	sph.radial_segments = 16
 	sph.rings = 8
 	head.add_child(_mesh(sph, COLOR_BONE, 0.02))
-	# あご(少し下に出た丸み)
+	# あご(下に少し細く出る)
 	var jaw := SphereMesh.new()
-	jaw.radius = 0.08
+	jaw.radius = 0.075
 	jaw.height = 0.1
 	var jm := _mesh(jaw, COLOR_BONE, 0.015)
-	jm.position = Vector3(0, -0.08, 0.035)
-	jm.scale = Vector3(1.1, 0.7, 0.9)
+	jm.position = Vector3(0, -0.085, 0.04)
+	jm.scale = Vector3(1.05, 0.75, 0.85)
 	head.add_child(jm)
-	var ink := Color("3A3633")
+	var hole := Color("2A2624")
+	# 目の穴(黒い丸。少し大きめ)
 	for x in [-0.048, 0.048]:
-		for side in [-1.0, 1.0]:
-			var bar := BoxMesh.new()
-			bar.size = Vector3(0.036, 0.013, 0.01)
-			var e := _mesh(bar, ink, 0.0)
-			e.position = Vector3(x + side * 0.013, 0.03, 0.125)
-			e.rotation.z = side * -0.6
-			head.add_child(e)
-	# 鼻の穴(小さな逆さハート形のかわりに、丸を2つ)
-	for x in [-0.01, 0.01]:
-		var hole := SphereMesh.new()
-		hole.radius = 0.009
-		hole.height = 0.014
-		var hm := _mesh(hole, ink, 0.0)
-		hm.position = Vector3(x, -0.01, 0.128)
-		hm.scale = Vector3(1.0, 1.3, 0.4)
-		head.add_child(hm)
-	# 笑った口と、小さな歯の線(3本)
-	for side in [-1.0, 1.0]:
-		var bar := BoxMesh.new()
-		bar.size = Vector3(0.05, 0.012, 0.01)
-		var mo := _mesh(bar, ink, 0.0)
-		mo.position = Vector3(side * 0.02, -0.06, 0.112)
-		mo.rotation.z = side * 0.35
-		head.add_child(mo)
-	for k in 3:
-		var tooth := BoxMesh.new()
-		tooth.size = Vector3(0.004, 0.014, 0.008)
-		var tm := _mesh(tooth, ink, 0.0)
-		tm.position = Vector3((k - 1) * 0.016, -0.057, 0.114)
-		head.add_child(tm)
-	# ほっぺ(ピンク)
-	for x in [-0.085, 0.085]:
-		var ch := SphereMesh.new()
-		ch.radius = 0.02
-		ch.height = 0.04
-		var cm := _mesh(ch, Color("F4A3B6"), 0.0)
-		cm.position = Vector3(x, -0.02, 0.105)
-		cm.scale = Vector3(1.0, 0.7, 0.4)
-		head.add_child(cm)
+		var eye := SphereMesh.new()
+		eye.radius = 0.034
+		eye.height = 0.06
+		eye.radial_segments = 12
+		eye.rings = 6
+		var em := _mesh(eye, hole, 0.0)
+		em.position = Vector3(x, 0.02, 0.112)
+		em.scale = Vector3(1.0, 1.05, 0.35)
+		head.add_child(em)
+	# 鼻の穴(逆さの三角)
+	var nose := MeshInstance3D.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.add_vertex(Vector3(-0.015, 0.0, 0))
+	st.add_vertex(Vector3(0.015, 0.0, 0))
+	st.add_vertex(Vector3(0.0, -0.03, 0))
+	nose.mesh = st.commit()
+	var nm := StandardMaterial3D.new()
+	nm.albedo_color = hole
+	nm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	nose.material_override = nm
+	nose.position = Vector3(0, -0.012, 0.13)
+	head.add_child(nose)
+	# 歯: 上下2段に、四角い歯をならべる(歯のすき間は黒い線)
+	var gap := BoxMesh.new()
+	gap.size = Vector3(0.09, 0.006, 0.01)
+	var gm := _mesh(gap, hole, 0.0)
+	gm.position = Vector3(0, -0.07, 0.108)
+	head.add_child(gm)
+	for k in 6:
+		var x := -0.0375 + k * 0.015
+		var line := BoxMesh.new()
+		line.size = Vector3(0.003, 0.03, 0.01)
+		var lm := _mesh(line, hole, 0.0)
+		lm.position = Vector3(x + 0.0075, -0.07, 0.108)
+		head.add_child(lm)

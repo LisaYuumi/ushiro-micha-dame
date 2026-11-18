@@ -275,15 +275,19 @@ func _draw_item(it: String, c: Vector2, s: float, line: float, ghost: bool) -> v
 				draw_circle(c + Vector2(0, -0.06) * s, s * 0.1, Color("E8C49A"))
 				draw_rect(Rect2(c + Vector2(-0.16, 0.12) * s, Vector2(0.32, 0.2) * s), Color("2E3324"))
 		"skeleton":
-			# ガイコツ: 丸い白い頭(にっこり)と、骨
+			# ガイコツ: 丸い白い頭(ふつうのガイコツの顔)と、骨
 			_poly(_pts(c, s, [[-0.05, -0.04], [0.05, -0.04], [0.05, 0.36], [-0.05, 0.36]]), Color("FFF6E4"), line * 0.7, ghost)
 			_poly(_pts(c, s, [[-0.26, 0.06], [0.26, 0.06], [0.26, 0.14], [-0.26, 0.14]]), Color("FFF6E4"), line * 0.7, ghost)
 			if not ghost:
 				draw_circle(c + Vector2(0, -0.22) * s, s * 0.22 + line * 0.5, INK)
 				draw_circle(c + Vector2(0, -0.22) * s, s * 0.22 - line * 0.3, Color("FFF6E4"))
+				# ふつうのガイコツの顔: 黒い丸い目の穴、三角の鼻の穴、歯の線
 				for x in [-0.08, 0.08]:
-					draw_arc(c + Vector2(x, -0.24) * s, s * 0.04, PI, TAU, 6, INK, line * 0.6, true)
-				draw_arc(c + Vector2(0, -0.18) * s, s * 0.08, 0.3, PI - 0.3, 8, INK, line * 0.6, true)
+					draw_circle(c + Vector2(x, -0.25) * s, s * 0.055, INK)
+				draw_colored_polygon(_pts(c, s, [[-0.025, -0.19], [0.025, -0.19], [0.0, -0.15]]), INK)
+				draw_line(c + Vector2(-0.08, -0.1) * s, c + Vector2(0.08, -0.1) * s, INK, line * 0.5, true)
+				for x in [-0.04, 0.0, 0.04]:
+					draw_line(c + Vector2(x, -0.12) * s, c + Vector2(x, -0.08) * s, INK, line * 0.4, true)
 		"shell":
 			# 貝殻: 扇の形と、うね
 			var fan := PackedVector2Array([c + Vector2(0, 0.3) * s])
