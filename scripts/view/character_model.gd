@@ -14,7 +14,8 @@ const PANIC := "panic"         # 追いかける/逃げる: 細い目・汗・�
 const WIN := "win"             # 勝ち: にっこり(「^」の目・U の口)
 const LOSE := "lose"           # 負け: しょんぼり(下がった目・への字の口・うなだれる)
 const SMIRK := "smirk"         # ニヤニヤ(見逃しで振り向かれた鬼): 細めた目・片方が上がった笑い口・つり眉
-const AWKWARD := "awkward"     # 気まずい(見逃して振り向いた人): 困り眉・汗・目をそらす・ゆがんだ口
+const AWKWARD := "awkward"     # 気まずい: 困り眉・汗・目をそらす・ゆがんだ口
+const SHOCK := "shock"         # ガーン!(見逃して振り向いた人): 白目に小さな黒目・あごが外れたように縦に開いた口・おでこの青い縦線・汗
 
 ## お手つきでだんだん崩れる顔(set_fluster)
 ## 0: ふだん / 1: 困り眉・汗 / 2: 汗2つ・目がちぐはぐ・への字口・ふるえる / 3: 放心(×の目・ぽかん口・ふらふら)
@@ -140,6 +141,10 @@ var _sweat: MeshInstance3D
 var _sweat2: MeshInstance3D
 var _brows: Array[MeshInstance3D] = []
 var _x_eyes: Array[Node3D] = []
+## ガーン!の顔の部品(白目と黒目・縦に長い口・おでこの縦線)と、口がガクッと開いていく時間
+var _shock_root: Node3D
+var _shock_mouth: MeshInstance3D
+var _shock_t := 0.0
 var _expression := ""
 var _fluster := -1
 var _hop := 0.0
@@ -240,6 +245,7 @@ func build(color: Color, display_name: String, font: Font) -> void:
 		_face.add_child(xe)
 		_x_eyes.append(xe)
 
+	_build_shock_face()
 	_build_name_tag(display_name, font)
 	# (物理演算で倒れる仕組みは使わない: コマが遅いと体が飛ぶので。転ぶ動きは animate で決まった動きにする)
 
@@ -876,6 +882,9 @@ func set_expression(expr: String) -> void:
 	if expr == _expression:
 		return
 	_expression = expr
+	if expr == SHOCK:
+		# ガーン!になった瞬間から、口がガクッと開いていく
+		_shock_t = 0.0
 	_apply_face()
 
 
@@ -895,11 +904,16 @@ func _apply_face() -> void:
 		e.visible = not happy
 	for h in _happy_eyes:
 		h.visible = happy
+	var shock := expr == SHOCK
+	if _shock_root:
+		_shock_root.visible = shock
+	for e in _eyes:
+		e.visible = not happy and not shock
 	_mouth_flat.visible = expr == NORMAL or expr == AWKWARD
 	_mouth_o.visible = expr == SURPRISED or expr == PANIC
 	_mouth_smile.visible = expr == WIN or expr == SMIRK
 	_mouth_frown.visible = expr == OOPS or expr == LOSE
-	_sweat.visible = expr == OOPS or expr == PANIC or expr == AWKWARD
+	_sweat.visible = expr == OOPS or expr == PANIC or expr == AWKWARD or shock
 	# ニヤニヤ・気まずいでは、口を少し傾け、目を横へずらす(ほかの顔ではもとの位置)
 	_mouth_smile.rotation.z = 0.28 if expr == SMIRK else 0.0
 	_mouth_smile.position.x = 0.015 if expr == SMIRK else 0.0
@@ -928,7 +942,7 @@ func _apply_face() -> void:
 	var f := maxi(_fluster, 0)
 	var calm := expr == NORMAL or expr == SURPRISED or expr == OOPS
 	for b in _brows:
-		b.visible = (f >= 1 and expr != WIN) or expr == SMIRK or expr == AWKWARD
+		b.visible = ((f >= 1 and expr != WIN) or expr == SMIRK or expr == AWKWARD) and expr != SHOCK
 	_sweat.visible = _sweat.visible or f >= 1
 	_sweat2.visible = f >= 2
 	for xe in _x_eyes:
@@ -950,6 +964,54 @@ func _apply_face() -> void:
 		_eyes[1].scale = Vector3(0.75, 0.75, 1.0)
 		_mouth_flat.visible = false
 		_mouth_frown.visible = true
+
+
+## ガーン!の顔: 白目に小さな黒目、あごが外れたように縦に長く開いた口、おでこの青い縦線(ふだんは隠す)
+func _build_shock_face() -> void:
+	_shock_root = Node3D.new()
+	_face.add_child(_shock_root)
+	for x in [-0.08, 0.08]:
+		var white := SphereMesh.new()
+		white.radius = 0.048
+		white.height = 0.096
+		white.radial_segments = 14
+		white.rings = 7
+		var w := _mesh(white, Color.WHITE, 0.008)
+		w.position = Vector3(x, HEAD_Y + 0.05, FACE_Z + 0.004)
+		w.scale = Vector3(1.0, 1.15, 0.45)
+		_shock_root.add_child(w)
+		var pupil := SphereMesh.new()
+		pupil.radius = 0.013
+		pupil.height = 0.026
+		pupil.radial_segments = 8
+		pupil.rings = 4
+		var pm := _mesh(pupil, GameConfig.COLOR_INK)
+		pm.position = Vector3(x, HEAD_Y + 0.045, FACE_Z - 0.018)
+		_shock_root.add_child(pm)
+	var mouth := SphereMesh.new()
+	mouth.radius = 0.045
+	mouth.height = 0.09
+	mouth.radial_segments = 12
+	mouth.rings = 6
+	_shock_mouth = _mesh(mouth, Color(0.25, 0.05, 0.05), 0.006)
+	_shock_mouth.position = Vector3(0, HEAD_Y - 0.12, FACE_Z + 0.006)
+	_shock_mouth.scale = Vector3(0.8, 0.6, 0.45)
+	_shock_root.add_child(_shock_mouth)
+	# おでこの青い縦線(頭の丸みにそって置く)
+	for i in 5:
+		var x := -0.1 + 0.05 * float(i)
+		var y := HEAD_Y + 0.15
+		var line := _box(Vector3(0.011, 0.075 - 0.012 * absf(float(i) - 2.0), 0.006), Vector3.ZERO)
+		var col := Color(0.32, 0.38, 0.78)
+		var m := StandardMaterial3D.new()
+		m.albedo_color = col
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		line.material_override = m
+		var z := -sqrt(maxf(HEAD_RADIUS * HEAD_RADIUS - (y - HEAD_Y) * (y - HEAD_Y) - x * x, 0.0)) - 0.004
+		line.position = Vector3(x, y, z)
+		line.rotation.x = asin(clampf((y - HEAD_Y) / HEAD_RADIUS, -1.0, 1.0))
+		_shock_root.add_child(line)
+	_shock_root.visible = false
 
 
 ## 振り向いたときなどに、ピョンと跳ねる
@@ -1010,6 +1072,14 @@ func set_kneel(v: bool) -> void:
 func animate(delta: float, running: bool) -> void:
 	_time += delta
 	_update_blink(delta)
+	if _shock_root and _shock_root.visible:
+		# ガーン!: 口がガクッと縦に開き(あごが外れたように)、少しだけふるえる
+		_shock_t += delta
+		var k := clampf(_shock_t / 0.22, 0.0, 1.0)
+		k = 1.0 - pow(1.0 - k, 3.0)
+		var wob := 0.04 * sin(_time * 40.0) * clampf(1.0 - _shock_t / 0.8, 0.0, 1.0)
+		_shock_mouth.scale = Vector3(0.8, lerpf(0.6, 2.0, k) + wob, 0.45)
+		_shock_mouth.position.y = HEAD_Y - 0.12 - 0.035 * k
 	_update_rig(delta)
 	_update_ragdoll(delta)
 	_follow_bones()

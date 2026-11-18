@@ -268,6 +268,7 @@ EN = {
     "歩く": "Walk",
     "ひざ崩れ": "Collapse",
     "驚く": "Surprised",
+    "ガーン": "Shocked",
     "勝ち": "Win",
     "負け": "Lose",
     "ニヤニヤ": "Smirk",

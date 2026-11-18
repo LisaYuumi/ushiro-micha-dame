@@ -16,7 +16,7 @@ signal closed
 const STAGES := {"教室": "school", "海辺": "beach"}
 const CAMERAS := ["輪の全体", "教室の全体", "キャラの寄り", "鬼の後ろ", "自由"]
 const POSES := ["座る", "体育座り", "立つ", "歩く", "走る", "振り向く", "転ぶ", "ひざ崩れ"]
-const FACES := ["ふつう", "驚く", "勝ち", "負け", "ニヤニヤ", "気まずい", "お手つき", "必死", "困り眉", "汗だく", "放心"]
+const FACES := ["ふつう", "驚く", "ガーン", "勝ち", "負け", "ニヤニヤ", "気まずい", "お手つき", "必死", "困り眉", "汗だく", "放心"]
 const ITEMS := ["なし", "手に持つ", "背中の後ろ"]
 ## 保存する画像の大きさ(4K)
 const SHOT_SIZE := Vector2i(3840, 2160)
@@ -177,6 +177,8 @@ func _apply_face(a: GameState.Actor, m: CharacterModel) -> void:
 	match face:
 		"驚く":
 			expr = CharacterModel.SURPRISED
+		"ガーン":
+			expr = CharacterModel.SHOCK
 		"勝ち":
 			expr = CharacterModel.WIN
 		"負け":

@@ -400,7 +400,7 @@ func _ms_dazed(id: int) -> bool:
 	return (not _ms.is_empty() and _ms["loser"] == id and float(_ms["t"]) >= MS_CHIIN) or _missed_sit.has(id)
 
 
-## 見逃しの演出での表情(""なら、ふだんどおり): 振り向いてから、鬼はニヤニヤ、気づかなかった人は気まずい顔(チーンからは放心)
+## 見逃しの演出での表情(""なら、ふだんどおり): 振り向いてから、鬼はニヤニヤ、気づかなかった人はガーン!(あごが外れたような顔。チーンからは放心)
 func _ms_expression(id: int) -> String:
 	if _ms.is_empty():
 		return ""
@@ -408,7 +408,7 @@ func _ms_expression(id: int) -> String:
 	if id == _ms["oni"] and t >= MS_LOOK:
 		return CharacterModel.SMIRK
 	if id == _ms["loser"] and t >= MS_FACE:
-		return CharacterModel.AWKWARD if t < MS_CHIIN else CharacterModel.NORMAL
+		return CharacterModel.SHOCK if t < MS_CHIIN else CharacterModel.NORMAL
 	return ""
 
 
