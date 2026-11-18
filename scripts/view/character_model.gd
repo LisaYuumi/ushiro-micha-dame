@@ -966,7 +966,7 @@ func _apply_face() -> void:
 		_mouth_frown.visible = true
 
 
-## ガーン!の顔: 白目に小さな黒目、あごが外れたように縦に長く開いた口、おでこの青い縦線(ふだんは隠す)
+## ガーン!の顔: 白目に小さな黒目、あごが外れたように縦に長く開いた口、おでこの青い縦線(顔の左半分。ふだんは隠す)
 func _build_shock_face() -> void:
 	_shock_root = Node3D.new()
 	_face.add_child(_shock_root)
@@ -997,14 +997,16 @@ func _build_shock_face() -> void:
 	_shock_mouth.position = Vector3(0, HEAD_Y - 0.12, FACE_Z + 0.006)
 	_shock_mouth.scale = Vector3(0.8, 0.6, 0.45)
 	_shock_root.add_child(_shock_mouth)
-	# おでこの青い縦線(頭の丸みにそって置く)
-	for i in 5:
-		var x := -0.1 + 0.05 * float(i)
-		var y := HEAD_Y + 0.15
-		var line := _box(Vector3(0.011, 0.075 - 0.012 * absf(float(i) - 2.0), 0.006), Vector3.ZERO)
-		var col := Color(0.32, 0.38, 0.78)
+	# おでこの青い縦線: 顔の半分(正面から見て左側)だけ。いちばん左が長く、右へ行くほど短い(上のはしはそろえる)。
+	# (顔の正面は -Z なので、正面から見た左は +X)
+	var top := HEAD_Y + 0.2
+	for i in 4:
+		var x := 0.125 - 0.035 * float(i)
+		var length := 0.12 - 0.025 * float(i)
+		var y := top - length / 2.0
+		var line := _box(Vector3(0.011, length, 0.006), Vector3.ZERO)
 		var m := StandardMaterial3D.new()
-		m.albedo_color = col
+		m.albedo_color = Color(0.32, 0.38, 0.78)
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		line.material_override = m
 		var z := -sqrt(maxf(HEAD_RADIUS * HEAD_RADIUS - (y - HEAD_Y) * (y - HEAD_Y) - x * x, 0.0)) - 0.004
