@@ -213,6 +213,8 @@ func _apply_item() -> void:
 	if h == null:
 		return
 	var a := _selected()
+	if _view._straps and is_instance_valid(_view._straps):
+		_view._straps.visible = false
 	match _item:
 		"手に持つ":
 			h.visible = true

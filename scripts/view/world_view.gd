@@ -354,6 +354,9 @@ func sync(state: GameState, delta: float) -> void:
 	_clock += delta
 
 	var holder := state.get_actor(state.chaser_id)
+	# (背負う紐は、背負っている間だけ。_carry_item が出す)
+	if _straps and is_instance_valid(_straps):
+		_straps.visible = false
 	if _item_head_id >= 0 and _actor_nodes.has(_item_head_id):
 		# 見逃した人は、落とし物を頭にのせたまま(次のラウンドで消える)
 		var hm := _actor_nodes[_item_head_id] as CharacterModel
@@ -2096,6 +2099,10 @@ func _carry_item(m: CharacterModel) -> void:
 	var body := m.global_transform.basis.orthonormalized()
 	# キャラの正面は -Z、背中は +Z
 	var back := body.z.normalized()
+	# 大きな物(机・教卓・砂の城・バナナボート)は、紐で背中にくくりつける
+	if _item_index >= 3 and not _night:
+		_carry_on_back(m, body, back)
+		return
 	if _beach:
 		_carry_beach_item(m, body, back)
 		return
@@ -2125,6 +2132,52 @@ func _carry_item(m: CharacterModel) -> void:
 			_handkerchief.transform = Transform3D(body, pos)
 
 
+## 大きな物を紐で背中にくくりつける: 物は背中のうしろに立てて(バナナボートは横向き)、
+## 体の前には、肩から腰へのたすきがけの紐と、腰ひもが見える
+func _carry_on_back(m: CharacterModel, body: Basis, back: Vector3) -> void:
+	var chest := m.bone_world("DEF-spine.003").origin
+	var b := body
+	var depth := _item_size.z
+	var height := _item_size.y
+	if _beach and _item_index == 4:
+		# バナナボートは長いので、横にして背負う
+		b = body * Basis(Vector3.UP, PI / 2.0)
+		depth = _item_size.x
+	var scale_k := 0.8 if height > 0.9 else 0.9
+	_handkerchief.transform = Transform3D(b.scaled(Vector3.ONE * scale_k), chest + back * (0.17 + depth * scale_k / 2.0) + Vector3(0, -height * scale_k * 0.55, 0))
+	_update_straps(m, body, true)
+
+
+## 背負うときの紐(体の前のたすきがけと腰ひも)。背負っていないときは隠す
+var _straps: Node3D
+
+
+func _update_straps(m: CharacterModel, body: Basis, show: bool) -> void:
+	if _straps == null or not is_instance_valid(_straps):
+		_straps = Node3D.new()
+		add_child(_straps)
+		var rope := Color("8B6A4A")
+		for side in [-1.0, 1.0]:
+			var bm := BoxMesh.new()
+			bm.size = Vector3(0.05, 0.62, 0.035)
+			var mi := Toon.mesh(bm, rope, 0.012)
+			mi.position = Vector3(side * 0.05, -0.18, -0.2)
+			mi.rotation = Vector3(0.12, 0, side * 0.55)
+			_straps.add_child(mi)
+		var belt := TorusMesh.new()
+		belt.inner_radius = 0.2
+		belt.outer_radius = 0.24
+		belt.rings = 18
+		belt.ring_segments = 6
+		var bt := Toon.mesh(belt, rope, 0.012)
+		bt.position = Vector3(0, -0.42, 0.02)
+		bt.scale = Vector3(1.0, 0.6, 0.85)
+		_straps.add_child(bt)
+	_straps.visible = show
+	if show and m:
+		_straps.global_transform = Transform3D(body, m.bone_world("DEF-spine.003").origin)
+
+
 ## 夜の落とし物の持ち方: 懐中電灯は手に(前を照らす)、メトロノームとガイコツは胸の前に抱え、モナリザは頭の上に担ぐ
 func _carry_night_item(m: CharacterModel, body: Basis, back: Vector3) -> void:
 	# (落とし物の正面は +Z、キャラの正面は -Z なので、半回転して前に向ける)
@@ -2133,13 +2186,19 @@ func _carry_night_item(m: CharacterModel, body: Basis, back: Vector3) -> void:
 		1:
 			var hand := m.bone_world("DEF-hand.R").origin
 			_handkerchief.transform = Transform3D(front, hand + Vector3(0, -0.12, 0))
-		2, 4:
+		2:
 			var chest := m.bone_world("DEF-spine.003").origin
-			var drop := 0.32 if _item_index == 2 else 0.5
-			_handkerchief.transform = Transform3D(front, chest - back * 0.28 + Vector3(0, -drop, 0))
+			_handkerchief.transform = Transform3D(front, chest - back * 0.28 + Vector3(0, -0.32, 0))
 		_:
-			var head := m.bone_world("DEF-head").origin
-			_handkerchief.transform = Transform3D(front, head + Vector3(0, CharacterModel.HEAD_RADIUS + 0.02, 0))
+			# モナリザとガイコツは、右の脇に抱える(モナリザは絵を外に向けて縦に、ガイコツは横にして前向きに)
+			var chest := m.bone_world("DEF-spine.003").origin
+			var right := body.x.normalized()
+			if _item_index == 3:
+				var b := body * Basis(Vector3.UP, PI / 2.0)
+				_handkerchief.transform = Transform3D(b.scaled(Vector3.ONE * 0.85), chest + right * 0.27 + Vector3(0, -0.62, 0))
+			else:
+				var b2 := body * Basis(Vector3.UP, PI) * Basis(Vector3.RIGHT, -PI / 2.0)
+				_handkerchief.transform = Transform3D(b2.scaled(Vector3.ONE * 0.85), chest + right * 0.25 - back * 0.3 + Vector3(0, -0.2, 0))
 
 
 ## 夜の落とし物の動き(毎フレーム): 懐中電灯の光(暗い席で目立ち、明るい席では弱い)、メトロノームの振り子と音、
