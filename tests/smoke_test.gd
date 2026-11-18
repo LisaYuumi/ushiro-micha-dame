@@ -66,6 +66,7 @@ func _initialize() -> void:
 	_test_minion()
 	_test_two_minions()
 	_test_minion_vote()
+	_test_custom_bot_names()
 	_test_beach_stage()
 	_test_accessories()
 	_test_lap_behind_not_touch()
@@ -1915,6 +1916,24 @@ func _test_minion_vote() -> void:
 	_run_until(s5, "match_over", GameState.reveal_time() + 1.0)
 	_check(not s5.match_over and s5.can_go_next(), "最後のラウンドも、発表のあとは「次へ」を待つ")
 	_check(not s5.next_round() and s5.match_over, "最後のラウンドの「次へ」で、試合おわり")
+
+
+## 宣伝用: ボットの名前を決められる(空のボットはふつうの名前)
+func _test_custom_bot_names() -> void:
+	var s := GameState.new()
+	s.custom_bot_names = ["たろう", "", "はなこ"]
+	s.start_match(5, false, 7)
+	var bots := []
+	for a in s.actors:
+		if a.is_bot:
+			bots.append(a)
+	_check(bots[0].display_name == "たろう", "ボット1に決めた名前がつく")
+	_check(bots[1].display_name.begins_with("ボット2"), "空のボットは、ふつうの名前")
+	_check(bots[2].display_name == "はなこ", "ボット3に決めた名前がつく")
+	_check(bots[0].personality != "", "名前を変えても、性格(動き)はふつうのボットと同じ")
+	var names := Profile.clean_bot_names(["  じろう  ", "", "あ".repeat(40)])
+	_check(names.size() == Profile.BOT_NAME_SLOTS and names[0] == "じろう" and names[1] == "" and names[2].length() <= Profile.NAME_MAX,
+			"ボットの名前は9人分にそろえ、長すぎる名前は切る")
 
 
 ## 舞台: 海辺の落とし物と、状態で届く舞台

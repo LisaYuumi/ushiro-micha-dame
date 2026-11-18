@@ -14,6 +14,10 @@ const COLORS := [
 const DEFAULT_NAME := "プレイヤー"
 
 static var player_name := DEFAULT_NAME
+## 宣伝用の動画を撮るための、ボットの名前(開発用。GameConfig.SHOW_PHOTO_MODE のときだけ使う)。
+## ボット1〜9の順。空の人は、ふつうの「ボット1」などのまま
+static var bot_names: Array = []
+const BOT_NAME_SLOTS := 9
 static var color: Color = COLORS[4]
 ## ボットの性格(「(せっかち)」など)を名前の横に出すか(⚙メニューで切りかえ。はじめはオフ)
 static var show_personality := false
@@ -89,6 +93,24 @@ static func load_saved() -> void:
 	accessories = Accessories.clean(cfg.get_value("profile", "accessories", {}))
 	smooth_mode = clampi(int(cfg.get_value("profile", "smooth_mode", -1)), -1, 1)
 	screen_shake = bool(cfg.get_value("profile", "screen_shake", true))
+	bot_names = clean_bot_names(cfg.get_value("profile", "bot_names", []))
+
+
+## ボットの名前を、正しい形(9人分の文字。空は使わない)に直す
+static func clean_bot_names(v: Variant) -> Array:
+	var out := []
+	var src: Array = v if v is Array else []
+	for i in BOT_NAME_SLOTS:
+		var t := str(src[i]) if i < src.size() else ""
+		out.append(clean_name(t) if t.strip_edges() != "" else "")
+	return out
+
+
+## 試合で使うボットの名前(開発用の機能がオフなら、使わない)
+static func active_bot_names() -> Array:
+	if not GameConfig.SHOW_PHOTO_MODE:
+		return []
+	return clean_bot_names(bot_names)
 
 
 static func save() -> void:
@@ -107,6 +129,7 @@ static func save() -> void:
 	cfg.set_value("profile", "accessories", accessories)
 	cfg.set_value("profile", "smooth_mode", smooth_mode)
 	cfg.set_value("profile", "screen_shake", screen_shake)
+	cfg.set_value("profile", "bot_names", bot_names)
 	cfg.save(PATH)
 
 

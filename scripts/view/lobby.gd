@@ -52,6 +52,9 @@ var _preview: Panel
 var _web_input: WebInput
 ## 小物の画面(見本のキャラと、小物ごとの形・色のボタン)
 var _acc_box: VBoxContainer
+## 宣伝用: ボットの名前を決める画面(開発用。GameConfig.SHOW_PHOTO_MODE のときだけ)
+var _bots_box: VBoxContainer
+var _bot_edits: Array = []
 ## 題名・イヤホンの案内など(きせかえの画面では、場所をあけるために隠す)
 var _header: Array[Control] = []
 var _acc_preview: AccessoryPreview
@@ -181,6 +184,8 @@ func _ready() -> void:
 
 	_build_words_box(root)
 	_build_acc_box(root)
+	if GameConfig.SHOW_PHOTO_MODE:
+		_build_bots_box(root)
 	# 音量の画面(全体・BGM・効果音)
 	_volume_box = VBoxContainer.new()
 	_volume_box.add_theme_constant_override("separation", 14)
@@ -336,9 +341,96 @@ func _build_acc_box(root: VBoxContainer) -> void:
 	var make_words := _button("スタンプの言葉を自分で作る ▶", func() -> void: _show_words(), Vector2(0, 60))
 	make_words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	acc_bottom.add_child(make_words)
+	if GameConfig.SHOW_PHOTO_MODE:
+		var bots := _button("ボットの名前(宣伝用) ▶", func() -> void: _show_bots(), Vector2(0, 60))
+		bots.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		acc_bottom.add_child(bots)
 	var acc_back := _button("もどる", func() -> void: show_menu(), Vector2(0, 60), true)
 	acc_back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	acc_bottom.add_child(acc_back)
+
+
+## 宣伝用: ボット1〜9の名前(空ならふつうの「ボット1」など)。次に始める試合から使う
+func _build_bots_box(root: VBoxContainer) -> void:
+	_bots_box = VBoxContainer.new()
+	_bots_box.add_theme_constant_override("separation", 8)
+	_bots_box.visible = false
+	root.add_child(_bots_box)
+	_bots_box.add_child(_label(tr("ボットの名前(宣伝用・開発用。空ならふつうの名前。次の試合から)"), 22))
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 8)
+	_bots_box.add_child(grid)
+	_bot_edits.clear()
+	for i in Profile.BOT_NAME_SLOTS:
+		var slot := i
+		if OS.has_feature("web"):
+			var b := _button("", func() -> void: _ask_bot_name(slot), Vector2(250, 56))
+			grid.add_child(b)
+			_bot_edits.append(b)
+		else:
+			var e := LineEdit.new()
+			e.max_length = Profile.NAME_MAX
+			e.placeholder_text = "ボット%d" % (slot + 1)
+			e.custom_minimum_size = Vector2(250, 56)
+			e.add_theme_font_override("font", HudFont.get_font())
+			e.add_theme_font_size_override("font_size", 26)
+			e.add_theme_stylebox_override("normal", UiStyle.box(GameConfig.COLOR_PAPER))
+			e.add_theme_stylebox_override("focus", UiStyle.box(GameConfig.COLOR_PAPER))
+			e.add_theme_color_override("font_color", GameConfig.COLOR_INK)
+			e.text_submitted.connect(func(t: String) -> void: _set_bot_name(slot, t))
+			e.focus_exited.connect(func() -> void: _set_bot_name(slot, e.text))
+			grid.add_child(e)
+			_bot_edits.append(e)
+	var bottom := HBoxContainer.new()
+	bottom.add_theme_constant_override("separation", 12)
+	_bots_box.add_child(bottom)
+	var clear := _button("全部ふつうの名前にもどす", func() -> void: _clear_bot_names(), Vector2(0, 60))
+	clear.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom.add_child(clear)
+	var back := _button("もどる", func() -> void: _show_acc(), Vector2(0, 60), true)
+	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom.add_child(back)
+
+
+func _show_bots() -> void:
+	show_menu()
+	_menu.visible = false
+	_bots_box.visible = true
+	_update_bot_names()
+
+
+func _ask_bot_name(slot: int) -> void:
+	var names := Profile.clean_bot_names(Profile.bot_names)
+	_web_input.ask(tr("ボット%dの名前(空ならふつうの名前)") % (slot + 1), str(names[slot]), Profile.NAME_MAX,
+			func(t: String) -> void: _set_bot_name(slot, t))
+
+
+func _set_bot_name(slot: int, text: String) -> void:
+	var names := Profile.clean_bot_names(Profile.bot_names)
+	names[slot] = Profile.clean_name(text) if text.strip_edges() != "" else ""
+	Profile.bot_names = names
+	Profile.save()
+	_update_bot_names()
+
+
+func _clear_bot_names() -> void:
+	Profile.bot_names = []
+	Profile.save()
+	_update_bot_names()
+
+
+func _update_bot_names() -> void:
+	var names := Profile.clean_bot_names(Profile.bot_names)
+	for i in _bot_edits.size():
+		var n: String = names[i]
+		if _bot_edits[i] is LineEdit:
+			var e := _bot_edits[i] as LineEdit
+			if not e.has_focus():
+				e.text = n
+		else:
+			(_bot_edits[i] as Button).text = n if n != "" else tr("ボット%d") % (i + 1)
 
 
 func _show_acc() -> void:
@@ -355,6 +447,8 @@ func _show_acc() -> void:
 func _hide_acc() -> void:
 	for h in _header:
 		h.visible = true
+	if _bots_box:
+		_bots_box.visible = false
 	if _acc_box:
 		_acc_box.visible = false
 		_acc_preview.set_active(false)

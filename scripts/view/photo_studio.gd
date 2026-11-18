@@ -86,6 +86,7 @@ func _rebuild_scene() -> void:
 		_view.queue_free()
 	_state = GameState.new()
 	_state.stage = _stage
+	_state.custom_bot_names = Profile.active_bot_names()
 	_state.start_match(7, false, SEATS, Profile.player_name, Profile.color, Profile.accessories)
 	_state.round_index = _item_round
 	_state.take_events()

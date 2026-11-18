@@ -147,6 +147,8 @@ var _next_obstacle_id: int = 0
 
 ## 席の数(この試合。鬼は別に1人)
 var seat_count: int = GameConfig.SEAT_COUNT
+## 宣伝用の動画のための、ボットの名前(ボット1〜の順。空ならふつうの名前。開発用)
+var custom_bot_names: Array = []
 ## オンラインの試合か(最初の鬼は人から選ぶ。次からは、ボットでも負けた人が鬼)
 var humans_only_oni: bool = false
 ## ラウンドを始めるたびに1つ増える(ホスト以外の画面が、見た目を作り直す合図)
@@ -274,6 +276,9 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 			# ボットには性格をつけて、名前の横に出す
 			actor.personality = Personalities.ALL[rng.randi_range(0, Personalities.ALL.size() - 1)]
 			actor.display_name = "ボット%d(%s)" % [bot_no, Personalities.label(actor.personality)]
+			# 宣伝用: 名前を決めてあるボットは、その名前(性格は同じように決まり、動きはふつうのボット)
+			if bot_no - 1 < custom_bot_names.size() and str(custom_bot_names[bot_no - 1]) != "":
+				actor.display_name = str(custom_bot_names[bot_no - 1])
 			bot_no += 1
 		actor.accessories = Accessories.clean(accessories.get(i, {}))
 		# スタンプの言葉はランダム(人の分は、あとで main がその人の選び方に置きかえる)

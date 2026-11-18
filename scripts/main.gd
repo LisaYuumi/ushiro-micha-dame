@@ -168,6 +168,7 @@ func _on_host_start() -> void:
 		next_id += 1
 	var first_oni: int = humans[randi_range(0, humans.size() - 1)]
 	state.stage = Profile.stage
+	state.custom_bot_names = Profile.active_bot_names()
 	state.start_match_custom(-1, humans, first_oni, names, true, _seats, colors, accs)
 	mode = Mode.HOST
 	_apply_stamp_words(true)
@@ -265,6 +266,7 @@ func _start_round() -> void:
 		_on_host_start()
 		return
 	state.stage = Profile.stage
+	state.custom_bot_names = Profile.active_bot_names()
 	state.start_match(-1, _player_is_oni, _seats, Profile.player_name, Profile.color, Profile.accessories)
 	_apply_stamp_words(true)
 	_refresh_round()
