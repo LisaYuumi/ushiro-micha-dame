@@ -134,6 +134,8 @@ const MS_LOOK := GameConfig.MISSED_LOOK_TIME
 const MS_FACE := GameConfig.MISSED_LOOK_TIME + GameConfig.MISSED_TURN_TIME
 const MS_CHIIN := MS_FACE + GameConfig.MISSED_FACE_TIME
 const MS_WALK := MS_CHIIN + GameConfig.MISSED_CHIIN_TIME
+## トントンされて振り向くとき、椅子と重ならないように後ろ(鬼の側)へ出る距離(メートル)
+const MS_TURN_STEP_OUT := 0.55
 ## 頭に落とし物をのせている人(見逃した人。次のラウンドで消える)と、真ん中に座った位置
 var _item_head_id := -1
 var _missed_sit := {}
@@ -271,6 +273,12 @@ func sync(state: GameState, delta: float) -> void:
 			node.rotation.y = a.yaw
 			_apply_out_anim(a, node, delta)
 			_apply_missed_pos(a, node)
+			if forced:
+				# 見逃しでトントンされた人: 頭だけひねると、鬼の側から見て後頭部に顔があるように見えるので、
+				# 立ち上がって、体ごとくるっと鬼の方へ振り向く(椅子と重ならないように、少し後ろへ出ながら)
+				var out := Vector3(a.position.x, 0.0, a.position.z).normalized()
+				node.position = a.position + out * MS_TURN_STEP_OUT * t
+				node.rotation.y = a.yaw + PI * t
 			var blob: MeshInstance3D = _blobs.get(a.id)
 			if blob:
 				blob.position = Vector3(a.position.x, 0.03, a.position.z)
@@ -278,7 +286,8 @@ func sync(state: GameState, delta: float) -> void:
 			var model := node as CharacterModel
 			if model:
 				# 振り向いた姿は全員に見える(頭→上半身の順に後ろを向く)
-				model.set_look(a.looking_back or _ms_forced_look(a.id))
+				# (見逃しの人は体ごと振り向くので、頭はひねらない)
+				model.set_look(a.looking_back and not forced)
 				model.set_pose(_pose_of(state, a))
 				# 転んで止まっている間は、前にばったり倒れている(お手つきの演出中は、後ろへズッコケる)
 				if _out_anim.has(a.id):
@@ -438,6 +447,9 @@ func _update_missed_scene(state: GameState, delta: float) -> void:
 	elif stage == 2 and t >= MS_WALK:
 		# 3. 落とし物を頭にのせて、とぼとぼ真ん中へ(ここで結果カードを出してよい)
 		_end_close_up()
+		# (振り向いて少し後ろへ出た場所から、とぼとぼ歩きだす)
+		if ln:
+			_ms["walk_from"] = ln.position
 		_ms["stage"] = 4
 		_ms["walking"] = true
 		_ms["walk_t"] = 0.0
@@ -469,6 +481,8 @@ func _update_ms_camera(state: GameState) -> void:
 	var of := _face_point(oni)
 	if int(_ms["stage"]) == 1 and (me == _ms["oni"] or me == _ms["loser"]):
 		# 鬼の画面: 気づかなかった人の気まずい顔 / 気づかなかった人の画面: 鬼のニヤニヤ顔
+		# (2人は近くで向かい合うので、見ている本人の体はカメラの前をさえぎらないように映さない)
+		_set_viewer_hidden(me == _ms["oni"], me == _ms["loser"])
 		var f: Array = lf if me == _ms["oni"] else of
 		var target: Vector3 = f[0]
 		var dir: Vector3 = f[1]
@@ -476,6 +490,7 @@ func _update_ms_camera(state: GameState) -> void:
 		# (少し下から見上げる: 鬼の帽子のつばで目がかくれないように)
 		_top_cam.look_at_from_position(target + dir * 0.85 + Vector3(0, -0.14, 0), target + Vector3(0, 0.02, 0))
 		return
+	_set_viewer_hidden(false, false)
 	# 2人を横から: 2人を結ぶ線の真横から、2人とも入る距離で(部屋の内側になる向きから)
 	var mid: Vector3 = ((lf[0] as Vector3) + (of[0] as Vector3)) / 2.0
 	var d: Vector3 = (of[0] as Vector3) - (lf[0] as Vector3)
@@ -509,8 +524,21 @@ func _face_point(m: CharacterModel) -> Array:
 	return [target, face]
 
 
+## 顔のアップの間だけ、見ている本人(鬼か、気づかなかった人)の体を隠す
+func _set_viewer_hidden(oni_hidden: bool, loser_hidden: bool) -> void:
+	if _ms.is_empty():
+		return
+	var oni := _actor_nodes.get(_ms["oni"]) as Node3D
+	var ln := _actor_nodes.get(_ms["loser"]) as Node3D
+	if oni and oni.visible == oni_hidden:
+		oni.visible = not oni_hidden
+	if ln and ln.visible == loser_hidden:
+		ln.visible = not loser_hidden
+
+
 ## 顔のアップ・2人を横から見るのをやめて、席のカメラと名札に戻す
 func _end_close_up() -> void:
+	_set_viewer_hidden(false, false)
 	if _seat_cam:
 		_seat_cam.make_current()
 	if _overlay:
@@ -590,6 +618,9 @@ func _apply_out_anim(a: GameState.Actor, node: Node3D, delta: float) -> void:
 
 ## 姿勢: 座っている人は座る、追いかけっこ中は走る、鬼は歩く(止まっていれば立つ)
 func _pose_of(state: GameState, a: GameState.Actor) -> String:
+	# 見逃しでトントンされた人: 立ち上がって振り向く
+	if _ms_forced_look(a.id):
+		return "idle"
 	# 見逃した人: 演出の終わりにとぼとぼ歩いて、真ん中で体育座り
 	if _missed_sit.has(a.id):
 		return "walk" if _ms.has("walking") and _ms["loser"] == a.id else "floor"
