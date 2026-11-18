@@ -61,6 +61,19 @@ var _batch: StaticBatch
 var _room_state: GameState
 ## 海辺の舞台か(座る人は砂に体育座り・鬼は麦わら帽子・牛乳のかわりに水鉄砲)
 var _beach := false
+## 夜の教室(昼の教室と同じ部屋の夜。暗めの青、窓の外は月と星、窓側は月の光で明るい)
+var _night := false
+## 窓の外の稲光(雷のときだけ出す)と、夜の壁の文字の明るさ
+var _bolts: Array[Node3D] = []
+var _night_label_bright := -1.0
+## 夜の落とし物の動く部品(NightStage.build_item)と、メトロノームの音・時計
+var _night_item := {}
+var _tick_player: AudioStreamPlayer3D
+var _night_t := 0.0
+var _tick_side := 0
+const COLOR_NIGHT_SKY := Color("16204A")
+const COLOR_NIGHT_GLASS := Color("1E2C63")
+const COLOR_MOON := Color("FFF3B8")
 ## 砂に座るので、座っている人のカメラを下げる高さ
 const BEACH_CAM_DROP := 0.3
 ## 足もとのぼんやりした丸い影(id -> MeshInstance3D)と、その材質
@@ -200,6 +213,11 @@ func build(state: GameState) -> void:
 	_milk_nodes.clear()
 
 	_beach = state.stage == "beach"
+	_night = state.stage == "night"
+	# (昼の舞台では、夜の青っぽさをなくす)
+	Toon.set_night(0.0)
+	_bolts.clear()
+	_night_label_bright = -1.0
 	_build_environment()
 	_room_state = state
 	if _beach:
@@ -232,7 +250,7 @@ func build(state: GameState) -> void:
 		var milk := _build_milk_splash()
 		if a.id == state.local_player_id:
 			# 自分の頭の牛乳は、座っているときの自分のカメラには映さない(画面が白くなるので)
-			for c in milk.get_children():
+			for c in milk.find_children("*", "VisualInstance3D", true, false):
 				(c as VisualInstance3D).layers = 1 << (SELF_LAYER - 1)
 		add_child(milk)
 		_milk_nodes[a.id] = milk
@@ -329,6 +347,7 @@ func sync(state: GameState, delta: float) -> void:
 					var o: Color = wl[2]
 					lab.modulate = Color(m.r * wb, m.g * wb, m.b * wb, m.a)
 					lab.outline_modulate = Color(o.r * wb, o.g * wb, o.b * wb, o.a)
+	apply_night_light(state)
 	_update_obstacles(state)
 	_update_oni_shadow(state)
 	_update_milk_ring(state, delta)
@@ -352,6 +371,7 @@ func sync(state: GameState, delta: float) -> void:
 		_handkerchief.visible = state.handkerchief_on_floor and not dark_hide
 		_handkerchief.transform = Transform3D(Basis.IDENTITY, state.handkerchief_position)
 	_hide_item_if_not_visible_to_me(state)
+	_update_night_item(state, delta, holder != null and _item_head_id < 0)
 	_update_footsteps(state)
 	_update_ambience(delta)
 
@@ -823,6 +843,9 @@ func on_event(e: Dictionary) -> void:
 			_play_actor(e["actor"], "banana" if e.get("kind", "") == "banana" else "fall", -2.0, -6.0)
 		"blackout":
 			AudioDirector.sfx("power_off", -2.0)
+		"lightning":
+			# 雷: ピシャッ、ゴロゴロ…(夜の教室)
+			AudioDirector.sfx("thunder", -3.0)
 		"lights_on":
 			AudioDirector.sfx("power_on", -3.0)
 		"out":
@@ -849,6 +872,10 @@ func on_event(e: Dictionary) -> void:
 			_surprise_until[e["target"]] = _clock + 1.2
 			if _beach:
 				_pop(e["target"], tr("ばしゃっ"), Color.WHITE)
+			elif _night:
+				# 夜の教室: カメラのフラッシュ「パシャッ!」
+				_pop(e["target"], tr("パシャッ!"), Color("FFE58A"))
+				_play_actor(e["target"], "flash_pasha", -2.0, -5.0)
 			else:
 				# 教室: 黒板消しでポンポンポン(チョークの粉の煙)
 				_pop(e["target"], tr("ポンポン!"), Color.WHITE)
@@ -967,7 +994,7 @@ func _build_environment() -> void:
 	var env := Environment.new()
 	_env = env
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = BeachStage.COLOR_SKY if _beach else GameConfig.COLOR_SKY
+	env.background_color = BeachStage.COLOR_SKY if _beach else (COLOR_NIGHT_SKY if _night else GameConfig.COLOR_SKY)
 	_sky_color = env.background_color
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(1, 1, 1)
@@ -1086,7 +1113,8 @@ func _build_window_light() -> void:
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(1.0, 0.98, 0.82, 0.28)
+	# (夜は、青白い月の光の帯)
+	mat.albedo_color = Color(0.72, 0.82, 1.0, 0.3) if _night else Color(1.0, 0.98, 0.82, 0.28)
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	for z in [-4.5, 0.0, 4.5]:
 		var quad := PlaneMesh.new()
@@ -1179,9 +1207,10 @@ func _build_front_wall(wall: Node3D, half: float) -> void:
 ## 教卓・時間割表・学級目標・スピーカー
 func _build_front_extras(wall: Node3D, half: float, z: float) -> void:
 	var round_no := _room_state.round_index if _room_state else 0
-	# 時計の針: 1ラウンドで10分進む(1時間目の始まりから)
-	var minutes := 30.0 + round_no * 10.0
-	for hand in [[0.3, 0.03, minutes / 60.0 * TAU], [0.2, 0.045, (9.0 + minutes / 60.0) / 12.0 * TAU]]:
+	# 時計の針: 1ラウンドで10分進む(1時間目の始まりから。夜の教室は夜の8時から)
+	var minutes := (0.0 if _night else 30.0) + round_no * 10.0
+	var hour := 8.0 if _night else 9.0
+	for hand in [[0.3, 0.03, minutes / 60.0 * TAU], [0.2, 0.045, (hour + minutes / 60.0) / 12.0 * TAU]]:
 		var box := BoxMesh.new()
 		box.size = Vector3(hand[1], hand[0], 0.02)
 		var mi := Toon.mesh(box, GameConfig.COLOR_INK, 0.0)
@@ -1302,14 +1331,18 @@ func _build_window_wall(wall: Node3D, half: float) -> void:
 	var z := -half + 0.12
 	for x in [-4.5, 0.0, 4.5]:
 		_part(Vector3(2.2, 1.9, 0.08), Vector3(x, 2.3, z), GameConfig.COLOR_PAPER, 0.03, wall)
-		_part(Vector3(1.9, 1.6, 0.06), Vector3(x, 2.3, z + 0.03), COLOR_GLASS, 0.0, wall)
-		# 窓の外: 校庭(緑の地面と土のグラウンド)と木
-		_part(Vector3(1.9, 0.42, 0.01), Vector3(x, 1.71, z + 0.065), COLOR_FIELD, 0.0, wall)
-		_part(Vector3(1.9, 0.12, 0.01), Vector3(x, 1.56, z + 0.066), COLOR_GROUND, 0.0, wall)
+		_part(Vector3(1.9, 1.6, 0.06), Vector3(x, 2.3, z + 0.03), COLOR_NIGHT_GLASS if _night else COLOR_GLASS, 0.0, wall)
+		# 窓の外: 校庭(緑の地面と土のグラウンド)と木。夜は、暗い校庭と木の影に、月と星
+		var field := COLOR_FIELD.darkened(0.6) if _night else COLOR_FIELD
+		var tree := COLOR_TREE.darkened(0.65) if _night else COLOR_TREE
+		_part(Vector3(1.9, 0.42, 0.01), Vector3(x, 1.71, z + 0.065), field, 0.0, wall)
+		_part(Vector3(1.9, 0.12, 0.01), Vector3(x, 1.56, z + 0.066), COLOR_GROUND.darkened(0.6) if _night else COLOR_GROUND, 0.0, wall)
 		var tx: float = x + (0.45 if int(x) % 2 == 0 else -0.5)
-		_part(Vector3(0.08, 0.32, 0.01), Vector3(tx, 2.0, z + 0.067), COLOR_TRUNK, 0.0, wall)
-		_part(Vector3(0.5, 0.42, 0.01), Vector3(tx, 2.32, z + 0.068), COLOR_TREE, 0.008, wall)
-		_part(Vector3(0.34, 0.3, 0.01), Vector3(tx - 0.62, 2.12, z + 0.068), COLOR_TREE.lightened(0.08), 0.008, wall)
+		_part(Vector3(0.08, 0.32, 0.01), Vector3(tx, 2.0, z + 0.067), COLOR_TRUNK.darkened(0.6) if _night else COLOR_TRUNK, 0.0, wall)
+		_part(Vector3(0.5, 0.42, 0.01), Vector3(tx, 2.32, z + 0.068), tree, 0.008, wall)
+		_part(Vector3(0.34, 0.3, 0.01), Vector3(tx - 0.62, 2.12, z + 0.068), tree.lightened(0.08), 0.008, wall)
+		if _night:
+			_build_night_window(wall, x, z)
 		_part(Vector3(0.06, 1.6, 0.08), Vector3(x, 2.3, z + 0.05), GameConfig.COLOR_PAPER, 0.015, wall)
 		_part(Vector3(1.9, 0.06, 0.08), Vector3(x, 2.3, z + 0.05), GameConfig.COLOR_PAPER, 0.015, wall)
 		for sx in [-1.25, 1.25]:
@@ -1325,6 +1358,132 @@ func _build_window_wall(wall: Node3D, half: float) -> void:
 			_part(Vector3(0.22, 0.2, 0.22), Vector3(x + px, 1.53, z + 0.17), COLOR_POT, 0.018, wall)
 			_part(Vector3(0.3, 0.22, 0.26), Vector3(x + px, 1.74, z + 0.17), COLOR_LEAF, 0.018, wall, Vector3(0, 0, 0.12))
 			_part(Vector3(0.12, 0.08, 0.12), Vector3(x + px + 0.05, 1.9, z + 0.17), COLOR_FLOWER, 0.012, wall)
+
+
+## 夜の窓の外: 星(小さな光る点)、まん中の窓には丸い月(にっこり顔)、雷のときだけ出る稲光。
+## 月と星は暗くならないように、光る材質(明るさの計算をしない)
+func _build_night_window(wall: Node3D, x: float, z: float) -> void:
+	var star_mat := _glow_material(Color("FFF7CF"))
+	var stars := [Vector2(-0.7, 2.95), Vector2(-0.35, 2.75), Vector2(0.15, 3.0), Vector2(0.62, 2.8), Vector2(-0.1, 2.55), Vector2(0.8, 2.5)]
+	for i in stars.size():
+		var st: Vector2 = stars[i]
+		var sz := 0.035 if i % 2 == 0 else 0.025
+		var q := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(sz, sz, 0.01)
+		q.mesh = bm
+		q.material_override = star_mat
+		q.position = Vector3(x + st.x + fmod(x * 0.37, 0.2), st.y, z + 0.07)
+		q.rotation.z = PI / 4.0
+		wall.add_child(q)
+	if is_zero_approx(x):
+		# 月: 丸い黄色(まわりにぼんやり光る輪)と、目を閉じたにっこり顔
+		var halo := MeshInstance3D.new()
+		var hm := CylinderMesh.new()
+		hm.top_radius = 0.36
+		hm.bottom_radius = 0.36
+		hm.height = 0.005
+		hm.radial_segments = 24
+		halo.mesh = hm
+		var hmat := _glow_material(Color(1.0, 0.95, 0.7, 0.25))
+		hmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		halo.material_override = hmat
+		halo.rotation.x = PI / 2.0
+		halo.position = Vector3(0.45, 2.75, z + 0.069)
+		wall.add_child(halo)
+		var moon := MeshInstance3D.new()
+		var mm := CylinderMesh.new()
+		mm.top_radius = 0.24
+		mm.bottom_radius = 0.24
+		mm.height = 0.01
+		mm.radial_segments = 24
+		moon.mesh = mm
+		moon.material_override = _glow_material(COLOR_MOON)
+		moon.rotation.x = PI / 2.0
+		moon.position = Vector3(0.45, 2.75, z + 0.072)
+		wall.add_child(moon)
+		var face_mat := _glow_material(Color("C9A84A"))
+		for ex in [-0.08, 0.08]:
+			var eye := MeshInstance3D.new()
+			var em := BoxMesh.new()
+			em.size = Vector3(0.07, 0.015, 0.01)
+			eye.mesh = em
+			eye.material_override = face_mat
+			eye.position = Vector3(0.45 + ex, 2.79, z + 0.08)
+			wall.add_child(eye)
+		var smile := MeshInstance3D.new()
+		var sm := BoxMesh.new()
+		sm.size = Vector3(0.09, 0.015, 0.01)
+		smile.mesh = sm
+		smile.material_override = face_mat
+		smile.position = Vector3(0.45, 2.68, z + 0.08)
+		wall.add_child(smile)
+	# 稲光(ギザギザの光の線。雷のときだけ出す)
+	var bolt := Node3D.new()
+	var bolt_mat := _glow_material(Color("FFFBE0"))
+	var pts := [Vector2(-0.3, 3.05), Vector2(-0.1, 2.7), Vector2(-0.28, 2.55), Vector2(0.05, 2.1), Vector2(-0.12, 1.95), Vector2(0.15, 1.6)]
+	for i in pts.size() - 1:
+		var a: Vector2 = pts[i]
+		var b: Vector2 = pts[i + 1]
+		var seg := MeshInstance3D.new()
+		var bm2 := BoxMesh.new()
+		bm2.size = Vector3(0.045, a.distance_to(b) + 0.03, 0.01)
+		seg.mesh = bm2
+		seg.material_override = bolt_mat
+		seg.position = Vector3(x + (a.x + b.x) / 2.0 + (0.3 if x < 0.0 else -0.2), (a.y + b.y) / 2.0, z + 0.075)
+		seg.rotation.z = atan2(b.x - a.x, a.y - b.y)
+		bolt.add_child(seg)
+	bolt.visible = false
+	wall.add_child(bolt)
+	_bolts.append(bolt)
+
+
+## 明るさの計算をしない光る材質(夜でも暗くならない)
+func _glow_material(c: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = c
+	return m
+
+
+## 夜の教室の明るさ(毎フレーム): 全体は暗めの青、窓側は月の光で明るい。雷の一瞬だけ、部屋全体が明るくなる。
+## 撮影モードからも呼ぶ
+func apply_night_light(state: GameState) -> void:
+	if not _night:
+		return
+	var flash := 0.0
+	var since := GameConfig.LIGHTNING_TIME - state.lightning_left
+	if state.lightning_left > 0.0:
+		# ピカッ・ピカッ(2回光って、そのあと少しずつ暗くなる)
+		if since < 0.1 or (since > 0.2 and since < 0.45):
+			flash = 1.0
+		elif since >= 0.45:
+			flash = clampf(state.lightning_left / (GameConfig.LIGHTNING_TIME - 0.45), 0.0, 1.0)
+	var bright := lerpf(GameConfig.NIGHT_BRIGHTNESS, 1.0, flash)
+	Toon.set_night(lerpf(GameConfig.NIGHT_TINT, GameConfig.NIGHT_TINT * 0.4, flash))
+	Toon.set_darkness(bright, GameConfig.NIGHT_MOON_CENTER, GameConfig.NIGHT_MOON_RADIUS,
+			lerpf(GameConfig.NIGHT_MOON_BRIGHTNESS, 1.0, flash))
+	if _env:
+		var sky := COLOR_NIGHT_SKY.lerp(Color(0.78, 0.84, 1.0), flash * 0.7)
+		if _env.background_color != sky:
+			_env.background_color = sky
+	for b in _bolts:
+		var show := state.lightning_left > 0.0 and since < 0.5 and flash > 0.5
+		if b.visible != show:
+			b.visible = show
+	# 壁の文字(黒板の日付など)も少し暗く(雷のときは明るく)
+	var wb := lerpf(0.7, 1.0, flash)
+	if not is_equal_approx(wb, _night_label_bright):
+		_night_label_bright = wb
+		for wl in _wall_labels:
+			# (ラウンドのあいだに消えた文字もあるので、型をつける前に確かめる)
+			if not is_instance_valid(wl[0]):
+				continue
+			var lab: Label3D = wl[0]
+			var m: Color = wl[1]
+			var o: Color = wl[2]
+			lab.modulate = Color(m.r * wb, m.g * wb, m.b * wb, m.a)
+			lab.outline_modulate = Color(o.r * wb, o.g * wb, o.b * wb, o.a)
 
 
 ## 後ろ: ロッカー(ランドセルが入っている)
@@ -1535,6 +1694,25 @@ func _update_oni_shadow(state: GameState) -> void:
 ## 頭からかぶった牛乳: 白いかたまりと、顔の横にたれるしずく(輪郭線つき)
 func _build_milk_splash() -> Node3D:
 	var root := Node3D.new()
+	if _night:
+		# 夜の教室: フラッシュでまぶしい人の頭のまわりを、黄色い星がくるくる回る
+		var star_mat := _glow_material(Color("FFE066"))
+		for k in 3:
+			var star := Node3D.new()
+			var ang := TAU * float(k) / 3.0
+			star.position = Vector3(sin(ang) * 0.26, 0.42, cos(ang) * 0.26)
+			for r in [0.0, PI / 2.0]:
+				var bar := MeshInstance3D.new()
+				var bm := BoxMesh.new()
+				bm.size = Vector3(0.11, 0.035, 0.035)
+				bar.mesh = bm
+				bar.material_override = star_mat
+				bar.rotation.z = r + PI / 4.0
+				star.add_child(bar)
+			root.add_child(star)
+		root.set_meta("spin", true)
+		root.visible = false
+		return root
 	if _beach:
 		# 海辺: 水鉄砲の水(水色。画面にかかる水と同じ色)が頭にかかる
 		var col := Color(MilkArt.WATER_WHITE)
@@ -1653,7 +1831,11 @@ func _update_milk(state: GameState, a: GameState.Actor, model: CharacterModel) -
 	milk.visible = model != null and state.is_milked(a) and state.phase != GameState.Phase.RESULT
 	if milk.visible:
 		var head := model.bone_world("DEF-head")
-		milk.global_transform = Transform3D(model.global_transform.basis.orthonormalized(), head.origin)
+		var basis := model.global_transform.basis.orthonormalized()
+		if milk.get_meta("spin", false):
+			# フラッシュの星は、頭のまわりをくるくる回る
+			basis = Basis(Vector3.UP, _clock * 3.0)
+		milk.global_transform = Transform3D(basis, head.origin)
 
 
 ## 障害物: 状態の obstacles に合わせて出す/消す。後ろに寄せたバケツ・椅子・机と、投げられたバナナの皮
@@ -1770,9 +1952,17 @@ func _hide_item_if_not_visible_to_me(state: GameState) -> void:
 			and state.drop_target_seat != me.seat_index \
 			and not state.sees_behind(me.id, state.drop_target_seat)
 	var bits := 1 << (HIDDEN_LAYER - 1) if hidden else 1
-	for c in _handkerchief.get_children():
+	_set_item_layers(_handkerchief, bits)
+
+
+## 落とし物の部品の見え方(中の部品まで。モナリザの目の光のように、いつも見せる部品はそのまま)
+func _set_item_layers(node: Node, bits: int) -> void:
+	for c in node.get_children():
+		if c.get_meta("always_visible", false):
+			continue
 		if c is VisualInstance3D:
 			c.layers = bits
+		_set_item_layers(c, bits)
 
 
 ## 落とし物の仮の形(大きさ・色)。ラウンドごとに重くなる
@@ -1798,6 +1988,9 @@ func _carry_item(m: CharacterModel) -> void:
 	if _beach:
 		_carry_beach_item(m, body, back)
 		return
+	if _night and _item_index > 0:
+		_carry_night_item(m, body, back)
+		return
 	match _item_index:
 		0:
 			# ハンカチ: 手からぶら下がる(布を縦にして、少し小さく)
@@ -1819,6 +2012,77 @@ func _carry_item(m: CharacterModel) -> void:
 			# (頭の部品の位置 = 頭の球のまん中)
 			var pos := head + Vector3(0, CharacterModel.HEAD_RADIUS + 0.04, 0)
 			_handkerchief.transform = Transform3D(body, pos)
+
+
+## 夜の落とし物の持ち方: 懐中電灯は手に(前を照らす)、メトロノームとガイコツは胸の前に抱え、モナリザは頭の上に担ぐ
+func _carry_night_item(m: CharacterModel, body: Basis, back: Vector3) -> void:
+	# (落とし物の正面は +Z、キャラの正面は -Z なので、半回転して前に向ける)
+	var front := body * Basis(Vector3.UP, PI)
+	match _item_index:
+		1:
+			var hand := m.bone_world("DEF-hand.R").origin
+			_handkerchief.transform = Transform3D(front, hand + Vector3(0, -0.12, 0))
+		2, 4:
+			var chest := m.bone_world("DEF-spine.003").origin
+			var drop := 0.32 if _item_index == 2 else 0.5
+			_handkerchief.transform = Transform3D(front, chest - back * 0.28 + Vector3(0, -drop, 0))
+		_:
+			var head := m.bone_world("DEF-head").origin
+			_handkerchief.transform = Transform3D(front, head + Vector3(0, CharacterModel.HEAD_RADIUS + 0.02, 0))
+
+
+## 夜の落とし物の動き(毎フレーム): 懐中電灯の光(暗い席で目立ち、明るい席では弱い)、メトロノームの振り子と音、
+## モナリザの目(こっちを見る・キラッ)、ガイコツ(床ではバラバラ、持つと元の形)。床にあるときは輪の中心を向く
+func _update_night_item(state: GameState, delta: float, carried: bool) -> void:
+	if not _night or _night_item.is_empty():
+		return
+	_night_t += delta
+	var on_floor := state.handkerchief_on_floor and not carried and _item_head_id < 0
+	if on_floor:
+		var p := state.handkerchief_position
+		_handkerchief.rotation.y = atan2(-p.x, -p.z)
+	match _item_index:
+		1:
+			var glow: Node3D = _night_item["glow"]
+			glow.visible = on_floor or carried
+			var dark := state.is_dark_seat(state.drop_target_seat)
+			var mat: StandardMaterial3D = _night_item["glow_mat"]
+			var a := 0.55 if (dark or carried) else 0.16
+			if not is_equal_approx(mat.albedo_color.a, a):
+				mat.albedo_color.a = a
+		2:
+			var arm: Node3D = _night_item["arm"]
+			var moving := on_floor or carried
+			var phase := sin(_night_t * PI * 2.0 * GameConfig.METRONOME_HZ / 2.0)
+			arm.rotation.z = phase * 0.45 if moving else 0.0
+			# 振り子がはしに来るたびに「カチ」(床にあるときだけ。小さく)
+			var side := 1 if phase > 0.0 else -1
+			if on_floor and side != _tick_side and _tick_player:
+				_tick_player.play()
+			_tick_side = side
+		3:
+			var cam := get_viewport().get_camera_3d()
+			var pupils: Array = _night_item["pupils"]
+			var bases: Array = _night_item["eyes_base"]
+			for i in pupils.size():
+				var pm: MeshInstance3D = pupils[i]
+				var base: Vector3 = bases[i]
+				var want := base
+				if on_floor and cam:
+					# 目がゆっくり、こっち(カメラ)を見る
+					var parent3d := pm.get_parent() as Node3D
+					var local: Vector3 = parent3d.global_transform.affine_inverse() * cam.global_position
+					var d: Vector3 = local - base
+					want = base + Vector3(clampf(d.x, -1.0, 1.0) * 0.008, clampf(d.y, -1.0, 1.0) * 0.004, 0)
+				pm.position = pm.position.lerp(want, clampf(delta * 1.5, 0.0, 1.0))
+			for g in _night_item["glints"]:
+				var gl: Node3D = g
+				gl.visible = on_floor
+				var k := 1.0 + 0.5 * maxf(sin(_night_t * 3.0), 0.0)
+				gl.scale = Vector3(k, k, 1.0)
+		4:
+			(_night_item["pile"] as Node3D).visible = on_floor
+			(_night_item["body"] as Node3D).visible = not on_floor
 
 
 ## 海辺の落とし物の持ち方: 貝殻は手に、ビーチボールは胸の前に抱え、浮き輪は腰に通し、
@@ -1850,6 +2114,17 @@ func _build_handkerchief(state: GameState) -> void:
 	var shape: Array = ITEM_SHAPES[index]
 	var size: Vector3 = shape[0]
 	_handkerchief = Node3D.new()
+	_night_item = {}
+	if _night and index > 0:
+		# 夜の教室の落とし物: 懐中電灯・メトロノーム・モナリザ・ガイコツ(ハンカチは教室と同じ)
+		_night_item = NightStage.build_item(_handkerchief, index)
+		_handkerchief.visible = false
+		add_child(_handkerchief)
+		_item_index = index
+		_item_size = NightStage.ITEM_SIZES[index]
+		_tick_player = Sfx.player_3d(_handkerchief, GameConfig.METRONOME_VOLUME_DB, 1.2)
+		_tick_player.stream = Sfx.get_stream("metronome_tick")
+		return
 	if _beach:
 		# 海辺の落とし物: 貝殻・ビーチボール・浮き輪・砂の城・バナナボート
 		BeachStage.build_item(_handkerchief, index)
@@ -1903,7 +2178,7 @@ func _build_sounds(state: GameState) -> void:
 
 	# 落とし物の音は、そのラウンドの落とし物の音(本物もフェイクも同じ)
 	_drop_player = Sfx.player_3d(self, GameConfig.DROP_VOLUME_DB, GameConfig.DROP_SOUND_RANGE)
-	var drop_name := ("drop_beach_%d" if _beach else "drop_%d") % clampi(state.round_index, 0, 4)
+	var drop_name := ("drop_beach_%d" if _beach else ("drop_night_%d" if _night else "drop_%d")) % clampi(state.round_index, 0, 4)
 	_drop_player.stream = Sfx.get_stream(drop_name)
 
 	# 場所のある効果音(振り向く・お手つき・拾う・転ぶなど)
@@ -1918,7 +2193,7 @@ func _build_sounds(state: GameState) -> void:
 
 	# 環境音(ごく小さく)
 	_amb_player = Sfx.player_2d(self, GameConfig.AMBIENT_VOLUME_DB)
-	_amb_player.stream = Sfx.get_stream("amb_beach" if _beach else "amb_school")
+	_amb_player.stream = Sfx.get_stream("amb_beach" if _beach else ("amb_night" if _night else "amb_school"))
 	_amb_player.play()
 	_clock_player = Sfx.player_3d(self, GameConfig.CLOCK_VOLUME_DB, 2.0)
 	_clock_player.stream = Sfx.get_stream("clock_tick")

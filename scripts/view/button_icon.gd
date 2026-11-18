@@ -22,6 +22,7 @@ var item := "hankie":
 const ITEMS := {
 	"classroom": ["hankie", "shoe", "randoseru", "desk", "podium"],
 	"beach": ["shell", "ball", "ring", "castle", "boat"],
+	"night": ["hankie", "flashlight", "metronome", "monalisa", "skeleton"],
 }
 
 
@@ -73,6 +74,18 @@ func _draw() -> void:
 				_drop_shape(c + (d as Vector2) * s, s * 0.07, line * 0.7)
 		"water_empty":
 			_draw_water_gun(c, s * 0.9, line, Color("D8D3CC"), Color("ECE8E2"), Color("8A847C"))
+		"camera":
+			_draw_camera(c, s, line, Color("3A3F4A"), Color("9FD3FF"), INK)
+		"camera_pour":
+			# パシャッ: カメラと、まわりに飛ぶ光(白い線: 青い地の上に乗せるため)
+			_draw_camera(c + Vector2(0, s * 0.06), s * 0.85, line, Color.WHITE, Color("BFE8FF"), INK)
+			for k in 5:
+				var ang := deg_to_rad(-150.0 + 30.0 * k)
+				var d := Vector2(cos(ang), sin(ang))
+				draw_line(c + d * s * 0.36, c + d * s * 0.48, Color.WHITE, line, true)
+		"camera_empty":
+			# フィルム切れ: 灰色のカメラ
+			_draw_camera(c, s * 0.9, line, Color("D8D3CC"), Color("ECE8E2"), Color("8A847C"))
 		"drop":
 			_draw_item(item, c, s, line, false)
 		"fake":
@@ -82,6 +95,22 @@ func _draw() -> void:
 			for k in 2:
 				var r := s * (0.22 + 0.18 * k)
 				draw_arc(c + Vector2(s * 0.2, 0), r, -0.75, 0.75, 10, INK, line, true)
+
+
+## カメラ: 四角い本体、丸いレンズ、上にフラッシュとシャッター
+func _draw_camera(c: Vector2, s: float, line: float, body: Color, lens: Color, ink: Color) -> void:
+	var box := Rect2(c + Vector2(-s * 0.38, -s * 0.18), Vector2(s * 0.76, s * 0.46))
+	draw_rect(box, body)
+	draw_rect(box, ink, false, line)
+	var top := Rect2(c + Vector2(-s * 0.3, -s * 0.3), Vector2(s * 0.22, s * 0.12))
+	draw_rect(top, body)
+	draw_rect(top, ink, false, line * 0.8)
+	var flash := Rect2(c + Vector2(s * 0.12, -s * 0.12), Vector2(s * 0.16, s * 0.08))
+	draw_rect(flash, Color("FFF3B8"))
+	draw_rect(flash, ink, false, line * 0.6)
+	draw_circle(c + Vector2(0, s * 0.06), s * 0.17 + line * 0.5, ink)
+	draw_circle(c + Vector2(0, s * 0.06), s * 0.17 - line * 0.3, lens)
+	draw_circle(c + Vector2(-s * 0.05, s * 0.01), s * 0.04, Color.WHITE)
 
 
 ## 牛乳びん: 白いびん、青いふたと帯(ほかの絵からも使う)
@@ -225,6 +254,36 @@ func _draw_item(it: String, c: Vector2, s: float, line: float, ghost: bool) -> v
 			# 教卓: 台形の木の箱と天板
 			_poly(_pts(c, s, [[-0.3, -0.18], [0.3, -0.18], [0.36, 0.42], [-0.36, 0.42]]), Color("8B5A33"), line, ghost)
 			_poly(_pts(c, s, [[-0.42, -0.3], [0.42, -0.3], [0.42, -0.18], [-0.42, -0.18]]), Color("B67A45"), line, ghost)
+		"flashlight":
+			# 懐中電灯: 黄色い筒、青い頭、前に光
+			_poly(_pts(c, s, [[0.2, -0.2], [0.5, -0.36], [0.5, 0.36], [0.2, 0.2]]), Color(1.0, 0.95, 0.6, 0.8), 0.0, ghost)
+			_poly(_pts(c, s, [[-0.42, -0.1], [0.04, -0.1], [0.04, 0.1], [-0.42, 0.1]]), Color("F2C14E"), line, ghost)
+			_poly(_pts(c, s, [[0.04, -0.16], [0.22, -0.2], [0.22, 0.2], [0.04, 0.16]]), Color("3F6FD0"), line, ghost)
+		"metronome":
+			# メトロノーム: 木の三角と、白い板、ななめの振り子
+			_poly(_pts(c, s, [[-0.06, -0.42], [0.06, -0.42], [0.3, 0.4], [-0.3, 0.4]]), Color("9A5B34"), line, ghost)
+			_poly(_pts(c, s, [[-0.06, -0.24], [0.06, -0.24], [0.12, 0.2], [-0.12, 0.2]]), Color("F4EBD8"), line * 0.6, ghost)
+			if not ghost:
+				draw_line(c + Vector2(0, 0.26) * s, c + Vector2(0.2, -0.3) * s, INK, line, true)
+				draw_rect(Rect2(c + Vector2(0.1, -0.16) * s, Vector2(0.1, 0.07) * s), Color("E9B949"))
+		"monalisa":
+			# モナリザ: 金の額縁、緑の背景、黒い髪と顔
+			_poly(_pts(c, s, [[-0.34, -0.44], [0.34, -0.44], [0.34, 0.44], [-0.34, 0.44]]), Color("E9B949"), line, ghost)
+			_poly(_pts(c, s, [[-0.24, -0.34], [0.24, -0.34], [0.24, 0.34], [-0.24, 0.34]]), Color("6F8A5A"), line * 0.5, ghost)
+			if not ghost:
+				draw_circle(c + Vector2(0, -0.06) * s, s * 0.15, Color("3A2A1E"))
+				draw_circle(c + Vector2(0, -0.06) * s, s * 0.1, Color("E8C49A"))
+				draw_rect(Rect2(c + Vector2(-0.16, 0.12) * s, Vector2(0.32, 0.2) * s), Color("2E3324"))
+		"skeleton":
+			# ガイコツ: 丸い白い頭(にっこり)と、骨
+			_poly(_pts(c, s, [[-0.05, -0.04], [0.05, -0.04], [0.05, 0.36], [-0.05, 0.36]]), Color("FFF6E4"), line * 0.7, ghost)
+			_poly(_pts(c, s, [[-0.26, 0.06], [0.26, 0.06], [0.26, 0.14], [-0.26, 0.14]]), Color("FFF6E4"), line * 0.7, ghost)
+			if not ghost:
+				draw_circle(c + Vector2(0, -0.22) * s, s * 0.22 + line * 0.5, INK)
+				draw_circle(c + Vector2(0, -0.22) * s, s * 0.22 - line * 0.3, Color("FFF6E4"))
+				for x in [-0.08, 0.08]:
+					draw_arc(c + Vector2(x, -0.24) * s, s * 0.04, PI, TAU, 6, INK, line * 0.6, true)
+				draw_arc(c + Vector2(0, -0.18) * s, s * 0.08, 0.3, PI - 0.3, 8, INK, line * 0.6, true)
 		"shell":
 			# 貝殻: 扇の形と、うね
 			var fan := PackedVector2Array([c + Vector2(0, 0.3) * s])

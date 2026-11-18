@@ -990,6 +990,90 @@ def vote_pon():
     return norm(mix(thud(720, 420, d, 0.05), click(0.03, 1500, 5000, 0.006) * 0.4), 0.8)
 
 
+# --- 夜の教室 ---
+
+def thunder():
+    # 雷: 「ピシャッ」と鋭い音のあと、遠くで「ゴロゴロ…」(怖くなりすぎないように、短めでやわらかく)
+    d = 2.6
+    t = t_of(d)
+    crack = highpass(noise(0.25), 1500) * env_exp(0.25, 0.05) * 0.7
+    rumble = lowpass(noise(d), 160)
+    wobble = 0.55 + 0.45 * np.sin(2 * np.pi * 2.3 * t) * np.sin(2 * np.pi * 0.7 * t + 0.5)
+    rumble = rumble * wobble * env_ar(d, 0.15, 1.8)
+    return norm(mix(crack, at(rumble * 1.2, 0.08, d)), 0.8)
+
+
+def amb_night():
+    # 夜の教室の環境音(ループ): 窓の外の虫の声(リーリー)と、ごく小さな風
+    d = 12.0
+    t = t_of(d)
+    out = lowpass(noise(d), 500) * 0.15
+    for f0, rate, phase, vol in [(4200, 18.0, 0.0, 0.18), (4700, 21.0, 1.7, 0.12), (3900, 16.0, 3.1, 0.1)]:
+        chirp = np.sin(2 * np.pi * f0 * t)
+        trill = (np.sin(2 * np.pi * rate * t + phase) > 0.2).astype(float)
+        swell = (np.sin(2 * np.pi * t / (2.5 + phase) + phase) > -0.1).astype(float)
+        out = out + lowpass(chirp * trill * swell, 6000) * vol
+    fade = int(0.5 * SR)
+    out[:fade] = out[:fade] * np.linspace(0, 1, fade) + out[-fade:] * np.linspace(1, 0, fade)
+    return norm(out[:-fade], 0.5)
+
+
+def drop_night_0():
+    # ハンカチ: ほかの舞台と同じ「ふわっ」
+    return drop_0()
+
+
+def drop_night_1():
+    # 懐中電灯「コトッ、コロコロ」: プラスチックの筒が床に当たって、少し転がる
+    hit = mix(thud(420, 260, 0.1, 0.025), click(0.03, 1800, 6000, 0.006) * 0.6)
+    roll = bandpass(noise(0.35), 900, 3000) * env_ar(0.35, 0.02, 0.3) * 0.25
+    return norm(mix(hit, at(roll, 0.08)), 0.85)
+
+
+def drop_night_2():
+    # メトロノーム「ゴトッ」: 木の箱が床に置かれる音と、中の振り子がカチャッ
+    body = thud(170, 95, 0.25, 0.06)
+    wood = bandpass(noise(0.06), 600, 2200) * env_exp(0.06, 0.015) * 0.6
+    tick = click(0.03, 2500, 7000, 0.005) * 0.4
+    return norm(mix(body, wood, at(tick, 0.07)), 0.85)
+
+
+def drop_night_3():
+    # モナリザ(額縁)「ゴトン」: 重い額縁が床に立てかけられる、低い木の音
+    body = thud(105, 50, 0.45, 0.12)
+    t = t_of(0.3)
+    frame = (np.sin(2 * np.pi * 190 * t) * 0.6 + np.sin(2 * np.pi * 410 * t) * 0.3) * np.exp(-t / 0.07)
+    return norm(mix(body, frame, click(0.04, 700, 2600, 0.01) * 0.5), 0.9)
+
+
+def drop_night_4():
+    # ガイコツ「ガシャーン!」: 骨がバラバラに崩れる、カラカラした軽い木の音がたくさん
+    d = 1.0
+    out = mix(thud(140, 70, 0.3, 0.07) * 0.8)
+    rng = np.random.default_rng(7)
+    for k in range(14):
+        st = 0.02 + rng.random() * 0.6 * (k / 14.0 + 0.2)
+        f = 700 + rng.random() * 1500
+        tt = t_of(0.12)
+        clack = (np.sin(2 * np.pi * f * tt) + 0.5 * np.sin(2 * np.pi * f * 2.3 * tt)) * np.exp(-tt / 0.025)
+        out = mix(out, at(clack * (0.5 + 0.5 * rng.random()) * (1.0 - k / 20.0), st, d))
+    return norm(out, 0.9)
+
+
+def metronome_tick():
+    # メトロノーム「カチ」: 小さく乾いた音(床で鳴り続けるので、とても短く)
+    tt = t_of(0.05)
+    return norm(mix(click(0.05, 2500, 7000, 0.004), np.sin(2 * np.pi * 1800 * tt) * np.exp(-tt / 0.008) * 0.4), 0.8)
+
+
+def flash_pasha():
+    # カメラのフラッシュ「パシャッ」: シャッターのカシャッと、フラッシュのピュイーン
+    d = 0.6
+    shutter = mix(click(0.04, 2000, 8000, 0.006), at(click(0.05, 1500, 6000, 0.01) * 0.8, 0.06))
+    whine = tone(glide(2400, 5200, 0.4, 0.6), 0.4) * env_ar(0.4, 0.05, 0.3) * 0.15
+    return norm(mix(shutter, at(whine, 0.08, d)), 0.85)
+
+
 SOUNDS = {
     "drop_0": drop_0, "drop_1": drop_1, "drop_2": drop_2, "drop_3": drop_3, "drop_4": drop_4,
     "step": step, "run_step": run_step,
@@ -1009,6 +1093,10 @@ SOUNDS = {
     "bgm_beach_1": bgm_beach_1, "bgm_beach_2": bgm_beach_2, "bgm_beach_3": bgm_beach_3,
     "bgm_school_1": bgm_school_1, "bgm_school_2": bgm_school_2, "bgm_school_3": bgm_school_3,
     "look_zah": look_zah, "found": found, "gaan": gaan, "tonton": tonton, "chiin": chiin,
+    "thunder": thunder, "amb_night": amb_night,
+    "drop_night_0": drop_night_0, "drop_night_1": drop_night_1, "drop_night_2": drop_night_2,
+    "drop_night_3": drop_night_3, "drop_night_4": drop_night_4, "metronome_tick": metronome_tick,
+    "flash_pasha": flash_pasha,
     "vote_don": vote_don, "drumroll": drumroll, "jajaan": jajaan, "vote_pon": vote_pon,
 }
 

@@ -13,7 +13,7 @@ extends Node3D
 
 signal closed
 
-const STAGES := {"教室": "school", "海辺": "beach"}
+const STAGES := {"教室": "classroom", "海辺": "beach", "夜の教室": "night"}
 const CAMERAS := ["輪の全体", "教室の全体", "キャラの寄り", "鬼の後ろ", "自由"]
 const POSES := ["座る", "体育座り", "立つ", "歩く", "走る", "振り向く", "転ぶ", "ひざ崩れ"]
 const FACES := ["ふつう", "驚く", "ガーン", "勝ち", "負け", "ニヤニヤ", "気まずい", "お手つき", "必死", "困り眉", "汗だく", "放心"]
@@ -36,7 +36,7 @@ var _sel_label: Label
 var _item_label: Label
 var _msg: Label
 
-var _stage := "school"
+var _stage := "classroom"
 var _cam_mode := "輪の全体"
 var _sel := 0
 var _poses := {}
@@ -69,11 +69,15 @@ func _ready() -> void:
 	_cam.make_current()
 	# 停電中に開いても、撮影の教室はふつうの明るさで(ゲームに戻ると、ゲームの明るさに戻る)
 	Toon.set_darkness(1.0)
+	Toon.set_night(0.0)
 	_build_ui()
 	_rebuild_scene()
 
 
 func _exit_tree() -> void:
+	# 夜の明るさを元に戻す(ゲームが夜の教室なら、ゲームの画面が毎フレームまた夜にする)
+	Toon.set_night(0.0)
+	Toon.set_darkness(1.0)
 	# 撮影用の教室を片づける(ゲームの教室にはさわっていない)
 	if _view and is_instance_valid(_view):
 		_view.queue_free()
@@ -132,6 +136,8 @@ func _process(delta: float) -> void:
 		if not _frozen:
 			m.animate(delta, _poses[a.id] == "走る")
 	_apply_item()
+	# 夜の教室は、ゲームと同じ夜の明るさ(窓側は月の光)
+	_view.apply_night_light(_state)
 	_apply_camera()
 
 
@@ -487,7 +493,10 @@ func _update_ui() -> void:
 		who = Profile.player_name + "(自分)"
 	_sel_label.text = who
 	_item_label.text = _state.item_name()
-	var stage_name := "教室" if _stage == "school" else "海辺"
+	var stage_name := "教室"
+	for k in STAGES:
+		if STAGES[k] == _stage:
+			stage_name = k
 	var chosen := {
 		"場面:" + stage_name: true,
 		"カメラ:" + _cam_mode: true,

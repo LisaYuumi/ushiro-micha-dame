@@ -222,7 +222,13 @@ func _update_stamp(state: GameState, a: GameState.Actor, delta: float) -> void:
 		return
 	var target: GameState.Actor = targets[rng.randi_range(0, targets.size() - 1)]
 	var say_look := false
-	if state.sees_behind(a.id, target.seat_index):
+	var sees := state.sees_behind(a.id, target.seat_index)
+	# 夜の教室: 明るい席のうしろの懐中電灯は、月の光にまぎれて気づかないことがある
+	if sees and state.is_night() and state.round_index == Items.NIGHT_FLASHLIGHT and not state.is_dark_seat(target.seat_index) \
+			and state.has_handkerchief_behind(target) and state.stamp_role_of(a.id) == "normal" \
+			and rng.randf() < GameConfig.BOT_FLASHLIGHT_BRIGHT_MISS:
+		sees = false
+	if sees:
 		var honest_chance := GameConfig.BOT_NORMAL_HONEST_CHANCE
 		var behind := state.has_handkerchief_behind(target)
 		match state.stamp_role_of(a.id):

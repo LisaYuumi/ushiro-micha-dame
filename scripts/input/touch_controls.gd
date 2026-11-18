@@ -18,6 +18,8 @@ var _milk_button: Button
 var _milk_label: Label
 ## 海辺の舞台: 牛乳のかわりに水鉄砲
 var _water := false
+## 鬼の技: "eraser"(黒板消し)/ "water"(水鉄砲)/ "camera"(カメラのフラッシュ)
+var _tool := "eraser"
 ## 「落とす」「フェイク」のボタンの落とし物の絵(ラウンドごとに変わる)
 var _item_icons: Array[ButtonIcon] = []
 var _milk_badge: Label
@@ -197,9 +199,14 @@ func set_item_icon(key: String) -> void:
 
 
 func set_water(v: bool) -> void:
-	if _water == v:
+	set_tool("water" if v else "eraser")
+
+
+func set_tool(tool: String) -> void:
+	if _tool == tool:
 		return
-	_water = v
+	_tool = tool
+	_water = tool == "water"
 	# 次の set_milk_state で描き直す
 	_milk_shown = -99
 
@@ -216,8 +223,8 @@ func set_milk_state(n: int, aiming: bool) -> void:
 	if empty:
 		normal = UiStyle.box(Color("E6E1D8"), false)
 		normal.border_color = Color("9A948C")
-		_milk_icon.kind = "water_empty" if _water else "eraser_empty"
-		_milk_label.text = "からっぽ"
+		_milk_icon.kind = _tool + "_empty"
+		_milk_label.text = "フィルム切れ" if _tool == "camera" else "からっぽ"
 		_milk_label.add_theme_color_override("font_color", Color("8A847C"))
 	elif aiming:
 		normal = UiStyle.box(ButtonIcon.MILK_BLUE, false)
@@ -225,13 +232,13 @@ func set_milk_state(n: int, aiming: bool) -> void:
 		normal.shadow_color = Color(ButtonIcon.MILK_BLUE, 0.45)
 		normal.shadow_size = 10
 		normal.shadow_offset = Vector2.ZERO
-		_milk_icon.kind = "water_pour" if _water else "eraser_pour"
+		_milk_icon.kind = _tool + "_pour"
 		_milk_label.text = "えいっ"
 		_milk_label.add_theme_color_override("font_color", GameConfig.COLOR_PAPER)
 	else:
 		normal = UiStyle.box(GameConfig.COLOR_PAPER)
-		_milk_icon.kind = "water" if _water else "eraser"
-		_milk_label.text = "水鉄砲" if _water else "黒板消し"
+		_milk_icon.kind = _tool
+		_milk_label.text = {"water": "水鉄砲", "camera": "カメラ"}.get(_tool, "黒板消し")
 		_milk_label.add_theme_color_override("font_color", GameConfig.COLOR_INK)
 	_milk_inner.visible = not empty and not aiming
 	UiStyle.refit_all()

@@ -77,6 +77,8 @@ var _milk_wiping := false
 var _milk_pill: PanelContainer
 ## 海辺の舞台: 白い牛乳のかわりに、水色の水しぶき
 var _water := false
+## 夜の教室: 鬼の技はカメラのフラッシュ(画面がまぶしく真っ白になり、数秒で晴れる)
+var _flash := false
 var _milk_pill_icon: ButtonIcon
 var _milk_bar: Control
 
@@ -853,7 +855,8 @@ func set_milk(on: bool, left: float = 1.0, wiped: bool = false) -> void:
 	_milk_left = clampf(left, 0.0, 1.0)
 	if wiped and not _milk_wiping and on:
 		# 「ゴシゴシ」: ぬぐいはじめ
-		show_message(tr("ゴシゴシ!"), Color(0.3, 0.45, 0.7), 0.8)
+		if not _flash:
+			show_message(tr("ゴシゴシ!"), Color(0.3, 0.45, 0.7), 0.8)
 	_milk_wiping = wiped
 
 
@@ -904,14 +907,23 @@ func _build_milk_pill() -> void:
 
 
 func set_water(v: bool) -> void:
-	_water = v
+	set_tool("water" if v else "eraser")
+
+
+## 鬼の技の見た目: "eraser"(黒板消しの煙)/ "water"(水鉄砲の水)/ "camera"(フラッシュ)
+func set_tool(tool: String) -> void:
+	_water = tool == "water"
+	_flash = tool == "camera"
 	if _milk_pill_icon:
-		_milk_pill_icon.kind = "water" if v else "eraser"
+		_milk_pill_icon.kind = tool
 
 
 ## 上から白い牛乳がたれる: 見本をまねた絵(MilkArt の SVG)を上からすべり下ろして出し、
 ## その下で白い粒がゆっくり落ちる(黒い輪郭)
 func _draw_milk() -> void:
+	if _flash:
+		_draw_flash()
+		return
 	if not _water:
 		_draw_smoke()
 		return
@@ -941,6 +953,25 @@ func _draw_milk() -> void:
 		_milk.draw_circle(Vector2.ZERO, rr, white)
 		_milk.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_scrub(sz, t)
+
+
+## カメラのフラッシュ: 画面がまぶしく真っ白(まん中に光の筋と星)。残りが少なくなると、だんだん晴れる
+func _draw_flash() -> void:
+	var sz := _milk.size
+	var t := Time.get_ticks_msec() / 1000.0
+	var a := clampf(_milk_left * 1.6, 0.0, 1.0)
+	_milk.draw_rect(Rect2(Vector2.ZERO, sz), Color(1.0, 1.0, 0.98, 0.97 * a))
+	var c := sz / 2.0
+	var ray := Color(1.0, 0.93, 0.55, 0.55 * a)
+	for i in 12:
+		var ang := TAU * float(i) / 12.0 + t * 0.4
+		var dir := Vector2(cos(ang), sin(ang))
+		_milk.draw_line(c + dir * sz.y * 0.12, c + dir * sz.y * (0.42 + 0.06 * sin(t * 6.0 + i)), ray, maxf(4.0, sz.y * 0.01), true)
+	var star := Color(1.0, 0.85, 0.3, 0.8 * a)
+	for k in 4:
+		var ang2 := PI / 4.0 * k
+		var d2 := Vector2(cos(ang2), sin(ang2))
+		_milk.draw_line(c - d2 * sz.y * 0.08, c + d2 * sz.y * 0.08, star, maxf(6.0, sz.y * 0.014), true)
 
 
 ## ゴシゴシこすっている間: 画面のまん中あたりを、こすったあとのすじが左右に行き来する

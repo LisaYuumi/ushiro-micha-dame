@@ -2,15 +2,21 @@ class_name Items
 extends RefCounted
 ## 落とし物。舞台ごとに5つあり、ラウンドごとに重くなる。
 ## 重さ(0〜1)で、置く音の大きさ・追いかける人の速さなどが変わる(数値は GameConfig)。
-## 舞台: "classroom"(教室)・"beach"(海辺)
+## 舞台: "classroom"(教室)・"beach"(海辺)・"night"(夜の教室)
 
-const STAGES := ["classroom", "beach"]
+const STAGES := ["classroom", "beach", "night"]
 ## 舞台の名前(翻訳ファイルのキー)
-const STAGE_NAMES := {"classroom": "教室", "beach": "海辺"}
+const STAGE_NAMES := {"classroom": "教室", "beach": "海辺", "night": "夜の教室"}
 const NAMES_BY_STAGE := {
 	"classroom": ["ハンカチ", "上履き", "ランドセル", "机", "教卓"],
 	"beach": ["貝殻", "ビーチボール", "浮き輪", "砂の城", "バナナボート"],
+	"night": ["ハンカチ", "懐中電灯", "メトロノーム", "モナリザ", "ガイコツ"],
 }
+## 夜の教室の落とし物の番号(ラウンドの番号と同じ)
+const NIGHT_FLASHLIGHT := 1
+const NIGHT_METRONOME := 2
+const NIGHT_MONA_LISA := 3
+const NIGHT_SKELETON := 4
 ## 教室の落とし物(前からある名前。テストなどで使う)
 const NAMES := ["ハンカチ", "上履き", "ランドセル", "机", "教卓"]
 const WEIGHTS := [0.0, 0.25, 0.5, 0.75, 1.0]

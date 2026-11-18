@@ -67,6 +67,7 @@ func _initialize() -> void:
 	_test_two_minions()
 	_test_minion_vote()
 	_test_custom_bot_names()
+	_test_night_stage()
 	_test_beach_stage()
 	_test_accessories()
 	_test_lap_behind_not_touch()
@@ -1934,6 +1935,79 @@ func _test_custom_bot_names() -> void:
 	var names := Profile.clean_bot_names(["  じろう  ", "", "あ".repeat(40)])
 	_check(names.size() == Profile.BOT_NAME_SLOTS and names[0] == "じろう" and names[1] == "" and names[2].length() <= Profile.NAME_MAX,
 			"ボットの名前は9人分にそろえ、長すぎる名前は切る")
+
+
+## 夜の教室: 明るい席と暗い席、雷、カメラのフラッシュ、落とし物
+func _test_night_stage() -> void:
+	_check("night" in Items.STAGES, "夜の教室を選べる")
+	var names := []
+	for i in Items.count():
+		names.append(Items.NAMES_BY_STAGE["night"][i])
+	_check(names == ["ハンカチ", "懐中電灯", "メトロノーム", "モナリザ", "ガイコツ"], "夜の教室の落とし物")
+	var s := GameState.new()
+	s.stage = "night"
+	s.start_match(31, false, 7)
+	var dark := []
+	var bright := []
+	for i in s.seat_count:
+		if s.is_dark_seat(i):
+			dark.append(i)
+		else:
+			bright.append(i)
+	_check(not dark.is_empty() and not bright.is_empty(), "明るい席と暗い席がある(暗い %d / 明るい %d)" % [dark.size(), bright.size()])
+	for i in dark:
+		_check(s.seat_positions[i].x > 0.0, "暗い席は廊下側(窓と反対)")
+	# 暗い席のうしろは、向かいの人からも見えない(鬼は見える)
+	var d: int = dark[0]
+	var viewer := -1
+	for a in s.actors:
+		if a.role == GameState.Role.SEATED and not s.is_minion(a.id) and s.can_see_behind(a.seat_index, d):
+			viewer = a.id
+			break
+	_check(viewer >= 0 and not s.sees_behind(viewer, d), "暗い席のうしろは見えない")
+	_check(s.sees_behind(s.oni_id, d), "鬼には暗い席のうしろも見える")
+	s.lightning_left = 0.5
+	_check(s.sees_behind(viewer, d), "雷の間は、暗い席のうしろも見える")
+	s.lightning_left = 0.0
+	# 懐中電灯のラウンドは、暗い席で光るので見える
+	s.round_index = Items.NIGHT_FLASHLIGHT
+	_check(s.sees_behind(viewer, d), "懐中電灯は暗い席で目立つ(見える)")
+	s.round_index = 0
+	# 雷は停電の代わり(夜の教室は停電しない)
+	var s2 := GameState.new()
+	s2.stage = "night"
+	s2.start_match(32, false, 7)
+	s2.round_index = s2.blackout_round
+	s2._begin_round(s2._round_start_lineup, s2._round_start_oni)
+	var got_lightning := false
+	for i in int(120.0 / STEP):
+		s2.tick(STEP)
+		_check(not s2.blackout, "夜の教室は停電しない")
+		for e in s2.take_events():
+			if e["type"] == "lightning":
+				got_lightning = true
+		if got_lightning or s2.phase == GameState.Phase.RESULT:
+			break
+	_check(got_lightning and s2.lightning_left > 0.0, "雷が光る")
+	# カメラのフラッシュは数秒だけ(黒板消しより短い)
+	_check(s.milk_laps() < GameConfig.MILK_LAPS * 0.5, "フラッシュは黒板消しより短い")
+	# 席はラウンドごとにランダム
+	var orders := {}
+	var s3 := GameState.new()
+	s3.stage = "night"
+	s3.start_match(33, false, 7)
+	for r in 4:
+		var order := []
+		for i in s3.seat_count:
+			var who := s3.get_actor_at_seat(i)
+			order.append(who.id if who else -1)
+		orders[str(order)] = true
+		if s3.drop_target_seat < 0:
+			s3.drop_target_seat = 0
+		s3._finish(s3.oni_id, s3.get_actor_at_seat(s3.drop_target_seat).id, "missed")
+		s3.close_vote()
+		s3.next_round()
+	_check(orders.size() >= 2, "夜の教室は、ラウンドごとに席が変わる")
 
 
 ## 舞台: 海辺の落とし物と、状態で届く舞台

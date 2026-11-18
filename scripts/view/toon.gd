@@ -15,6 +15,8 @@ uniform float shade_dark = 0.66;
 
 // 停電: 3D の明るさ(1 = ふつう)と、鬼の懐中電灯(鬼の足もとのまわりだけ明るい。半径 0 なら無し)
 global uniform float dark_bright;
+// 夜の教室: 色を少し青っぽく(彩度を下げて青へ寄せる)割合。0 = 昼
+global uniform float night_mix;
 global uniform vec3 dark_flash_pos;
 global uniform float dark_flash_r;
 global uniform float dark_flash_bright;
@@ -35,6 +37,7 @@ void vertex() {
 
 void fragment() {
 	ALBEDO = albedo.rgb;
+	ALBEDO = mix(ALBEDO, vec3(dot(ALBEDO, vec3(0.3, 0.59, 0.11))) * vec3(0.62, 0.74, 1.3), night_mix);
 	// 停電のときは、前の暗い幕と同じ紺色にうっすら寄せる
 	EMISSION = vec3(0.0015, 0.0024, 0.007) * (1.0 - dark_bright);
 }
@@ -78,6 +81,8 @@ uniform float shade_dark = 0.66;
 
 // 停電: 3D の明るさ(1 = ふつう)と、鬼の懐中電灯(鬼の足もとのまわりだけ明るい。半径 0 なら無し)
 global uniform float dark_bright;
+// 夜の教室: 色を少し青っぽく(彩度を下げて青へ寄せる)割合。0 = 昼
+global uniform float night_mix;
 global uniform vec3 dark_flash_pos;
 global uniform float dark_flash_r;
 global uniform float dark_flash_bright;
@@ -99,6 +104,7 @@ void vertex() {
 void fragment() {
 	// 頂点の色: RGB が箱の色(Godot が明るさの決まりに直して渡す)、A が明るさ(床に近いほど暗い・部品ごとの色むら)
 	ALBEDO = albedo.rgb * COLOR.rgb * (COLOR.a * 1.1);
+	ALBEDO = mix(ALBEDO, vec3(dot(ALBEDO, vec3(0.3, 0.59, 0.11))) * vec3(0.62, 0.74, 1.3), night_mix);
 	EMISSION = vec3(0.0015, 0.0024, 0.007) * (1.0 - dark_bright);
 }
 
@@ -238,6 +244,13 @@ static func ensure_globals() -> void:
 		RenderingServer.global_shader_parameter_add("dark_flash_pos", RenderingServer.GLOBAL_VAR_TYPE_VEC3, Vector3.ZERO)
 		RenderingServer.global_shader_parameter_add("dark_flash_r", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 		RenderingServer.global_shader_parameter_add("dark_flash_bright", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.6)
+		RenderingServer.global_shader_parameter_add("night_mix", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+
+
+## 夜の教室の青っぽさ(0 = 昼。部屋を作り直すときや昼の舞台では 0 に戻す)
+static func set_night(mix: float) -> void:
+	ensure_globals()
+	RenderingServer.global_shader_parameter_set("night_mix", clampf(mix, 0.0, 1.0))
 
 
 ## 停電の暗さを決める(bright: 1 = ふつう。flash_r > 0 なら、flash_pos のまわり flash_r メートルが明るい)

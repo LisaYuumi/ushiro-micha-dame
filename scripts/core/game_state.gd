@@ -139,6 +139,8 @@ var chaser_progress: float = 0.0
 ## 停電イベント: 停電するラウンド(1試合に1回。2〜4ラウンド目のどれか。-1 = なし)と、いま停電中か。
 ## 停電は見た目だけのイベント(ルールは変わらない)。追いかけっこが始まったら電気がつく
 var blackout_round: int = -1
+## 夜の教室: 雷で明るい残りの秒数(0 なら暗いまま)
+var lightning_left: float = 0.0
 var blackout: bool = false
 var _blackout_angle: float = INF
 ## 停電が終わる鬼の角度(停電してから鬼が BLACKOUT_LAPS 周歩いたら、電気がつく)
@@ -301,6 +303,9 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 	for i in seat_count + 1:
 		if i != first_oni:
 			lineup.append(i)
+	if is_night():
+		# 夜の教室: 席はラウンドごとにランダム(明るい席・暗い席)
+		_shuffle(lineup)
 	_begin_round(lineup, first_oni)
 
 
@@ -332,6 +337,10 @@ func next_round() -> bool:
 		return false
 	var seats := _lineup_after_result()
 	round_index += 1
+	if is_night():
+		# 夜の教室: 明るい席・暗い席が同じ人にならないように、席はラウンドごとにランダム
+		var ids: Array = seats[0]
+		_shuffle(ids)
 	_begin_round(seats[0], seats[1])
 	return true
 
@@ -348,6 +357,15 @@ func item_name() -> String:
 
 func item_weight() -> float:
 	return Items.weight_of(round_index)
+
+
+## 配列を、この試合の乱数で並べかえる(同じ種なら同じ並び)
+func _shuffle(arr: Array) -> void:
+	for i in range(arr.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp = arr[i]
+		arr[i] = arr[j]
+		arr[j] = tmp
 
 
 ## 勝敗のあとの並び: [席ごとの id の配列, 次の鬼の id]
@@ -427,6 +445,7 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	_round_base_scores = scores.duplicate()
 	# 停電するラウンドなら、鬼が歩きはじめてから少しして、とつぜん停電する
 	blackout = false
+	lightning_left = 0.0
 	_blackout_angle = INF
 	if round_index == blackout_round:
 		_blackout_angle = oni_angle + TAU * rng.randf_range(GameConfig.BLACKOUT_START_LAPS_MIN, GameConfig.BLACKOUT_START_LAPS_MAX)
@@ -470,7 +489,14 @@ func tick(delta: float) -> void:
 	_tick_stamps(delta)
 	for i in seat_pass_age.size():
 		seat_pass_age[i] += delta
-	if not blackout and (phase == Phase.WALKING or phase == Phase.DROPPED) and oni_angle >= _blackout_angle:
+	if lightning_left > 0.0:
+		lightning_left = maxf(lightning_left - delta, 0.0)
+	if is_night() and (phase == Phase.WALKING or phase == Phase.DROPPED) and oni_angle >= _blackout_angle:
+		# 夜の教室は停電の代わりに雷: 一瞬だけ部屋全体が明るくなり、暗い席のうしろも見える
+		_blackout_angle = INF
+		lightning_left = GameConfig.LIGHTNING_TIME
+		events.append({"type": "lightning"})
+	elif not blackout and (phase == Phase.WALKING or phase == Phase.DROPPED) and oni_angle >= _blackout_angle:
 		_blackout_angle = INF
 		blackout = true
 		_blackout_end_angle = oni_angle + TAU * GameConfig.BLACKOUT_LAPS
@@ -599,12 +625,36 @@ func _occupied_seats() -> Array:
 func milk_left_ratio(a: Actor) -> float:
 	if not is_milked(a):
 		return 0.0
-	return 1.0 - (oni_angle - a.milk_angle) / (GameConfig.MILK_LAPS * TAU)
+	return 1.0 - (oni_angle - a.milk_angle) / (milk_laps() * TAU)
 
 
 ## 牛乳がかかっていて、画面が白いか(鬼が半周歩くまで)
 func is_milked(a: Actor) -> bool:
-	return a != null and a.milk_angle != INF and oni_angle - a.milk_angle < GameConfig.MILK_LAPS * TAU
+	return a != null and a.milk_angle != INF and oni_angle - a.milk_angle < milk_laps() * TAU
+
+
+## 鬼の技で画面が白い長さ(鬼が歩く周の割合)。夜の教室のフラッシュは数秒だけ
+func milk_laps() -> float:
+	if stage == "night":
+		return GameConfig.FLASH_SECONDS * GameConfig.ONI_WALK_SPEED / (TAU * GameConfig.ONI_WALK_RADIUS)
+	return GameConfig.MILK_LAPS
+
+
+## 夜の教室か
+func is_night() -> bool:
+	return stage == "night"
+
+
+## 夜の教室: この席は暗いか(廊下側。窓側は月の光で明るい)
+func is_dark_seat(seat: int) -> bool:
+	if not is_night() or seat < 0 or seat >= seat_positions.size():
+		return false
+	return seat_positions[seat].x > GameConfig.NIGHT_DARK_SEAT_X
+
+
+## 夜の教室: 暗くて、この席のうしろが見えないか(雷の間と、懐中電灯のラウンドは見える。懐中電灯は暗い席で目立つ)
+func dark_hides(seat: int) -> bool:
+	return is_dark_seat(seat) and lightning_left <= 0.0 and round_index != Items.NIGHT_FLASHLIGHT
 
 
 ## 後ろのハンカチを拾って立ち上がる。
@@ -1027,12 +1077,15 @@ func sees_behind(viewer_id: int, to_seat: int) -> bool:
 	if v == null:
 		return false
 	if v.role == Role.ONI or v.role == Role.OUT:
-		# 鬼と、お手つきで真ん中に抜けた人は、全員の後ろが見える
-		return true
+		# 鬼と、お手つきで真ん中に抜けた人は、全員の後ろが見える(夜は、抜けた人も暗い席のうしろは見えない)
+		return v.role == Role.ONI or not dark_hides(to_seat)
 	if v.role != Role.SEATED or v.seat_index == to_seat:
 		return false
 	if is_minion(viewer_id):
 		return true
+	# 夜の教室: 暗い席のうしろは見えない(手下と鬼は見える)
+	if dark_hides(to_seat):
+		return false
 	return can_see_behind(v.seat_index, to_seat)
 
 
@@ -1106,6 +1159,7 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"obstacles": obstacles,
 		"milk_left": milk_left,
 		"blackout": blackout,
+		"lightning_left": lightning_left,
 		"stamp_words": stamp_words,
 		"stamp_langs": stamp_langs,
 		"stamp_picks": stamp_picks,
@@ -1178,6 +1232,7 @@ func apply_snapshot(s: Dictionary) -> void:
 	obstacles = s.get("obstacles", [])
 	milk_left = s.get("milk_left", 0)
 	blackout = s.get("blackout", false)
+	lightning_left = s.get("lightning_left", 0.0)
 	stamp_words = s.get("stamp_words", {})
 	stamp_langs = s.get("stamp_langs", {})
 	stamp_picks = s.get("stamp_picks", {})

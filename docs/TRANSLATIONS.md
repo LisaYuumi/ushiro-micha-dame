@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(338)
+## 一覧(348)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -185,6 +185,16 @@
 | 当たり +%d | Correct +%d |
 | 教室 | Classroom |
 | 海辺 | Beach |
+| 夜の教室 | Night Classroom |
+| 懐中電灯 | Flashlight |
+| メトロノーム | Metronome |
+| モナリザ | Mona Lisa |
+| ガイコツ | Skeleton |
+| フィルム切れ | Out of film |
+| フラッシュでまぶしい! | Blinded by the flash! |
+| %s をパシャッ! | Snap! Flashed %s! |
+| パシャッ! | Snap! |
+| カミナリ! | Thunder! |
 | 貝殻 | Seashell |
 | ビーチボール | Beach ball |
 | 浮き輪 | Swim ring |

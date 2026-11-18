@@ -276,8 +276,9 @@ func _start_round() -> void:
 func _build_view() -> void:
 	view.build(state)
 	var water := state.stage == "beach"
-	hud.set_water(water)
-	touch.set_water(water)
+	var tool := "water" if water else ("camera" if state.stage == "night" else "eraser")
+	hud.set_tool(tool)
+	touch.set_tool(tool)
 	# 「落とす」「フェイク」のボタンの絵は、このラウンドの落とし物
 	touch.set_item_icon(ButtonIcon.item_key(state.stage, state.round_index))
 	# 送るボタンの言葉(参加者は、ホストから届いた自分の言葉)
@@ -1033,7 +1034,13 @@ func _show_event(e: Dictionary) -> void:
 			if e["actor"] == me:
 				hud.show_message(tr("かける人をタップしてね"), Color(0.3, 0.3, 0.3), 1.0)
 		"milk":
-			if e["target"] == me:
+			if state.stage == "night":
+				# 夜の教室: カメラのフラッシュ
+				if e["target"] == me:
+					hud.show_message(tr("フラッシュでまぶしい!"), Color(0.3, 0.45, 0.7), 1.2)
+				elif e["sender"] == me:
+					hud.show_message(tr("%s をパシャッ!") % _name(e["target"]), Color(0.3, 0.45, 0.7), 1.0)
+			elif e["target"] == me:
 				hud.show_message(tr("水鉄砲でかけられた!") if state.stage == "beach" else tr("黒板消しでポンポンされた!"), Color(0.3, 0.45, 0.7), 1.2)
 			elif e["sender"] == me:
 				hud.show_message((tr("%s に水鉄砲!") if state.stage == "beach" else tr("%s を黒板消しでポンポン!")) % _name(e["target"]), Color(0.3, 0.45, 0.7), 1.0)
@@ -1085,6 +1092,9 @@ func _show_event(e: Dictionary) -> void:
 			# ラウンド開始: 学校のチャイムのような音
 			# (海辺はスチールドラムのジングル)
 			audio.play("beach_start" if state.stage == "beach" else "chime", -6.0)
+		"lightning":
+			# 夜の教室の雷(音と光は WorldView)。一瞬だけ、暗い席のうしろも見える
+			hud.show_message(tr("カミナリ!"), Color(0.25, 0.3, 0.6), 1.2)
 		"blackout":
 			# 停電イベント(音は WorldView が鳴らす)
 			hud.show_message(tr("停電!"), Color(0.15, 0.15, 0.35), 1.8)

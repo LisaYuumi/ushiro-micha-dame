@@ -276,6 +276,8 @@ const ONI_BACK_LIMIT := 2.0
 const MILK_PER_ROUND := 1
 ## かかった人の画面が白い長さ(鬼が歩く周の割合。0.5 = 半周)
 const MILK_LAPS := 0.5
+## 夜の教室の鬼の技「カメラのフラッシュ」: 画面が真っ白になる秒数(黒板消し・水鉄砲より短い)
+const FLASH_SECONDS := 4.0
 ## ボットの鬼が、そのラウンドで牛乳を使う確率/使うとき、落とす相手に落とす瞬間かける確率
 const BOT_ONI_MILK_CHANCE := 0.8
 const BOT_ONI_MILK_AT_DROP := 0.5
@@ -288,6 +290,23 @@ const BOT_MILK_NOTICE_MULT := 1.6
 
 # --- 停電イベント ---
 ## 停電するラウンド(1試合に1回。この範囲のラウンドからランダム。0 = 1ラウンド目)
+## 夜の教室(停電の代わりに雷。明るい席と暗い席):
+## 雷で部屋全体が明るくなり、暗い席のうしろも見える秒数
+const LIGHTNING_TIME := 1.0
+## 3D の明るさ(1 = 昼)。暗い席のあたり / 月の光が当たる窓側(窓側を中心にした丸い範囲が明るい)
+const NIGHT_BRIGHTNESS := 0.52
+const NIGHT_MOON_BRIGHTNESS := 0.85
+const NIGHT_MOON_CENTER := Vector3(-4.6, 0.0, 0.0)
+const NIGHT_MOON_RADIUS := 5.2
+## 夜の青っぽさ(色の彩度を下げて青へ寄せる割合。雷のときは少し弱くなる)
+const NIGHT_TINT := 0.42
+## 席が暗いか: 窓(x = -8)と反対側(x がこれより大きい席)
+const NIGHT_DARK_SEAT_X := 0.4
+## メトロノーム: 床で鳴り続ける「カチ」の大きさ(鬼のフェイクの音とまぎれないように、とても小さく)と、1秒に何回ゆれるか
+const METRONOME_VOLUME_DB := -18.0
+const METRONOME_HZ := 1.6
+## ボット: 明るい席のうしろの懐中電灯は、月の光にまぎれて気づかないことがある(この確率で見えないものとして考える)
+const BOT_FLASHLIGHT_BRIGHT_MISS := 0.5
 const BLACKOUT_ROUND_MIN := 1
 const BLACKOUT_ROUND_MAX := 3
 ## 停電するまで、鬼がどれだけ歩くか(周の割合。この範囲でランダム)
