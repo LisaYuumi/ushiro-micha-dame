@@ -966,7 +966,7 @@ func _apply_face() -> void:
 		_mouth_frown.visible = true
 
 
-## ガーン!の顔: 白目に小さな黒目、あごが外れたように縦に長く開いた口、おでこの青い縦線(顔の左半分。ふだんは隠す)
+## ガーン!の顔: 白目に小さな黒目、あごが外れたように縦に長く開いた口、おでこの青い縦線(顔の右半分。ふだんは隠す)
 func _build_shock_face() -> void:
 	_shock_root = Node3D.new()
 	_face.add_child(_shock_root)
@@ -997,18 +997,21 @@ func _build_shock_face() -> void:
 	_shock_mouth.position = Vector3(0, HEAD_Y - 0.12, FACE_Z + 0.006)
 	_shock_mouth.scale = Vector3(0.8, 0.6, 0.45)
 	_shock_root.add_child(_shock_mouth)
-	# おでこの青い縦線: 顔の半分(正面から見て左側)だけ。いちばん左が長く、右へ行くほど短い(上のはしはそろえる)。
-	# (顔の正面は -Z なので、正面から見た左は +X)
+	# おでこの青い縦線(濃い青・はしが丸い・ふちどり): 顔の半分(正面から見て右側)だけ。いちばん左(顔のまん中寄り)が長く、右へ行くほど短い
+	# (上のはしはそろえる)。顔の正面は -Z なので、正面から見た右は -X
 	var top := HEAD_Y + 0.2
 	for i in 4:
-		var x := 0.125 - 0.035 * float(i)
+		var x := -0.015 - 0.035 * float(i)
 		var length := 0.12 - 0.025 * float(i)
 		var y := top - length / 2.0
-		var line := _box(Vector3(0.011, length, 0.006), Vector3.ZERO)
-		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.32, 0.38, 0.78)
-		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		line.material_override = m
+		# 濃い青で、はしが丸く、細いふちどりのある線(マンガの「ガーン」の線)
+		var cap := CapsuleMesh.new()
+		cap.radius = 0.009
+		cap.height = length
+		cap.radial_segments = 8
+		cap.rings = 2
+		var line := _mesh(cap, Color("1C22D6"), 0.004)
+		line.scale = Vector3(1.0, 1.0, 0.6)
 		var z := -sqrt(maxf(HEAD_RADIUS * HEAD_RADIUS - (y - HEAD_Y) * (y - HEAD_Y) - x * x, 0.0)) - 0.004
 		line.position = Vector3(x, y, z)
 		line.rotation.x = asin(clampf((y - HEAD_Y) / HEAD_RADIUS, -1.0, 1.0))
