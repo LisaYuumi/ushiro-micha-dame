@@ -1180,6 +1180,7 @@ func _update_rig(delta: float) -> void:
 	# 座る動きは腰が後ろに下がるので、体全体を前へずらして椅子の上に乗せる
 	_seat_shift = move_toward(_seat_shift, SEAT_SHIFT if _pose == "sit" or _pose == "floor" else 0.0, delta / 0.5 * SEAT_SHIFT)
 	_rig.position = Vector3(0, 0, -_seat_shift)
+	_apply_tuck(delta)
 	# 振り向き: 頭は速く、上半身はゆっくり
 	_look_head = move_toward(_look_head, _look_target, delta / LOOK_HEAD_TIME)
 	_look_body = move_toward(_look_body, _look_target, delta / LOOK_BODY_TIME)
@@ -1190,6 +1191,47 @@ func _update_rig(delta: float) -> void:
 			continue
 		var angle: float = _twist_bones[i] * _ease(t)
 		_skel.set_bone_pose_rotation(i, _skel.get_bone_pose_rotation(i) * Quaternion(Vector3.UP, angle))
+
+
+## 右の脇に物をはさむ(モナリザ): 二の腕を少し外へ開いて下ろし、ひじから先は少し前と内へ曲げて、物の下を手で支える。
+## 腕は物の外側に来る(物は体と腕のあいだ)。走る動きの右腕の振りは止める
+const TUCK_TIME := 0.2
+var _tuck := false
+var _tuck_w := 0.0
+
+
+func set_tuck(v: bool) -> void:
+	_tuck = v
+
+
+func _apply_tuck(delta: float) -> void:
+	_tuck_w = move_toward(_tuck_w, 1.0 if _tuck else 0.0, delta / TUCK_TIME)
+	if _tuck_w <= 0.0:
+		return
+	var ua := _skel.find_bone("DEF-upper_arm.R")
+	var fa := _skel.find_bone("DEF-forearm.R")
+	var ual := _skel.find_bone("DEF-upper_arm.L")
+	if ua < 0 or fa < 0 or ual < 0:
+		return
+	# 骨組みの中での向き: 右(右腕の付け根 - 左腕の付け根)、前(素材は +Z)
+	var right := (_skel.get_bone_global_pose(ua).origin - _skel.get_bone_global_pose(ual).origin)
+	right.y = 0.0
+	right = right.normalized()
+	var fwd := Vector3(0, 0, 1)
+	_aim_bone(ua, (Vector3.DOWN + right * 0.45).normalized(), _ease(_tuck_w))
+	_aim_bone(fa, (Vector3.DOWN - right * 0.3 + fwd * 0.45).normalized(), _ease(_tuck_w))
+
+
+## 骨の向き(骨の +Y)を、骨組みの中の dir に向ける(w = 0 で元の動きのまま、1 で dir)
+func _aim_bone(i: int, dir: Vector3, w: float) -> void:
+	var g := _skel.get_bone_global_pose(i)
+	var cur := g.basis.y.normalized()
+	var target := cur.slerp(dir, w).normalized()
+	var rot := Quaternion(cur, target) if cur.cross(target).length() > 0.0001 else Quaternion.IDENTITY
+	var want := Basis(rot) * g.basis
+	var parent := _skel.get_bone_parent(i)
+	var pg := _skel.get_bone_global_pose(parent).basis if parent >= 0 else Basis()
+	_skel.set_bone_pose_rotation(i, (pg.inverse() * want).get_rotation_quaternion())
 
 
 func _ease(t: float) -> float:

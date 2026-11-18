@@ -215,6 +215,8 @@ func _apply_item() -> void:
 	var a := _selected()
 	if _view._straps and is_instance_valid(_view._straps):
 		_view._straps.visible = false
+	var tucker: CharacterModel = _view._tucker
+	_view._tucker = null
 	match _item:
 		"手に持つ":
 			h.visible = true
@@ -225,6 +227,8 @@ func _apply_item() -> void:
 			h.transform = Transform3D(Basis.IDENTITY, Vector3(sin(ang), 0.0, cos(ang)) * GameConfig.DROP_RADIUS)
 		_:
 			h.visible = false
+	if tucker != _view._tucker and tucker and is_instance_valid(tucker):
+		tucker.set_tuck(false)
 
 
 # --- カメラ ---

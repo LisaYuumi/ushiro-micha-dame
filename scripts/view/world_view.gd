@@ -357,6 +357,8 @@ func sync(state: GameState, delta: float) -> void:
 	# (背負う紐は、背負っている間だけ。_carry_item が出す)
 	if _straps and is_instance_valid(_straps):
 		_straps.visible = false
+	var tucker := _tucker
+	_tucker = null
 	if _item_head_id >= 0 and _actor_nodes.has(_item_head_id):
 		# 見逃した人は、落とし物を頭にのせたまま(次のラウンドで消える)
 		var hm := _actor_nodes[_item_head_id] as CharacterModel
@@ -373,6 +375,8 @@ func sync(state: GameState, delta: float) -> void:
 		var dark_hide := state.blackout and state.local_player_id != state.oni_id
 		_handkerchief.visible = state.handkerchief_on_floor and not dark_hide
 		_handkerchief.transform = Transform3D(Basis.IDENTITY, state.handkerchief_position)
+	if tucker != _tucker and tucker and is_instance_valid(tucker):
+		tucker.set_tuck(false)
 	_hide_item_if_not_visible_to_me(state)
 	_update_night_item(state, delta, holder != null and _item_head_id < 0)
 	_update_footsteps(state)
@@ -2148,6 +2152,20 @@ func _carry_on_back(m: CharacterModel, body: Basis, back: Vector3) -> void:
 	_update_straps(m, body, true)
 
 
+## モナリザを脇にはさんでいる人(腕の形を変える)。運んでいないときは null
+var _tucker: CharacterModel
+
+
+func _set_tucker(m: CharacterModel) -> void:
+	if _tucker == m:
+		return
+	if _tucker and is_instance_valid(_tucker):
+		_tucker.set_tuck(false)
+	_tucker = m
+	if m:
+		m.set_tuck(true)
+
+
 ## 背負うときの紐(体の前のたすきがけと腰ひも)。背負っていないときは隠す
 var _straps: Node3D
 
@@ -2194,8 +2212,11 @@ func _carry_night_item(m: CharacterModel, body: Basis, back: Vector3) -> void:
 			var chest := m.bone_world("DEF-spine.003").origin
 			var right := body.x.normalized()
 			if _item_index == 3:
+				# 絵は体と腕のあいだ(脇の下にはさむ)。腕は絵の外側に下ろす(CharacterModel.set_tuck)
+				_set_tucker(m)
+				var shoulder := m.bone_world("DEF-upper_arm.R").origin
 				var b := body * Basis(Vector3.UP, PI / 2.0)
-				_handkerchief.transform = Transform3D(b.scaled(Vector3.ONE * 0.85), chest + right * 0.4 + Vector3(0, -0.62, 0))
+				_handkerchief.transform = Transform3D(b.scaled(Vector3.ONE * 0.85), shoulder + Vector3(0, -0.6, 0))
 			else:
 				var b2 := body * Basis(Vector3.UP, PI) * Basis(Vector3.RIGHT, -PI / 2.0)
 				_handkerchief.transform = Transform3D(b2.scaled(Vector3.ONE * 0.85), chest + right * 0.25 - back * 0.3 + Vector3(0, -0.2, 0))
