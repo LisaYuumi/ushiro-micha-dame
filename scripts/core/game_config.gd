@@ -294,10 +294,10 @@ const BOT_MILK_NOTICE_MULT := 1.6
 ## 雷で部屋全体が明るくなり、暗い席のうしろも見える秒数
 const LIGHTNING_TIME := 1.0
 ## 3D の明るさ(1 = 昼)。暗い席のあたり / 月の光が当たる窓側(窓側を中心にした丸い範囲が明るい)
-const NIGHT_BRIGHTNESS := 0.52
+const NIGHT_BRIGHTNESS := 0.38
 const NIGHT_MOON_BRIGHTNESS := 0.85
 const NIGHT_MOON_CENTER := Vector3(-4.6, 0.0, 0.0)
-const NIGHT_MOON_RADIUS := 5.2
+const NIGHT_MOON_RADIUS := 6.2
 ## 夜の青っぽさ(色の彩度を下げて青へ寄せる割合。雷のときは少し弱くなる)
 const NIGHT_TINT := 0.42
 ## 席が暗いか: 窓(x = -8)と反対側(x がこれより大きい席)

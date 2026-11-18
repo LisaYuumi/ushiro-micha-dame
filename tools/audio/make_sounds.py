@@ -1074,6 +1074,69 @@ def flash_pasha():
     return norm(mix(shutter, at(whine, 0.08, d)), 0.85)
 
 
+# --- 夜の教室: ちょっと怖い(でもかわいい)曲 ---
+
+def _celesta(freq, d):
+    # チェレスタ(オルゴールのような、キラキラした鈴の音)
+    return bell(freq, min(d + 0.4, 1.2), 0.5, 0.8)
+
+
+def _theremin(f0, f1, d):
+    # テルミン(おばけの「ひゅ〜」): すべる高さと、ゆったり大きなゆれ
+    t = t_of(d)
+    f = glide(f0, f1, d, 0.7) * (1.0 + 0.02 * np.sin(2 * np.pi * 5.5 * t))
+    w = tone(f, d) + 0.25 * tone(f * 2.0, d)
+    return w * env_ar(d, 0.2, 0.4) * 0.6
+
+
+def _snap(d):
+    # 指パッチン
+    dd = min(d, 0.08)
+    return mix(click(dd, 1800, 6000, 0.008), thud(900, 600, dd, 0.01) * 0.3)
+
+
+def _bgm_night(level):
+    # 夜の教室のラウンド中: ニ短調の、ぬき足さし足のちょっと怖い曲(怖すぎない、お化け屋敷のかわいい感じ)。
+    # はじいたベースが半音ずつ動き、チェレスタがあやしいメロディ(半音のうごき)。2ラウンド目からテルミンの「ひゅ〜」、
+    # 最後のラウンドは指パッチンと低い太鼓。ラウンドが進むほど少し速くなる。鬼との距離では変えない
+    bpm = [92, 96, 102][level - 1]
+    bars = 8
+    # (ベースの音の並び: 1小節4つ)
+    bass = [[50, 57, 50, 57], [46, 53, 46, 53], [43, 50, 44, 50], [45, 52, 49, 52],
+            [50, 57, 50, 57], [46, 53, 47, 53], [43, 50, 45, 49], [50, 45, 50, 0]]
+    melody = [74, 0, 77, 0, 81, 0, 80, 81, 82, 0, 81, 0, 77, 0, 0, 0,
+              79, 0, 77, 0, 76, 0, 73, 0, 74, 76, 77, 76, 74, 0, 0, 0]
+    parts = []
+    for b in range(bars):
+        for k, n in enumerate(bass[b]):
+            if n:
+                parts.append((b * 4 + k, 0.45, lambda d, n=n: pluck(midi(n - 12), d, 0.16, 0.3), 0.42))
+        if level >= 2 and b % 2 == 0:
+            # テルミンの「ひゅ〜」(2小節に1回、高いところからすべり下りる)
+            hi = [86, 84, 86, 81][(b // 2) % 4]
+            parts.append((b * 4 + 0.5, 3.0, lambda d, hi=hi: _theremin(midi(hi), midi(hi - 5), d), 0.1))
+        if level >= 3:
+            for k in [1, 3]:
+                parts.append((b * 4 + k, 0.2, _snap, 0.22))
+            parts.append((b * 4, 0.4, lambda d: thud(95, 50, min(d, 0.4), 0.12), 0.3))
+    for i, n in enumerate(melody):
+        if n:
+            parts.append((i * 1.0, 0.5, lambda d, n=n: _celesta(midi(n), d), 0.2))
+    return norm(_render_song(bpm, bars, parts), 0.75)
+
+
+def bgm_night_1():
+    return _bgm_night(1)
+
+
+def bgm_night_2():
+    return _bgm_night(2)
+
+
+def bgm_night_3():
+    return _bgm_night(3)
+
+
 SOUNDS = {
     "drop_0": drop_0, "drop_1": drop_1, "drop_2": drop_2, "drop_3": drop_3, "drop_4": drop_4,
     "step": step, "run_step": run_step,
@@ -1094,6 +1157,7 @@ SOUNDS = {
     "bgm_school_1": bgm_school_1, "bgm_school_2": bgm_school_2, "bgm_school_3": bgm_school_3,
     "look_zah": look_zah, "found": found, "gaan": gaan, "tonton": tonton, "chiin": chiin,
     "thunder": thunder, "amb_night": amb_night,
+    "bgm_night_1": bgm_night_1, "bgm_night_2": bgm_night_2, "bgm_night_3": bgm_night_3,
     "drop_night_0": drop_night_0, "drop_night_1": drop_night_1, "drop_night_2": drop_night_2,
     "drop_night_3": drop_night_3, "drop_night_4": drop_night_4, "metronome_tick": metronome_tick,
     "flash_pasha": flash_pasha,

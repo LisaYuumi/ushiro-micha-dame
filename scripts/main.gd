@@ -445,8 +445,9 @@ func _update_music(delta: float) -> void:
 	if mode != Mode.LOBBY and _studio == null:
 		match state.phase:
 			GameState.Phase.WALKING, GameState.Phase.DROPPED:
-				# 教室は小学校っぽい曲(リコーダー・木琴・鍵盤ハーモニカ)、海辺は今までの曲
-				want = ("bgm_beach_%d" if state.stage == "beach" else "bgm_school_%d") % _round_level()
+				# 教室は小学校っぽい曲(リコーダー・木琴・鍵盤ハーモニカ)、海辺はハワイアン、夜の教室はちょっと怖い曲
+				var fmt := {"beach": "bgm_beach_%d", "night": "bgm_night_%d"}.get(state.stage, "bgm_school_%d") as String
+				want = fmt % _round_level()
 			GameState.Phase.CHASE:
 				want = "bgm_chase"
 			_:
