@@ -2195,7 +2195,7 @@ func _carry_night_item(m: CharacterModel, body: Basis, back: Vector3) -> void:
 			var right := body.x.normalized()
 			if _item_index == 3:
 				var b := body * Basis(Vector3.UP, PI / 2.0)
-				_handkerchief.transform = Transform3D(b.scaled(Vector3.ONE * 0.85), chest + right * 0.27 + Vector3(0, -0.62, 0))
+				_handkerchief.transform = Transform3D(b.scaled(Vector3.ONE * 0.85), chest + right * 0.4 + Vector3(0, -0.62, 0))
 			else:
 				var b2 := body * Basis(Vector3.UP, PI) * Basis(Vector3.RIGHT, -PI / 2.0)
 				_handkerchief.transform = Transform3D(b2.scaled(Vector3.ONE * 0.85), chest + right * 0.25 - back * 0.3 + Vector3(0, -0.2, 0))
