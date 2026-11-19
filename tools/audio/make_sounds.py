@@ -990,6 +990,16 @@ def vote_pon():
     return norm(mix(thud(720, 420, d, 0.05), click(0.03, 1500, 5000, 0.006) * 0.4), 0.8)
 
 
+def title_pon():
+    # 称号が出る「ポン!」: 明るい和音のベルと、キラッ
+    d = 0.7
+    out = np.zeros(int(d * SR))
+    out = out + at(thud(520, 380, 0.18, 0.05) * 0.5, 0.0, d)
+    for k, m in enumerate((79, 83, 86, 91)):
+        out = out + at(bell(midi(m), 0.5, 0.2, 0.5) * 0.28, 0.02 + k * 0.035, d)
+    return norm(out, 0.8)
+
+
 # --- 夜の教室 ---
 
 def thunder():
@@ -1162,6 +1172,7 @@ SOUNDS = {
     "drop_night_3": drop_night_3, "drop_night_4": drop_night_4, "metronome_tick": metronome_tick,
     "flash_pasha": flash_pasha,
     "vote_don": vote_don, "drumroll": drumroll, "jajaan": jajaan, "vote_pon": vote_pon,
+    "title_pon": title_pon,
 }
 
 

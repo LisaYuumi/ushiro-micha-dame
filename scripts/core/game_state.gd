@@ -190,6 +190,10 @@ var votes: Dictionary = {}
 var reveal_left: float = -1.0
 ## このラウンドで、人ごとの嘘のスタンプの数(ボットが投票の参考にする)
 var lie_counts: Dictionary = {}
+## 試合中の出来事の回数(称号のため。ホストだけが数える)。id -> {出来事: 回数}。出来事の名前は Titles.LIST
+var match_stats: Dictionary = {}
+## 試合の最後の称号(試合が終わったら決まる)。id -> {"title", "reason", "n"}(Titles.decide)
+var titles: Dictionary = {}
 ## 人ごとの、自分で決めたスタンプの言葉(id -> {種類: 言葉})。ない人・ない種類は初期の言葉
 var stamp_words: Dictionary = {}
 ## 人ごとの言語(id -> "ja" / "en")。自作の言葉は、受け取った人と言語が同じときだけ出す
@@ -294,6 +298,8 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 	scores = {}
 	for a in actors:
 		scores[a.id] = 0
+	match_stats = {}
+	titles = {}
 	round_index = 0
 	match_over = false
 	last_minion_id = -1
@@ -333,7 +339,11 @@ func next_round() -> bool:
 	close_vote()
 	if round_index + 1 >= GameConfig.ROUNDS_PER_MATCH:
 		match_over = true
-		events.append({"type": "match_over", "scores": scores.duplicate()})
+		var ids := []
+		for a in actors:
+			ids.append(a.id)
+		titles = Titles.decide(match_stats, ids, stage, rng)
+		events.append({"type": "match_over", "scores": scores.duplicate(), "titles": titles.duplicate(true)})
 		return false
 	var seats := _lineup_after_result()
 	round_index += 1
@@ -459,6 +469,7 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 		_plan_drop()
 		_plan_bot_milk()
 	events.append({"type": "round_start", "round": round_index, "item": item_name()})
+	_stat(oni, "oni_rounds")
 	# 座っている人(ボットも)から手下を選ぶ。8人のときは、ときどき2人。本人にだけ知らせる(手下どうしも知らない)
 	var count := 1
 	if seat_count >= GameConfig.MINION_TWO_MIN_SEATS and rng.randf() < GameConfig.MINION_TWO_CHANCE:
@@ -561,6 +572,7 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 		st["looked"] = true
 	if has_handkerchief_behind(a):
 		events.append({"type": "found", "actor": actor_id})
+		_count_found(actor_id)
 		# 本当の「落ちてる!」などで振り向けた: 教えた人に点
 		for st in shown:
 			if st["scorable"] and Stamps.says_look(st["kind"]) and st["truthful"] and not st["credited"]:
@@ -569,6 +581,9 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 	else:
 		# 外れの振り向き: 減点はしない。回数だけ数える(表情と、だました人の点数に使う)
 		a.otetsuki_count += 1
+		_stat(actor_id, "otetsuki")
+		if blackout or dark_hides(a.seat_index):
+			_stat(actor_id, "otetsuki_dark")
 		events.append({
 			"type": "otetsuki",
 			"actor": actor_id,
@@ -704,6 +719,8 @@ func pick_up(actor_id: int) -> void:
 	# 追いかけっこが始まったら、電気がつく
 	_lights_on()
 	events.append({"type": "picked_up", "actor": a.id})
+	if is_night() and round_index == Items.NIGHT_SKELETON:
+		_stat(a.id, "skeleton")
 
 
 ## この人にスタンプを送れるか。送れるなら ""、送れないなら理由:
@@ -758,6 +775,9 @@ func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
 	var truthful := Stamps.says_look(kind) == has_handkerchief_behind(target)
 	if not truthful:
 		lie_counts[sender_id] = int(lie_counts.get(sender_id, 0)) + 1
+	_stat(sender_id, "stamps_sent")
+	if truthful:
+		_stat(sender_id, "stamps_true")
 	if not active_stamps.has(target_id):
 		active_stamps[target_id] = []
 	active_stamps[target_id].append({
@@ -826,6 +846,7 @@ func _milk(target: Actor) -> bool:
 		return false
 	milk_left -= 1
 	target.milk_angle = oni_angle
+	_stat(target.id, "tool_hit")
 	events.append({"type": "milk", "sender": oni_id, "target": target.id})
 	return true
 
@@ -1156,6 +1177,7 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"stage": stage,
 		"scores": scores,
 		"match_over": match_over,
+		"titles": titles,
 		"obstacles": obstacles,
 		"milk_left": milk_left,
 		"blackout": blackout,
@@ -1229,6 +1251,7 @@ func apply_snapshot(s: Dictionary) -> void:
 	stage = Items.clean_stage(str(s.get("stage", "classroom")))
 	scores = s["scores"]
 	match_over = s["match_over"]
+	titles = s.get("titles", {})
 	obstacles = s.get("obstacles", [])
 	milk_left = s.get("milk_left", 0)
 	blackout = s.get("blackout", false)
@@ -1363,6 +1386,14 @@ func _award_deceive(st: Dictionary, target_id: int) -> void:
 	var points: int = {"normal": GameConfig.SCORE_DECEIVE_NORMAL, "minion": GameConfig.SCORE_DECEIVE_MINION,
 			"oni": GameConfig.SCORE_DECEIVE_ONI}[st["sender_role"]]
 	var sender_id: int = st["sender"]
+	# 称号のための回数(点にならなくても数える)
+	_stat(sender_id, "deceived")
+	_stat(target_id, "fooled")
+	if st["sender_role"] == "minion":
+		_stat(sender_id, "minion_deceived")
+	if _is_out(sender_id) and Stamps.says_look(st["kind"]):
+		# お手つきで抜けたあと、自分の言葉でほかの人をお手つきにさせた
+		_stat(sender_id, "dragged")
 	# お手つきで抜けた人は、このラウンドは0点
 	if points == 0 or _is_out(sender_id):
 		return
@@ -1479,6 +1510,7 @@ func _check_obstacles(a: Actor) -> void:
 		a.immune_left = t + GameConfig.HIT_IMMUNE_TIME
 		if ob["kind"] == "banana":
 			obstacles.remove_at(i)
+			_stat(a.id, "banana")
 		events.append({"type": "slip", "actor": a.id, "sender": ob["sender"], "kind": ob["kind"]})
 		return
 
@@ -1584,6 +1616,7 @@ func close_vote() -> void:
 		tally[target] = int(tally.get(target, 0)) + 1
 		if is_minion(target):
 			correct.append(voter)
+			_stat(voter, "vote_correct")
 			scores[voter] = scores.get(voter, 0) + GameConfig.SCORE_VOTE_CORRECT
 	var fooled := []
 	var busted := []
@@ -1591,6 +1624,8 @@ func close_vote() -> void:
 		var got: int = int(tally.get(m, 0))
 		if got == 0:
 			fooled.append(m)
+			# 投票した全員をだました
+			_stat(m, "minion_deceived", votes.size())
 			scores[m] = scores.get(m, 0) + GameConfig.SCORE_MINION_FOOLED
 		elif got == votes.size():
 			busted.append(m)
@@ -1619,8 +1654,12 @@ func _finish(winner_id: int, loser_id: int, reason: String) -> void:
 	match reason:
 		"sat":
 			scores[winner_id] += GameConfig.SCORE_ONI_SAT
+			_stat(winner_id, "escaped")
+		"missed":
+			_stat(loser_id, "missed")
 		"touched":
 			scores[winner_id] += GameConfig.SCORE_CHASER_TOUCHED
+			_stat(winner_id, "touched")
 	if loser_id >= 0:
 		scores[loser_id] += GameConfig.SCORE_LOSE
 	# 表示中のスタンプは、ここで消える(「まだ平気」の点もここで決まる)
@@ -1665,6 +1704,21 @@ func _finish(winner_id: int, loser_id: int, reason: String) -> void:
 	events.append(e)
 
 
+## 称号のための回数を足す
+func _stat(actor_id: int, key: String, n: int = 1) -> void:
+	if actor_id < 0:
+		return
+	if not match_stats.has(actor_id):
+		match_stats[actor_id] = {}
+	match_stats[actor_id][key] = int(match_stats[actor_id].get(key, 0)) + n
+
+
+func _count_found(actor_id: int) -> void:
+	_stat(actor_id, "found")
+	if lightning_left > 0.0:
+		_stat(actor_id, "found_lightning")
+
+
 func _flat_distance(a: Vector3, b: Vector3) -> float:
 	return Vector2(a.x - b.x, a.z - b.z).length()
 
@@ -1688,6 +1742,7 @@ func _drop() -> void:
 	var target := get_actor_at_seat(drop_target_seat)
 	if target and target.looking_back:
 		events.append({"type": "found", "actor": target.id})
+		_count_found(target.id)
 
 
 func _sit(actor: Actor, seat: int) -> void:

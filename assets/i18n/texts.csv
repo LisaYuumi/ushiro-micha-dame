@@ -317,6 +317,11 @@ UIを消す(H),UIを消す(H),Hide UI (H)
 場面:,場面:,Scene:
 落とし物:,落とし物:,Item:
 背景:,背景:,Background:
+称号,称号,Awards
+称号:,称号:,Awards:
+表示,表示,Show
+演出,演出,Animate
+選び直す,選び直す,Reroll
 動き:,動き:,Motion:
 ボットの名前(宣伝用・開発用。空ならふつうの名前。次の試合から),ボットの名前(宣伝用・開発用。空ならふつうの名前。次の試合から),Bot names (promo / dev only. Empty = default name. From the next match)
 全部ふつうの名前にもどす,全部ふつうの名前にもどす,Reset all to default names
@@ -333,6 +338,56 @@ UIを消す(H),UIを消す(H),Hide UI (H)
 手下,手下,Helper
 バレバレ!,バレバレ!,Busted!
 だましきった!,だましきった!,Fooled them all!
+称号発表!,称号発表!,Awards!
+道連れ名人,道連れ名人,Taking You With Me
+お手つきのあと %d人を道連れ,お手つきのあと %d人を道連れ,Dragged down after going out: %d
+ウソつき大賞,ウソつき大賞,Grand Liar Award
+手下として %d人をだました,手下として %d人をだました,People fooled as a minion: %d
+気づかな賞,気づかな賞,Totally Oblivious
+一周まわっても気づかず %d回,一周まわっても気づかず %d回,Missed it for a full lap: %d
+バナナの被害者,バナナの被害者,Banana Victim
+バナナで %d回転んだ,バナナで %d回転んだ,Banana slips: %d
+だまされ王,だまされ王,Most Gullible
+ウソを信じて %d回失敗,ウソを信じて %d回失敗,Fell for lies: %d
+暗やみパニック賞,暗やみパニック賞,Panic in the Dark
+暗やみでお手つき %d回,暗やみでお手つき %d回,Wrong looks in the dark: %d
+カミナリの目撃者,カミナリの目撃者,Lightning Witness
+カミナリの光で %d回見つけた,カミナリの光で %d回見つけた,Spotted in a lightning flash: %d
+ガイコツのお友だち,ガイコツのお友だち,Skeleton's Buddy
+ガイコツをかかえて %d回走った,ガイコツをかかえて %d回走った,Runs with the skeleton: %d
+お手つき王,お手つき王,King of Wrong Looks
+お手つき %d回,お手つき %d回,Wrong looks: %d
+粉まみれ賞,粉まみれ賞,Chalk Dust Award
+黒板消しを %d回くらった,黒板消しを %d回くらった,Eraser hits taken: %d
+びしょぬれ賞,びしょぬれ賞,Soaking Wet Award
+水鉄砲を %d回くらった,水鉄砲を %d回くらった,Water gun hits taken: %d
+まぶしかった賞,まぶしかった賞,Dazzled Award
+フラッシュを %d回くらった,フラッシュを %d回くらった,Flash hits taken: %d
+逃げ足No.1,逃げ足No.1,Fastest Feet
+%d回 逃げ切った,%d回 逃げ切った,Getaways: %d
+名探偵,名探偵,Great Detective
+手下を %d回当てた,手下を %d回当てた,Minions caught: %d
+振り向き名人,振り向き名人,Eagle Eye
+振り向いて %d回見つけた,振り向いて %d回見つけた,Found by looking back: %d
+信じられる人,信じられる人,Most Trustworthy
+本当の言葉を %d回送った,本当の言葉を %d回送った,True messages: %d
+おしゃべりさん,おしゃべりさん,Chatterbox
+言葉を %d回送った,言葉を %d回送った,Messages sent: %d
+無口な人,無口な人,The Silent Type
+言葉は %d回だけ,言葉は %d回だけ,Messages sent: only %d
+言葉を送らなかった,言葉を送らなかった,Sent no messages
+マイペースで賞,マイペースで賞,Own Pace Award
+平和の使者,平和の使者,Peacekeeper
+事件にまきこまれなかった,事件にまきこまれなかった,Stayed out of trouble
+縁の下の力持ち,縁の下の力持ち,Unsung Hero
+そっと輪を支えた,そっと輪を支えた,Quietly held the circle together
+安定感No.1,安定感No.1,Steady as a Rock
+ずっと落ち着いていた,ずっと落ち着いていた,Kept calm the whole time
+タッチの達人,タッチの達人,Touch Master
+鬼に %d回タッチした,鬼に %d回タッチした,Tagged the oni: %d
+鬼の常連,鬼の常連,Oni Regular
+鬼を %d回やった,鬼を %d回やった,Rounds as the oni: %d
+のんびり楽しんだ,のんびり楽しんだ,Just enjoyed the ride
 チーン…,チーン…,Ding…
 音がガタガタ割れるときは「なめらか」を試してね,音がガタガタ割れるときは「なめらか」を試してね,"If the sound crackles, try ""Smooth"""
 音の鳴らし方: %s ▶,音の鳴らし方: %s ▶,Sound mode: %s ▶

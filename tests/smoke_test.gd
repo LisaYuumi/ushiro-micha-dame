@@ -54,6 +54,7 @@ func _initialize() -> void:
 	_test_player_oni_rounds_finish()
 	_test_match_next_oni_is_loser()
 	_test_match_scores_and_end()
+	_test_titles()
 	_test_heavier_items_slow_the_chaser()
 	_test_banana_rules()
 	_test_banana_can_be_dodged()
@@ -237,6 +238,50 @@ func _test_drop_happens_for_every_seed() -> void:
 		_check(behind.distance_to(s.handkerchief_position) < 0.01, "ハンカチは相手の席の真後ろ")
 		seats_hit[e["seat"]] = true
 	_check(seats_hit.size() == GameConfig.SEAT_COUNT, "プレイヤーもボットも全員が落とされることがある")
+
+
+## 称号: 出来事の回数から決める。1人1つ、多い人、当てはまらない人は予備の称号、出来事を数える
+func _test_titles() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var stats := {
+		0: {"otetsuki": 3, "found": 1},
+		1: {"otetsuki": 1, "dragged": 1},
+		2: {"found": 2, "stamps_sent": 5},
+		3: {},
+		4: {"banana": 2, "otetsuki": 2},
+	}
+	var t := Titles.decide(stats, [0, 1, 2, 3, 4], "classroom", rng)
+	_check(t[1]["title"] == "道連れ名人", "称号: 珍しい「道連れ名人」が先に決まる")
+	_check(t[4]["title"] == "バナナの被害者", "称号: バナナで転んだ人は「バナナの被害者」")
+	_check(t[0]["title"] == "お手つき王", "称号: お手つきが一番多い人は「お手つき王」")
+	_check(t[2]["title"] == "振り向き名人", "称号: 見つけた回数が多い人は「振り向き名人」(%s)" % t[2]["title"])
+	_check(t[3]["title"] == "無口な人", "称号: 言葉を送らなかった人は「無口な人」(%s)" % t[3]["title"])
+	_check(Titles.reason_text(t[0]) == "お手つき 3回", "称号: 理由の文に回数が入る")
+	var t2 := Titles.decide({}, [0, 1, 2], "beach", rng)
+	var fallback := {}
+	for id in t2:
+		if Titles.is_fallback(t2[id]["title"]):
+			fallback[t2[id]["title"]] = true
+	_check(t2.size() == 3 and fallback.size() == 2, "称号: 何もない人には予備の称号(重ならない。無口な人は1人だけ)")
+	var t3 := Titles.decide({0: {"tool_hit": 1}}, [0], "beach", rng)
+	_check(t3[0]["title"] == "びしょぬれ賞", "称号: 海辺で水鉄砲をくらった人は「びしょぬれ賞」")
+	# 同点はランダム(何回か決めると、どちらにもなる)
+	var winners := {}
+	for k in 30:
+		var t4 := Titles.decide({0: {"otetsuki": 2}, 1: {"otetsuki": 2}}, [0, 1], "classroom", rng)
+		for id in t4:
+			if t4[id]["title"] == "お手つき王":
+				winners[id] = true
+	_check(winners.size() == 2, "称号: 同点のときはランダムで1人")
+	# 出来事を数える
+	var s := GameState.new()
+	s.start_round(1)
+	s.set_looking_back(s.local_player_id, true)
+	_check(int(s.match_stats.get(s.local_player_id, {}).get("otetsuki", 0)) == 1, "称号: お手つきが数えられる")
+	Locale.setup("en")
+	_check(Titles.title_text({"title": "名探偵"}) == "Great Detective", "称号: 英語の称号名")
+	Locale.setup("ja")
 
 
 func _test_otetsuki_when_nothing_behind() -> void:
@@ -1041,7 +1086,25 @@ func _test_match_scores_and_end() -> void:
 		b.reset(61 + total_rounds)
 	_check(total_rounds == GameConfig.ROUNDS_PER_MATCH, "1試合は %d ラウンド" % GameConfig.ROUNDS_PER_MATCH)
 	_check(s.match_over, "最後のラウンドのあとは試合終了")
-	_check(_has(s.take_events(), "match_over"), "試合終了のお知らせが出る")
+	var over_ev := s.take_events()
+	_check(_has(over_ev, "match_over"), "試合終了のお知らせが出る")
+	# 称号: 全員に1つずつ。お知らせと状態(参加者に送る分)にも入る
+	_check(s.titles.size() == s.actors.size(), "試合の最後に、全員に称号がつく(%d人)" % s.titles.size())
+	var seen_titles := {}
+	var dup := false
+	for id in s.titles:
+		var tt: String = s.titles[id]["title"]
+		if not Titles.is_fallback(tt) and seen_titles.has(tt):
+			dup = true
+		seen_titles[tt] = true
+	_check(not dup, "同じ称号は2人につかない(マイペースで賞のほか)")
+	for e in over_ev:
+		if e["type"] == "match_over":
+			_check((e.get("titles", {}) as Dictionary).size() == s.actors.size(), "試合終了のお知らせに称号が入る")
+	var guest := GameState.new()
+	guest.apply_snapshot(s.snapshot())
+	_check(guest.titles.size() == s.actors.size(), "参加者にも同じ称号が届く")
+	_check(not s.match_stats.is_empty(), "試合中の出来事が数えられている")
 	_check(not s.next_round(), "試合終了のあとは次のラウンドに進めない")
 	var sum := 0
 	for id in s.scores:

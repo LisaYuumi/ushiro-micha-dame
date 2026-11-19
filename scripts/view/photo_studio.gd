@@ -97,6 +97,9 @@ func _rebuild_scene() -> void:
 	_view = WorldView.new()
 	add_child(_view)
 	_view.build(_state)
+	_titles_data = {}
+	if _titles_mode != "なし":
+		_show_titles.call_deferred(false)
 	var ov := _view.get_overlay()
 	if ov:
 		ov.visible = false
@@ -343,6 +346,11 @@ func _save_shot() -> void:
 	c.environment = env
 	add_child(sv)
 	sv.add_child(c)
+	if _titles_node and is_instance_valid(_titles_node):
+		# 称号の画面も入れる(2D は今の画面の大きさで作って、4K に引きのばす)
+		sv.size_2d_override = Vector2i(get_viewport().get_visible_rect().size)
+		sv.size_2d_override_stretch = true
+		sv.add_child(_new_titles(true))
 	c.global_transform = _cam.global_transform
 	c.current = true
 	await RenderingServer.frame_post_draw
@@ -418,6 +426,15 @@ func _build_ui() -> void:
 		_transparent = v == "キャラだけ"
 		_apply_background())
 	_row(col, "動き", ["うごく", "止める"], func(v: String) -> void: _frozen = v == "止める")
+	# 試合の最後の称号の画面(称号はそれらしいものをランダムに。「演出」は1人ずつ出す流れ。4Kで保存にも入る)
+	_row(col, "称号", ["なし", "表示", "演出", "選び直す"], func(v: String) -> void:
+		if v == "選び直す":
+			_titles_data = {}
+			if _titles_mode == "なし":
+				_titles_mode = "表示"
+		else:
+			_titles_mode = v
+		_show_titles(_titles_mode == "演出"))
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", 8)
 	col.add_child(bottom)
@@ -511,12 +528,68 @@ func _update_ui() -> void:
 		"落とし物:" + _item: true,
 		"背景:" + ("キャラだけ" if _transparent else "ふつう"): true,
 		"動き:" + ("止める" if _frozen else "うごく"): true,
+		"称号:" + _titles_mode: true,
 	}
 	for b in _buttons:
 		var key: String = b.get_meta("key", "")
 		if key == "":
 			continue
 		UiStyle.button(b, chosen.get(key, false), 17)
+
+
+## 称号の画面
+var _titles_mode := "なし"
+var _titles_node: TitleReveal
+var _titles_data := {}
+
+
+func _show_titles(animate: bool) -> void:
+	if _titles_node and is_instance_valid(_titles_node):
+		_titles_node.queue_free()
+	_titles_node = null
+	if _titles_mode == "なし" or _state == null:
+		return
+	if _titles_data.is_empty():
+		_titles_data = _make_titles()
+	_titles_node = _new_titles(not animate)
+	add_child(_titles_node)
+	move_child(_titles_node, 0)
+
+
+func _new_titles(instant: bool) -> TitleReveal:
+	var t := TitleReveal.new()
+	t.ready.connect(func() -> void:
+		t.setup(_titles_data["rows"], _titles_data["titles"], "", "", instant), CONNECT_ONE_SHOT)
+	return t
+
+
+## それらしい点数と称号(順位の高い順の行と、称号)
+func _make_titles() -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var ids := []
+	var sc := {}
+	for a in _state.actors:
+		ids.append(a.id)
+		sc[a.id] = rng.randi_range(0, 14)
+	ids.sort_custom(func(x, y): return sc[x] > sc[y])
+	var rows := []
+	var rank := 0
+	var prev := -1
+	for i in ids.size():
+		var a := _state.get_actor(ids[i])
+		if sc[ids[i]] != prev:
+			rank = i + 1
+			prev = sc[ids[i]]
+		rows.append({
+			"title_id": a.id,
+			"name": Profile.player_name if a.id == _state.local_player_id else Locale.actor_name(a.display_name),
+			"color": a.color,
+			"score": sc[a.id],
+			"mark": "★" if rank == 1 else tr("%d位") % rank,
+			"me": false,
+		})
+	return {"rows": rows, "titles": Titles.sample(ids, _stage, rng)}
 
 
 func _set_ui_hidden(v: bool) -> void:

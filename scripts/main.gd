@@ -294,6 +294,7 @@ func _refresh_round() -> void:
 
 func _refresh_round_inner() -> void:
 	_seen_serial = state.round_serial
+	_close_titles()
 	_my_vote = -1
 	if _reveal and is_instance_valid(_reveal):
 		_reveal.queue_free()
@@ -541,6 +542,10 @@ func _process(delta: float) -> void:
 		_hold_start = -1
 		_set_play_ui_hidden(false)
 	_update_music(delta)
+	if _titles_wait > 0.0:
+		_titles_wait -= delta
+		if _titles_wait <= 0.0 and state.match_over:
+			_open_titles()
 	if _studio:
 		return
 	# ロビーの間は、後ろの3D(教室)を描かない(水色の幕でほとんど見えないのに重いので)
@@ -715,8 +720,17 @@ func _on_restart_pressed() -> void:
 		_refresh_round()
 
 
-## 試合が終わった: 順位のカード(1位に★)
+## 試合が終わった: 順位のカード(1位に★)を見せてから、称号の発表(TitleReveal)。
+## ホストは next_round と match_over のお知らせの両方から呼ばれるので、1試合に1回だけ
+var _title_reveal: TitleReveal
+var _titles_wait := -1.0
+var _match_shown_serial := -1
+
+
 func _show_match_result() -> void:
+	if _match_shown_serial == state.round_serial:
+		return
+	_match_shown_serial = state.round_serial
 	var ids := state.scores.keys()
 	ids.sort_custom(func(a, b): return state.scores[a] > state.scores[b])
 	var rows := []
@@ -732,6 +746,7 @@ func _show_match_result() -> void:
 			top_name = _name(ids[i])
 		var row := _score_row_for(ids[i], state.scores, false)
 		row["mark"] = "★" if rank == 1 else tr("%d位") % rank
+		row["title_id"] = ids[i]
 		rows.append(row)
 	var me_first: bool = state.scores.get(state.local_player_id, 0) == state.scores[ids[0]]
 	var title := tr("ゆうしょう!") if me_first else tr("試合おわり!")
@@ -739,10 +754,33 @@ func _show_match_result() -> void:
 		hud.confetti()
 	var sub := tr("あなたがいちばん!") if me_first else tr("いちばんは %s!") % top_name
 	hud.hide_message()
+	# 点数の発表(ボタンなし)→ 少ししたら称号の発表へ
+	hud.show_result_card(title, sub, [], GameConfig.COLOR_ACCENT, rows, "")
+	_title_rows = rows
+	_titles_wait = GameConfig.TITLE_DELAY
+
+
+var _title_rows: Array = []
+
+
+## 称号の発表を始める(点数のカードと入れかえ)
+func _open_titles() -> void:
+	_close_titles()
+	hud.hide_result_card()
+	_title_reveal = TitleReveal.new()
+	add_child(_title_reveal)
 	if mode == Mode.GUEST:
-		hud.show_result_card(title, sub, [], GameConfig.COLOR_ACCENT, rows, tr("ホストが「次へ」を押すと新しい試合"))
+		_title_reveal.setup(_title_rows, state.titles, "", tr("ホストが「次へ」を押すと新しい試合"))
 	else:
-		hud.show_result_card(title, sub, [], GameConfig.COLOR_ACCENT, rows, "", tr("新しい試合へ ▶"))
+		_title_reveal.setup(_title_rows, state.titles, tr("新しい試合へ ▶"), "")
+	_title_reveal.next_pressed.connect(hud._press_next)
+
+
+func _close_titles() -> void:
+	_titles_wait = -1.0
+	if _title_reveal and is_instance_valid(_title_reveal):
+		_title_reveal.queue_free()
+	_title_reveal = null
 
 
 ## 結果カードの1行。delta: このラウンドで増えた分も出すか
@@ -816,6 +854,8 @@ func _open_studio() -> void:
 	_set_ui_tree_visible(touch, false)
 	if _reveal and is_instance_valid(_reveal):
 		_reveal.visible = false
+	if _title_reveal and is_instance_valid(_title_reveal):
+		_title_reveal.visible = false
 	_lobby_was_visible = lobby.visible
 	lobby.visible = false
 
@@ -830,6 +870,8 @@ func _close_studio() -> void:
 	_set_ui_tree_visible(touch, not _play_ui_hidden)
 	if _reveal and is_instance_valid(_reveal):
 		_reveal.visible = not _play_ui_hidden
+	if _title_reveal and is_instance_valid(_title_reveal):
+		_title_reveal.visible = true
 	lobby.visible = _lobby_was_visible
 
 

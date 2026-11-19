@@ -361,3 +361,6 @@ const COLOR_INK := Color("1E1B18")
 const COLOR_PAPER := Color("FFFFFF")
 ## キャラ・小物・家具の輪郭線の太さ(メートル)
 const OUTLINE_WIDTH := 0.025
+
+## 試合の最後: 点数のカードを見せてから、称号の発表を始めるまで(秒)。称号の発表の長さは TitleReveal
+const TITLE_DELAY := 3.0
