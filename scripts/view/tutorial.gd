@@ -36,6 +36,7 @@ var _skip: Button
 var _arrow: Control
 var _arrow_target := Callable()
 var _end_card: PanelContainer
+var _end_button: Button
 
 
 func setup(main: Node) -> void:
@@ -384,6 +385,7 @@ func _show_end() -> void:
 		AudioDirector.click()
 		_end(true))
 	col.add_child(b)
+	_end_button = b
 	UiStyle.center(_end_card)
 	AudioDirector.sfx("jajaan", -4.0)
 	_main.hud.confetti()
@@ -391,6 +393,11 @@ func _show_end() -> void:
 
 func _end(completed: bool) -> void:
 	finished.emit(completed)
+
+
+## スマホの指: 「次へ」「スキップ」「ロビーへ」を押す
+func _input(event: InputEvent) -> void:
+	UiStyle.tap_buttons(event, [_end_button, _next, _skip])
 
 
 ## 今の段階(テスト用)

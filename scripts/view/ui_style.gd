@@ -200,3 +200,19 @@ static func set_font_color(l: Label, c: Color) -> void:
 static func set_bg(st: StyleBoxFlat, c: Color) -> void:
 	if st.bg_color != c:
 		st.bg_color = c
+
+
+## スマホの指で、見えているボタンを押す(このゲームは指をマウスに見立てない設定なので、ボタンは自分で押す)。
+## 押したら true(指の入力はそこで止める)
+static func tap_buttons(event: InputEvent, buttons: Array) -> bool:
+	if not event is InputEventScreenTouch or not (event as InputEventScreenTouch).pressed:
+		return false
+	var pos: Vector2 = (event as InputEventScreenTouch).position
+	for b in buttons:
+		var btn := b as Button
+		if btn and is_instance_valid(btn) and btn.is_visible_in_tree() and not btn.disabled \
+				and btn.get_global_rect().grow(4.0).has_point(pos):
+			btn.pressed.emit()
+			btn.get_viewport().set_input_as_handled()
+			return true
+	return false

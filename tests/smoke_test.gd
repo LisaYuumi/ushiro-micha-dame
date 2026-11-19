@@ -189,6 +189,12 @@ func _check_tutorial() -> void:
 	var tu: Tutorial = _main._tutorial
 	_check(tu != null and _main.state.seat_count == Tutorial.SEAT_COUNT and _main.state.stage == "classroom",
 			"チュートリアル: 教室・7人で始まる")
+	# スマホの指で「次へ」を押せる(指をマウスに見立てない設定なので、自分で押す)
+	var touch := InputEventScreenTouch.new()
+	touch.pressed = true
+	touch.position = tu._next.get_global_rect().get_center()
+	tu._input(touch)
+	_check(tu.step() == "oni_walk", "チュートリアル: スマホの指で「次へ」を押せる(%s)" % tu.step())
 	var seen := {}
 	var since := 0.0
 	var last := ""

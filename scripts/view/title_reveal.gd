@@ -25,6 +25,13 @@ var _lit := -1
 var _done := false
 var _footer: Control
 var _panel: PanelContainer
+var _next_button: Button
+
+
+## スマホの指: 「新しい試合へ」を押す(発表が終わってから)
+func _input(event: InputEvent) -> void:
+	if _done and visible:
+		UiStyle.tap_buttons(event, [_next_button])
 
 
 ## rows: 順位の高い順に {"id", "name", "color", "score", "mark", "me"}。titles: id -> Titles.decide の値。
@@ -96,6 +103,7 @@ func setup(rows: Array, titles: Dictionary, next_label: String, footer: String, 
 			AudioDirector.click()
 			next_pressed.emit())
 		foot.add_child(nb)
+		_next_button = nb
 	_footer = foot
 	_footer.modulate.a = 0.0
 
