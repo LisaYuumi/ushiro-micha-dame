@@ -346,6 +346,7 @@ func _build_menu() -> void:
 	_language_button = _menu_button(col, "", _menu_action.bind("toggle_language"))
 	_menu_button(col, "🔊 音の大きさ", _show_volume)
 	_menu_button(col, "あそびかた", _show_help)
+	_menu_button(col, "チュートリアル(遊び方の練習)", _menu_action.bind("tutorial"))
 	if GameConfig.SHOW_PHOTO_MODE:
 		_menu_button(col, "撮影モード(開発用)", _menu_action.bind("photo_mode"))
 		_menu_button(col, "UIを全部消す(撮影用・長押しで戻る)", _menu_action.bind("hide_ui"))

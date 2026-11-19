@@ -190,6 +190,8 @@ var votes: Dictionary = {}
 var reveal_left: float = -1.0
 ## このラウンドで、人ごとの嘘のスタンプの数(ボットが投票の参考にする)
 var lie_counts: Dictionary = {}
+## チュートリアル: ボットの鬼は台本どおりに歩く(気まぐれに止まらない・ニセの音を出さない・牛乳をかけない)
+var scripted := false
 ## 試合中の出来事の回数(称号のため。ホストだけが数える)。id -> {出来事: 回数}。出来事の名前は Titles.LIST
 var match_stats: Dictionary = {}
 ## 試合の最後の称号(試合が終わったら決まる)。id -> {"title", "reason", "n"}(Titles.decide)
@@ -1275,6 +1277,28 @@ func apply_snapshot(s: Dictionary) -> void:
 
 # --- 内部の処理 ---
 
+## チュートリアル: 鬼を角度 angle から歩かせ、席 drop_seat の真後ろに来たら落とす(-1 なら落とさない)。
+## minion は手下にする人(-1 なら手下なし)
+func script_round(angle: float, drop_seat: int, minion: int) -> void:
+	scripted = true
+	oni_angle = angle
+	oni_start_angle = angle
+	oni_max_angle = angle
+	next_seat_crossing = ceilf(angle / (TAU / seat_count) + 0.0001) * (TAU / seat_count)
+	_place_on_walk_ring(get_actor(oni_id), oni_angle)
+	_bot_milk_seat = -1
+	_bot_milk_at_drop = false
+	if drop_seat < 0 or oni_is_player:
+		drop_target_seat = -1 if drop_seat < 0 else drop_target_seat
+		drop_angle = INF
+	else:
+		drop_target_seat = drop_seat
+		var target := seat_angle(drop_seat)
+		drop_angle = target + ceilf((angle - target) / TAU) * TAU
+	minion_ids = [minion] if minion >= 0 else []
+	minion_count = minion_ids.size()
+
+
 ## 落とす相手と、落とすタイミング(角度)を決める。
 ## 相手はプレイヤーもボットも含めてランダム。
 func _plan_drop() -> void:
@@ -1313,8 +1337,8 @@ func _on_pass_behind_seat() -> void:
 			_bot_milk_at_drop = false
 			_milk(get_actor_at_seat(drop_target_seat))
 		_drop()
-	elif oni_is_player:
-		# 人が鬼のときは、立ち止まるのも物音も牛乳も本人が決める
+	elif oni_is_player or scripted:
+		# 人が鬼のときは、立ち止まるのも物音も牛乳も本人が決める(チュートリアルのボットの鬼は、台本のとおりだけ)
 		return
 	elif get_actor_at_seat(passed_seat) == null:
 		# お手つきで抜けた人の空いた席: 立ち止まらない

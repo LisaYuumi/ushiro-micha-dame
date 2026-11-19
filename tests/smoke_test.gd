@@ -5,7 +5,7 @@ extends SceneTree
 ## 2. 本番のシーンを数秒動かして、スクリプトのエラーが出ないか確かめる
 
 const STEP := 1.0 / 60.0
-const MAIN_SCENE_FRAMES := 180
+const MAIN_SCENE_FRAMES := 200
 
 var _failures := 0
 var _frames := 0
@@ -125,6 +125,8 @@ func _process(delta: float) -> bool:
 		_press("restart", true)
 		_press("restart", false)
 	_check_photo_mode()
+	if _frames == 175:
+		_check_tutorial()
 	if (_frames < MAIN_SCENE_FRAMES or not _fall_done) and _frames < 5000:
 		return false
 	if _failures == 0:
@@ -179,6 +181,56 @@ func _check_photo_mode() -> void:
 		160:
 			_main._studio._close()
 			_check(_main._studio == null and _main.view.visible, "撮影モードからもどれる")
+
+
+## チュートリアル: 最後まで進められる(プレイヤーの動きをまねる)。終わるとロビーにもどり、端末に覚える
+func _check_tutorial() -> void:
+	_main.start_tutorial()
+	var tu: Tutorial = _main._tutorial
+	_check(tu != null and _main.state.seat_count == Tutorial.SEAT_COUNT and _main.state.stage == "classroom",
+			"チュートリアル: 教室・7人で始まる")
+	var seen := {}
+	var since := 0.0
+	var last := ""
+	for i in 6000:
+		if _main._tutorial == null:
+			break
+		var st: String = tu.step()
+		if st != last:
+			last = st
+			since = 0.0
+			seen[st] = true
+		since += 1.0 / 30.0
+		var s: GameState = _main.state
+		if since > 0.5:
+			match st:
+				"intro", "see_back", "look_rule", "words", "minion", "revealed", "oni_intro", "oni_done":
+					tu._on_next()
+				"out":
+					if since > 3.6:
+						tu._on_next()
+				"try_look", "pick":
+					s.set_looking_back(s.local_player_id, true)
+					s.pick_up(s.local_player_id)
+				"vote_now":
+					_main._on_vote_pressed(Tutorial.MINION_ID)
+				"fake":
+					s.oni_feint(s.local_player_id)
+				"drop":
+					s.oni_drop(s.local_player_id)
+				"end":
+					tu._end(true)
+		_main._physics_process(1.0 / 30.0)
+	for st in ["oni_walk", "see_back", "bot_pick", "try_look", "out", "minion", "pick", "chase", "vote_now", "revealed", "fake", "drop", "end"]:
+		_check(seen.has(st), "チュートリアル: 「%s」まで進む" % st)
+	_check(_main._tutorial == null and _main.mode == _main.Mode.LOBBY and _main.lobby.visible, "チュートリアルが終わるとロビーにもどる")
+	_check(Profile.tutorial == 2, "チュートリアルを最後までやったことを覚える")
+	_check(not _main.state.scripted, "チュートリアルのあとは、ボットはふつうに動く")
+	# スキップ
+	_main.start_tutorial()
+	_main._tutorial._end(false)
+	_check(_main._tutorial == null and _main.lobby.visible, "チュートリアルはスキップできる")
+	_main._on_solo()
 
 
 ## 転ぶ: 床の上でキャラを転ばせると、頭がぐっと下がり、少しして元の高さに戻る

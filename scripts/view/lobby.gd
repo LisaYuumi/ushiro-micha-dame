@@ -5,6 +5,8 @@ extends CanvasLayer
 ## 画面の表示とボタンだけ。つなぐ処理は NetSession、試合を始めるのは main がやる。
 
 signal solo_pressed
+## チュートリアル(遊び方の練習)
+signal tutorial_pressed
 signal host_pressed
 signal join_pressed(code: String)
 signal start_pressed
@@ -166,6 +168,11 @@ func _ready() -> void:
 	menu_grid.add_child(_button("部屋に入る\n(合言葉)", func() -> void: _show_join(), big))
 	for b in menu_grid.get_children():
 		(b as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# チュートリアル(最後までやるまでは目立つ色)
+	_tutorial_button = _button("チュートリアル(遊び方の練習)", func() -> void: tutorial_pressed.emit(), Vector2(0, 56),
+			Profile.tutorial < 2)
+	_menu.add_child(_tutorial_button)
+	UiStyle.fit(_tutorial_button, 26, 800.0)
 
 	_join_box = VBoxContainer.new()
 	_join_box.add_theme_constant_override("separation", 10)
@@ -202,11 +209,56 @@ func _ready() -> void:
 	_host_box.add_child(_button("スタート", func() -> void: start_pressed.emit(), Vector2(0, 100), true))
 
 	show_menu()
+	# はじめて起動したとき: チュートリアルを見るか聞く(「あとで」でも、あとからロビーと⚙メニューで遊べる)
+	if Profile.tutorial == 0 and DisplayServer.get_name() != "headless":
+		_ask_tutorial()
 	# 小物の画面の見本のキャラは、ここで1回だけ作っておく(開くたびに作ると重くて音が止まるので)
 	_acc_preview.prepare(Profile.color, Profile.accessories)
 	_acc_preview.warm_up()
 	# ほかの画面(ボタン)が先にできていても、決まった言語の文字の長さで大きさを合わせ直す
 	UiStyle.refit_all()
+
+
+var _tutorial_button: Button
+var _tutorial_ask: Control
+
+
+## 「チュートリアルで遊び方を見る?」(はじめて起動したとき)
+func _ask_tutorial() -> void:
+	var dim := ColorRect.new()
+	dim.color = Color(0.05, 0.05, 0.12, 0.5)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(dim)
+	_tutorial_ask = dim
+	var card := PanelContainer.new()
+	var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 26, 5)
+	st.set_content_margin_all(32)
+	card.add_theme_stylebox_override("panel", st)
+	dim.add_child(card)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 18)
+	card.add_child(col)
+	col.add_child(_label("はじめて遊ぶ?", 40))
+	col.add_child(_label("チュートリアルで遊び方を見る?(3分くらい)", 24))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_child(row)
+	row.add_child(_button("あとで", func() -> void:
+		Profile.tutorial = 1
+		Profile.save()
+		_close_tutorial_ask(), Vector2(220, 70)))
+	row.add_child(_button("見る!", func() -> void:
+		_close_tutorial_ask()
+		tutorial_pressed.emit(), Vector2(260, 70), true))
+	card.reset_size()
+	UiStyle.center(card)
+
+
+func _close_tutorial_ask() -> void:
+	if _tutorial_ask and is_instance_valid(_tutorial_ask):
+		_tutorial_ask.queue_free()
+	_tutorial_ask = null
 
 
 ## ロビーのいちばん上: 自分の色の丸と名前(見るだけ)と、「きせかえ」のボタン
@@ -718,6 +770,9 @@ func _update_players_button() -> void:
 
 func show_menu() -> void:
 	_menu.visible = true
+	if _tutorial_button:
+		UiStyle.button(_tutorial_button, Profile.tutorial < 2, 26)
+		UiStyle.fit(_tutorial_button, 26, 800.0)
 	_hide_acc()
 	_words_box.visible = false
 	_volume_box.visible = false

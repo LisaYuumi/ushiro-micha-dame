@@ -33,6 +33,7 @@ const KEYS := {
 	"debug_blackout_next": [KEY_G],
 	"toggle_personality": [],
 	"toggle_language": [],
+	"tutorial": [],
 	"quit": [KEY_ESCAPE],
 }
 

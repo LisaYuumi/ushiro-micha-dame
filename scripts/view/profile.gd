@@ -42,6 +42,8 @@ static var accessories := {}
 static var smooth_mode := -1
 ## お手つきのときに画面をゆらすか(⚙メニューで切りかえ)
 static var screen_shake := true
+## チュートリアル: 0 = まだ聞いていない、1 = 「あとで」かスキップ(もう聞かない)、2 = 最後までやった
+static var tutorial := 0
 static var _loaded := false
 
 
@@ -94,6 +96,7 @@ static func load_saved() -> void:
 	smooth_mode = clampi(int(cfg.get_value("profile", "smooth_mode", -1)), -1, 1)
 	screen_shake = bool(cfg.get_value("profile", "screen_shake", true))
 	bot_names = clean_bot_names(cfg.get_value("profile", "bot_names", []))
+	tutorial = clampi(int(cfg.get_value("profile", "tutorial", 0)), 0, 2)
 
 
 ## ボットの名前を、正しい形(9人分の文字。空は使わない)に直す
@@ -130,6 +133,7 @@ static func save() -> void:
 	cfg.set_value("profile", "smooth_mode", smooth_mode)
 	cfg.set_value("profile", "screen_shake", screen_shake)
 	cfg.set_value("profile", "bot_names", bot_names)
+	cfg.set_value("profile", "tutorial", tutorial)
 	cfg.save(PATH)
 
 

@@ -91,12 +91,76 @@ func _ready() -> void:
 	net.events_received.connect(_on_net_events)
 	net.command_received.connect(_on_remote_command)
 	net.host_lost.connect(_on_host_lost)
+	lobby.tutorial_pressed.connect(start_tutorial)
 	if DisplayServer.get_name() == "headless":
 		# 自動チェックのときは、すぐひとりで始める
 		_on_solo()
 
 
 # --- ロビー ---
+
+# --- チュートリアル(はじめて遊ぶ人向け。オフライン・ボットだけ・教室) ---
+var _tutorial: Tutorial
+
+
+## チュートリアルを始める(ロビーか、ひとりで遊んでいるときだけ)
+func start_tutorial() -> void:
+	if mode == Mode.HOST or mode == Mode.GUEST or _tutorial:
+		return
+	mode = Mode.SOLO
+	lobby.visible = false
+	cmds = state
+	_close_titles()
+	hud.hide_result_card()
+	_tutorial = Tutorial.new()
+	add_child(_tutorial)
+	_tutorial.finished.connect(_end_tutorial)
+	_tutorial.setup(self)
+
+
+## チュートリアルの場面: 教室・5人の新しい試合(player_oni = true なら自分が鬼)。ボットの名前は決まったもの
+func tutorial_scene(player_oni: bool) -> void:
+	state.stage = "classroom"
+	state.custom_bot_names = []
+	state.start_match(Tutorial.SEED, player_oni, Tutorial.SEAT_COUNT, Profile.player_name, Profile.color, Profile.accessories)
+	_apply_stamp_words(true)
+	# 手下のお知らせなどは出さない(台本で決める)
+	state.take_events()
+	_refresh_round()
+	hud.hide_message()
+	hud.hide_result_card()
+	audio.play("chime", -6.0)
+
+
+## チュートリアルが終わった(completed = 最後まで / false = スキップ): 端末に覚えて、ロビーへもどる
+func _end_tutorial(completed: bool) -> void:
+	Profile.tutorial = maxi(Profile.tutorial, 2 if completed else 1)
+	Profile.save()
+	if _tutorial and is_instance_valid(_tutorial):
+		_tutorial.queue_free()
+	_tutorial = null
+	state.scripted = false
+	back_to_lobby()
+
+
+## ロビーにもどる(ひとりで遊んでいるとき)
+func back_to_lobby() -> void:
+	if mode == Mode.HOST or mode == Mode.GUEST:
+		return
+	mode = Mode.LOBBY
+	_close_titles()
+	_close_picker()
+	hud.hide_result_card()
+	hud.hide_message()
+	hud.set_vote_ui(false)
+	hud.set_next_ui(false, false)
+	if _reveal and is_instance_valid(_reveal):
+		_reveal.queue_free()
+	_reveal = null
+	state.start_match(-1, false)
+	_refresh_round()
+	lobby.visible = true
+	lobby.show_menu()
 
 func _on_solo() -> void:
 	_seats = lobby.players - 1
@@ -328,8 +392,11 @@ func _physics_process(delta: float) -> void:
 	PlayerInput.apply(state, cmds, view.get_camera_basis())
 	_update_milk()
 	if mode != Mode.GUEST:
-		# ルールを動かすのは、ひとりのときとホストだけ
-		bots.update(state, delta)
+		# ルールを動かすのは、ひとりのときとホストだけ(チュートリアルの間は、ボットは台本どおり)
+		if _tutorial:
+			_tutorial.update(delta)
+		else:
+			bots.update(state, delta)
 		state.tick(delta)
 		var t1 := Time.get_ticks_usec()
 		if t1 - t0 > 8000:
@@ -338,7 +405,10 @@ func _physics_process(delta: float) -> void:
 		for e in events:
 			var te := Time.get_ticks_usec()
 			view.on_event(e)
-			bots.on_event(state, e)
+			if _tutorial:
+				_tutorial.on_event(e)
+			else:
+				bots.on_event(state, e)
 			_show_event(e)
 			_update_help()
 			var ms := (Time.get_ticks_usec() - te) / 1000
@@ -399,7 +469,7 @@ func _physics_process(delta: float) -> void:
 		elif _my_vote >= 0:
 			hint = tr("%s に投票した(入れ直せる)") % _short_name(_my_vote)
 		hud.set_vote_ui(true, state.votes.size(), state.voter_count(), hint, mode != Mode.GUEST, state.can_skip_vote())
-	elif waiting_next:
+	elif waiting_next and _tutorial == null:
 		hud.set_next_ui(true, mode != Mode.GUEST)
 	else:
 		hud.set_vote_ui(false)
@@ -637,6 +707,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("debug_top_camera"):
 		view.toggle_top_camera()
 		_update_help()
+	elif _tutorial and (event.is_action_pressed("restart") or event.is_action_pressed("toggle_role")
+			or event.is_action_pressed("debug_finish") or event.is_action_pressed("debug_blackout_next")):
+		# チュートリアルの間は、やり直し・役の切りかえなどは使えない(台本が崩れるので)
+		return
+	elif event.is_action_pressed("tutorial"):
+		if mode == Mode.HOST or mode == Mode.GUEST:
+			hud.show_message(tr("チュートリアルは、ひとりのときに遊べます"), Color(0.3, 0.3, 0.3), 1.5)
+		else:
+			start_tutorial()
 	elif event.is_action_pressed("restart"):
 		if mode == Mode.GUEST:
 			hud.show_message(tr("次へ進むのはホストです"), Color(0.3, 0.3, 0.3), 1.2)
