@@ -134,6 +134,14 @@ func set_tags_hidden(v: bool) -> void:
 	_tags_hidden = v
 
 
+## 届いている言葉の吹き出しを隠す(夜の教室のフラッシュでまぶしい間)
+var _bubbles_hidden := false
+
+
+func set_bubbles_hidden(v: bool) -> void:
+	_bubbles_hidden = v
+
+
 ## 画面のこの位置にある名札の人(なければ -1)
 func tag_hit(pos: Vector2) -> int:
 	for id in _tags:
@@ -211,7 +219,7 @@ func update(state: GameState, cam: Camera3D) -> void:
 			y = (_tag_rects[id] as Rect2).position.y - 4.0
 		for i in bubbles.size():
 			var b: PanelContainer = bubbles[i]
-			b.visible = _tag_rects.has(id) and i < list.size()
+			b.visible = _tag_rects.has(id) and i < list.size() and not _bubbles_hidden
 			if not b.visible:
 				continue
 			var st: Dictionary = list[i]

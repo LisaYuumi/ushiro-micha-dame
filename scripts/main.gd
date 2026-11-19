@@ -477,8 +477,10 @@ func _physics_process(delta: float) -> void:
 	var ov := view.get_overlay()
 	if ov:
 		# 牛乳がかかっている間は名札も見えない(鬼の名札で場所がわからないように)。吹き出しは出したまま
+		# (夜の教室のフラッシュは、まぶしい間は言葉の吹き出しも見えない)
 		ov.visible = (not showing_result or voting or revealing) and not _play_ui_hidden
 		ov.set_tags_hidden(state.is_milked(me) and not showing_result)
+		ov.set_bubbles_hidden(_flashed(me) and not showing_result)
 		if showing_result:
 			ov.set_voted(state.votes.keys() if voting else [])
 			ov.set_send_target(_my_vote if voting else -1, tr("あなたの票"))
@@ -646,8 +648,18 @@ func _send_to_guests(events: Array, delta: float) -> void:
 
 
 ## 自分に届いているスタンプ(3つまで)を、画面の下に送り主つきで並べる
+## 夜の教室のフラッシュでまぶしい間か(言葉も見えない)
+func _flashed(me: GameState.Actor) -> bool:
+	return state.is_night() and state.is_milked(me)
+
+
 func _update_my_stamps() -> void:
 	var list := []
+	var me := state.get_local_player()
+	if me and _flashed(me) and state.phase != GameState.Phase.RESULT:
+		# フラッシュでまぶしい間は、自分に届いた言葉も見えない(消えるのではなく、見えないだけ)
+		hud.show_my_stamps(list)
+		return
 	for st in state.active_stamps.get(state.local_player_id, []):
 		list.append({
 			"kind": st["kind"],
