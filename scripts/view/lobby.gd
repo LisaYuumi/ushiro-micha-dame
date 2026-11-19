@@ -238,8 +238,12 @@ func _ask_tutorial() -> void:
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 18)
 	card.add_child(col)
-	col.add_child(_label("はじめて遊ぶ?", 40))
-	col.add_child(_label("チュートリアルで遊び方を見る?(3分くらい)", 24))
+	# (折り返す文字は幅を決めないと1文字ずつ折り返して、カードが縦に伸びてしまう)
+	card.custom_minimum_size = Vector2(660, 0)
+	for t in [["はじめて遊ぶ?", 40], ["チュートリアルで遊び方を見る?(3分くらい)", 24]]:
+		var l := _label(t[0], t[1])
+		l.custom_minimum_size = Vector2(596, 0)
+		col.add_child(l)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 16)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER

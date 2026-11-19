@@ -230,6 +230,12 @@ func _check_tutorial() -> void:
 	_main.start_tutorial()
 	_main._tutorial._end(false)
 	_check(_main._tutorial == null and _main.lobby.visible, "チュートリアルはスキップできる")
+	# はじめて起動したときの「チュートリアルを見る?」: カードが画面に収まる(縦に伸びてボタンが外に出ない)
+	_main.lobby._ask_tutorial()
+	var card: Control = _main.lobby._tutorial_ask.get_child(0)
+	var vp := _main.lobby._tutorial_ask.get_viewport_rect().size
+	_check(card.size.y < vp.y * 0.8 and card.position.y >= 0.0, "チュートリアルを見るか聞くカードが画面に収まる(高さ %d)" % card.size.y)
+	_main.lobby._close_tutorial_ask()
 	_main._on_solo()
 
 
