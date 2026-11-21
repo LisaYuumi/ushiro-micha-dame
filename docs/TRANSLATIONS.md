@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(439)
+## 一覧(445)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -315,6 +315,12 @@
 | 自分と両どなりのうしろは見えないけど、<br>ほかの人のうしろは見える。ほら、落ちてる! | You can't see behind yourself or your neighbors,<br>but you can see behind the others. Look, it's there! |
 | 落とされた人は、拾って鬼を追いかけるよ | Whoever it was dropped behind picks it up and chases the oni |
 | 振り向くのは、ここぞという1回だけ。<br>何もないのに振り向くと「お手つき」! | Only look back when it counts.<br>Look back at nothing and it's a wrong look! |
+| 教えてあげよう!%sをクリックして、<br>赤い「落ちてる」の言葉を送ろう | Let's tell them! Click %s<br>and send a red "it's there" message |
+| 教えてあげよう!%sをタップして、<br>赤い「落ちてる」の言葉を送ろう | Let's tell them! Tap %s<br>and send a red "it's there" message |
+| 教えてもらって気づいた!<br>拾って鬼を追いかけるよ | They got the hint!<br>They grab it and chase the oni |
+| それは「まだへいき」(見ないで)の意味だよ。<br>でも自分で気づいたみたい! | That one means "you're safe" (don't look).<br>But they noticed anyway! |
+| まだだよ!みんなの言葉を待とう | Not yet! Wait for the messages |
+| バケツやいすは、左右に動いてよける。<br>ぶつかると転ぶよ | Dodge buckets and chairs by moving sideways.<br>Bump into one and you fall |
 | スペースキーで振り向いてみよう(いまは何もないよ) | Press Space to look back (nothing's there right now) |
 | 「振り向く」ボタンで振り向いてみよう(いまは何もないよ) | Tap the Look back button (nothing's there right now) |
 | みんなが言葉で、うしろに落ちてるか教えてくれるよ | Others send you messages about what's behind you |

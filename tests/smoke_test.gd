@@ -6,6 +6,7 @@ extends SceneTree
 
 const STEP := 1.0 / 60.0
 const MAIN_SCENE_FRAMES := 200
+var _dodged := false
 
 var _failures := 0
 var _frames := 0
@@ -218,6 +219,8 @@ func _check_tutorial() -> void:
 				"try_look", "pick":
 					s.set_looking_back(s.local_player_id, true)
 					s.pick_up(s.local_player_id)
+				"teach":
+					s.send_stamp(s.local_player_id, Tutorial.PICK_BOT, Stamps.DROPPED)
 				"vote_now":
 					_main._on_vote_pressed(Tutorial.MINION_ID)
 				"fake":
@@ -226,8 +229,11 @@ func _check_tutorial() -> void:
 					s.oni_drop(s.local_player_id)
 				"end":
 					tu._end(true)
+		if st == "chase_demo" and tu._flag:
+			_dodged = true
 		_main._physics_process(1.0 / 30.0)
-	for st in ["oni_walk", "see_back", "bot_pick", "try_look", "out", "minion", "pick", "chase", "vote_now", "revealed", "fake", "drop", "end"]:
+	_check(_dodged, "チュートリアル: ボットがバケツをよけて見せる")
+	for st in ["oni_walk", "see_back", "teach", "bot_pick", "chase_demo", "try_look", "out", "minion", "pick", "chase", "vote_now", "revealed", "fake", "drop", "end"]:
 		_check(seen.has(st), "チュートリアル: 「%s」まで進む" % st)
 	_check(_main._tutorial == null and _main.mode == _main.Mode.LOBBY and _main.lobby.visible, "チュートリアルが終わるとロビーにもどる")
 	_check(Profile.tutorial == 2, "チュートリアルを最後までやったことを覚える")

@@ -5,7 +5,8 @@ extends CanvasLayer
 ## 画面の上に短い吹き出し(1〜2行)を出し、「次へ」か、言われたことをやると進む。右上の「スキップ」でいつでもやめられる。
 ## 流れ(docs/AI_BRIEF.md にも同じ表):
 ##   (7人。6人以上なら、言葉を送った人の名前が出るので、だれがウソをついたか分かる)
-##   A 鬼が歩いて落とす → 自分と両どなりのうしろは見えないが、ほかの人のうしろは見える → 落とされた人が拾って追いかける
+##   A 鬼が歩いて落とす → 自分と両どなりのうしろは見えないが、ほかの人のうしろは見える → 言葉で教えてあげる →
+##     教えてもらった人が拾って追いかける → 障害物は左右によける(ボットがよけて見せる)
 ##   B 振り向くのはここぞの1回 → 振り向いてみる(何もない)→ お手つきで体育座り
 ##   C みんなが言葉で教える → 手下はウソをつく → 本当は落ちている。振り向いて拾う → 追いかける → 手下に投票 → 発表
 ##   D 鬼の体験: フェイク → 落とす
@@ -18,7 +19,9 @@ const SEAT_COUNT := 6          # 席の数(鬼を入れて7人)
 const SEED := 20261119
 const BOT_PICK_DELAY := 1.2    # A: 落とされたボットが気づいて拾うまで
 const STAMP_DELAYS := [0.6, 1.6]  # C: 本当のこと → ウソ の言葉が届くまで
-const CHASE_SHOW := 3.5        # A: 追いかけっこを見せる長さ
+const CHASE_SHOW := 6.5        # A: 追いかけっこを見せる長さ(障害物をよけるところまで)
+const DEMO_OBSTACLE_AHEAD := 3.5  # A: 追いかける人の前に置くバケツ(メートル)
+const DODGE_AT := 1.6          # A: ボットがよけはじめる、障害物までの距離(メートル)
 const MINION_ID := 4           # C: 手下(席4。正面の少し右)
 const HONEST_ID := 2           # C: 本当のことを言う人(席2。正面の少し左)
 const PICK_BOT := 3            # A: 落とされる人(席3。正面)
@@ -28,6 +31,9 @@ var _step := ""
 var _t := 0.0
 var _flag := false
 var _my_vote_was_right := false
+var _taught_right := false
+var _demo_obstacle := {}
+var _chase_ready := false
 
 var _bubble: PanelContainer
 var _text: Label
@@ -152,6 +158,12 @@ func _point_actor(id: int, h: float = 1.9) -> Callable:
 	return func() -> Variant: return _main.view.actor_point(id, h)
 
 
+func _point_obstacle() -> Callable:
+	return func() -> Variant:
+		var s := _state()
+		return s.obstacle_position(_demo_obstacle) + Vector3(0, 0.6, 0) if _demo_obstacle in s.obstacles else null
+
+
 func _point_item() -> Callable:
 	return func() -> Variant:
 		var s := _state()
@@ -181,10 +193,17 @@ func _go(step: String) -> void:
 			s.oni_pause_left = 0.0
 			_say(tr("鬼がみんなのうしろを歩いて、\nだれかのうしろに落とし物を落とすよ"), false, _point_actor(s.oni_id))
 		"see_back":
-			s.oni_pause_left = 999.0
 			_say(tr("自分と両どなりのうしろは見えないけど、\nほかの人のうしろは見える。ほら、落ちてる!"), true, _point_item())
+		"teach":
+			_say(_ctrl(tr("教えてあげよう!%sをクリックして、\n赤い「落ちてる」の言葉を送ろう"),
+					tr("教えてあげよう!%sをタップして、\n赤い「落ちてる」の言葉を送ろう")) % _main._name(PICK_BOT), false, _point_actor(PICK_BOT))
 		"bot_pick":
-			_say(tr("落とされた人は、拾って鬼を追いかけるよ"), false, _point_actor(PICK_BOT))
+			if _taught_right:
+				_say(tr("教えてもらって気づいた!\n拾って鬼を追いかけるよ"), false, _point_actor(PICK_BOT))
+			else:
+				_say(tr("それは「まだへいき」(見ないで)の意味だよ。\nでも自分で気づいたみたい!"), false, _point_actor(PICK_BOT))
+		"chase_demo":
+			_say(tr("バケツやいすは、左右に動いてよける。\nぶつかると転ぶよ"), false, _point_obstacle())
 		"look_rule":
 			_scene(false)
 			s.script_round(0.35, -1, -1)
@@ -199,6 +218,8 @@ func _go(step: String) -> void:
 			_scene(false)
 			# 鬼は自分(席0)のうしろに落とす。席3が手下
 			s.script_round(-0.6, 0, MINION_ID)
+			# 「拾おう」と言うまでは振り向けない(先に拾うと、鬼がすぐそばにいてすぐタッチになるので)
+			s.get_local_player().looks_left = 0
 			s.oni_pause_left = 999.0
 			_say(tr("みんなが言葉で、うしろに落ちてるか教えてくれるよ"), true)
 		"wait_words":
@@ -207,6 +228,9 @@ func _go(step: String) -> void:
 		"minion":
 			_say(tr("でも、ウソをつく「鬼の手下」がまぎれている!\nだれが何と言ったか、覚えておこう"), true)
 		"pick":
+			var me_a := s.get_local_player()
+			if me_a:
+				me_a.looks_left = maxi(me_a.looks_left, 1)
 			_say(_ctrl(tr("じつは本当に落ちてるよ!\nスペースキーで振り向いて拾おう"),
 					tr("じつは本当に落ちてるよ!\n「振り向く」ボタンで拾おう")), false)
 		"chase":
@@ -247,7 +271,7 @@ func _on_next() -> void:
 		"intro":
 			_go("oni_walk")
 		"see_back":
-			_go("bot_pick")
+			_go("teach")
 		"look_rule":
 			_go("try_look")
 		"out":
@@ -274,23 +298,39 @@ func update(delta: float) -> void:
 		# 落とされる前に振り向いてお手つきになった: この場面をやり直す
 		_go("words")
 		return
+	# 落としたあと、鬼は1席ぶん先まで歩いてから止まって待つ(すぐ止めると、拾った瞬間にタッチになるので)
+	if s.scripted and s.phase == GameState.Phase.DROPPED and not s.oni_is_player \
+			and s.oni_angle >= s.drop_angle + TAU / s.seat_count * 0.9:
+		s.oni_pause_left = 999.0
+	# 追いかけっこが始まった瞬間: ランダムの障害物は消して、追いかける人の前(鬼より手前)にバケツを1つだけ置く
+	# (ランダムの障害物で鬼がすぐ転ぶと、拾った瞬間にタッチになってしまうので)。state.tick の前に呼ばれる
+	_setup_chase()
 	match _step:
 		"out":
 			if not _flag and _t >= 3.4:
 				_flag = true
 				_say(tr("お手つき!真ん中で体育座り。\nこのラウンドはお休み(0点)"), true)
 		"bot_pick":
-			if not _flag and _t >= BOT_PICK_DELAY:
+			# (鬼が1席先まで歩いて止まってから拾う。すぐ拾うと、拾った瞬間にタッチになるので)
+			if not _flag and _t >= BOT_PICK_DELAY and s.oni_pause_left > 100.0:
 				_flag = true
 				s.pick_up(PICK_BOT)
-			if _t >= BOT_PICK_DELAY + CHASE_SHOW:
+				_setup_chase()
+			if s.phase == GameState.Phase.CHASE:
+				_go("chase_demo")
+		"chase_demo":
+			# ボットは、バケツが近づいたら列を変えてよける
+			var runner := s.get_actor(PICK_BOT)
+			if not _flag and s.is_runner(runner) and _demo_obstacle in s.obstacles \
+					and not s.obstacle_ahead(runner, runner.lane, DODGE_AT).is_empty():
+				_flag = true
+				s.chase_lane(PICK_BOT, 1 if runner.lane < GameConfig.LANE_RADII.size() - 1 else -1)
+			if _t >= CHASE_SHOW or s.phase == GameState.Phase.RESULT:
 				_go("look_rule")
 		"wait_words":
 			if s.phase == GameState.Phase.DROPPED:
 				# 落とされた: 言葉が届く(本当のこと → ウソ)。鬼は1席ぶん先まで歩いてから止まって待つ
 				# (すぐ止めると、拾った瞬間にタッチになってしまうので)
-				if s.oni_angle >= s.drop_angle + TAU / s.seat_count * 0.9:
-					s.oni_pause_left = 999.0
 				if not _flag:
 					_flag = true
 					_t = 0.0
@@ -301,10 +341,9 @@ func update(delta: float) -> void:
 				if _t >= STAMP_DELAYS[1] + 0.8 and s.oni_pause_left > 100.0:
 					_go("minion")
 		"minion", "pick":
-			# 読んでいる間に言葉が消えないように、鬼は止めたまま(拾えば走り出す)
-			if s.phase == GameState.Phase.DROPPED:
-				s.oni_pause_left = 999.0
-				# (鬼が止まっている間も、言葉は時間で消えない。鬼が歩いた分で消えるので)
+			# (読んでいる間に言葉が消えないように、鬼は1席先で止めたまま。拾えば走り出す。
+			#  言葉は時間ではなく、鬼が歩いた分で消える)
+			pass
 		"vote":
 			if s.voting_open:
 				# ボットは手下に投票(手下は投票しない)
@@ -321,6 +360,17 @@ func update(delta: float) -> void:
 				_go("revealed")
 
 
+func _setup_chase() -> void:
+	var s := _state()
+	if s.phase == GameState.Phase.CHASE and not _chase_ready:
+		_chase_ready = true
+		# バケツは、追いかける人と鬼のあいだ(鬼の足もとに置くと、鬼が転んでしまうので)
+		var chaser := s.get_actor(s.chaser_id)
+		var gap := fposmod(s.runner_angle(s.get_actor(s.oni_id)) - s.runner_angle(chaser), TAU)
+		var ahead := minf(DEMO_OBSTACLE_AHEAD, gap * 0.5 * float(GameConfig.LANE_RADII[chaser.lane]))
+		_demo_obstacle = s.script_obstacle(s.chaser_id, ahead, "bucket", true)
+
+
 ## ゲームのお知らせ(main から)
 func on_event(e: Dictionary) -> void:
 	var t: String = e.get("type", "")
@@ -328,6 +378,10 @@ func on_event(e: Dictionary) -> void:
 		"oni_walk":
 			if t == "dropped":
 				_go("see_back")
+		"teach":
+			if t == "stamp" and e.get("sender", -1) == _me() and e.get("target", -1) == PICK_BOT:
+				_taught_right = Stamps.says_look(str(e.get("kind", "")))
+				_go("bot_pick")
 		"try_look":
 			if t == "otetsuki" and e.get("actor", -1) == _me():
 				_go("out")
@@ -353,6 +407,7 @@ func on_event(e: Dictionary) -> void:
 ## 場面を作り直す(試合を新しく)
 func _scene(player_oni: bool) -> void:
 	_main.tutorial_scene(player_oni)
+	_chase_ready = false
 
 
 func _show_end() -> void:

@@ -1158,7 +1158,10 @@ func _show_event(e: Dictionary) -> void:
 		"slip":
 			hud.show_message(tr("つるっ! %s が転んだ") % (tr("あなた") if e["actor"] == me else _name(e["actor"])), Color(0.85, 0.7, 0.0), 1.2)
 		"no_looks":
-			if e["actor"] == me:
+			if e["actor"] == me and _tutorial:
+				# チュートリアル: 「拾おう」と言うまでは振り向けない
+				hud.show_message(tr("まだだよ!みんなの言葉を待とう"), Color(0.3, 0.3, 0.3), 1.2)
+			elif e["actor"] == me:
 				hud.show_message(tr("もう振り向けない!\n(1ラウンド%d回まで)") % GameConfig.LOOKS_PER_ROUND, Color(0.3, 0.3, 0.3), 1.2)
 		"drop_failed":
 			if e["actor"] == me:

@@ -1299,6 +1299,17 @@ func script_round(angle: float, drop_seat: int, minion: int) -> void:
 	minion_count = minion_ids.size()
 
 
+## チュートリアル: 走っている人の前(同じ列)ahead メートルに障害物を置く。clear = true なら、ほかの障害物は消す
+func script_obstacle(actor_id: int, ahead: float, kind: String, clear: bool) -> Dictionary:
+	if clear:
+		obstacles = []
+	var a := get_actor(actor_id)
+	if a == null:
+		return {}
+	var r: float = GameConfig.LANE_RADII[a.lane]
+	return _add_obstacle(fposmod(runner_angle(a) + ahead / r, TAU), a.lane, kind)
+
+
 ## 落とす相手と、落とすタイミング(角度)を決める。
 ## 相手はプレイヤーもボットも含めてランダム。
 func _plan_drop() -> void:
