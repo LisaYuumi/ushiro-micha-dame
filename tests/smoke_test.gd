@@ -211,7 +211,7 @@ func _check_tutorial() -> void:
 		var s: GameState = _main.state
 		if since > 0.5:
 			match st:
-				"intro", "see_back", "teach_done", "look_rule", "words", "minion", "revealed", "oni_intro", "oni_done":
+				"intro", "see_back", "banana_done", "look_rule", "words", "minion", "revealed", "oni_intro", "oni_done":
 					tu._on_next()
 				"out":
 					if since > 3.6:
@@ -231,6 +231,8 @@ func _check_tutorial() -> void:
 					_main._send_stamp(Stamps.DROPPED)
 				"vote_now":
 					_main._on_vote_pressed(Tutorial.MINION_ID)
+				"banana":
+					s.throw_banana(s.local_player_id, s.oni_id)
 				"fake":
 					s.oni_feint(s.local_player_id)
 				"eraser":
@@ -243,7 +245,7 @@ func _check_tutorial() -> void:
 			_chase_lasted = true
 		_main._physics_process(1.0 / 30.0)
 	_check(_chase_lasted, "チュートリアル: 拾ってすぐタッチで終わらない(追いかけっこが続く)")
-	for st in ["oni_walk", "see_back", "teach", "teach_done", "try_look", "out", "words", "minion", "pick", "chase", "vote_now", "revealed", "fake", "eraser", "drop", "end"]:
+	for st in ["oni_walk", "see_back", "teach", "bot_pick", "banana", "banana_done", "try_look", "out", "words", "minion", "pick", "chase", "vote_now", "revealed", "fake", "eraser", "drop", "end"]:
 		_check(seen.has(st), "チュートリアル: 「%s」まで進む" % st)
 	_check(_main._tutorial == null and _main.mode == _main.Mode.LOBBY and _main.lobby.visible, "チュートリアルが終わるとロビーにもどる")
 	_check(Profile.tutorial == 2, "チュートリアルを最後までやったことを覚える")

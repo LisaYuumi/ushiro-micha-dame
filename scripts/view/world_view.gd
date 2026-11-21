@@ -2609,8 +2609,13 @@ func get_camera_basis() -> Basis:
 ## 自分のカメラ:
 ## - 座っているとき: 前は輪の内側、振り向くと足元の後ろを見る
 ## - 追いかけているとき: 輪の外側・斜め上から自分を見る(画面の右が鬼の走る向き)
+## お手つきの本人の画面で、自分の顔を大きく映している間か(名札が顔にかぶらないように、main が名札を隠す)
+var self_close_up := false
+
+
 func _update_seat_camera(state: GameState, delta: float) -> void:
 	var me := state.get_local_player()
+	self_close_up = false
 	if me == null or _seat_cam == null:
 		return
 	# 画面のゆれ(お手つきの本人。だんだん小さく)
@@ -2624,6 +2629,7 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 			and float(_out_anim[me.id]["t"]) < OUT_FACE_TIME + OUT_FALL_TIME * 0.9
 	# 顔のアップの間は、自分の椅子を隠す(カメラと顔の間に背もたれが入って、顔にかぶるので)
 	_set_hidden_chair(me.home_seat if close_up else -1)
+	self_close_up = close_up
 	if close_up:
 		# お手つき直後: 自分の顔の正面にカメラを寄せて、放心の顔を大きく映す。そのまま崩れ落ちるところを見せる
 		var model := _actor_nodes.get(me.id) as CharacterModel

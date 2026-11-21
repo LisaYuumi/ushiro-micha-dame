@@ -5,12 +5,13 @@ extends CanvasLayer
 ## 画面の上に短い吹き出し(1〜2行)を出し、「次へ」か、言われたことをやると進む。右上の「スキップ」でいつでもやめられる。
 ## 流れ(docs/AI_BRIEF.md にも同じ表):
 ##   (7人。6人以上なら、言葉を送った人の名前が出るので、だれがウソをついたか分かる)
-##   A 鬼が歩いて落とす → 自分と両どなりのうしろは見えないが、ほかの人のうしろは見える → 言葉で教えてあげる(ウソもつける)
+##   A 鬼が歩いて落とす → 自分と両どなりのうしろは見えないが、ほかの人のうしろは見える → 言葉で教えてあげる(ウソもつける)→
+##     教えてもらった人が拾って追いかける → 座っている人はバナナを投げてじゃまできる(投げてみる)
 ##   B 振り向くのはここぞの1回 → 振り向いてみる(何もない)→ ガーン、お手つきで体育座り
 ##   C 鬼が自分のうしろを通ったら、まわりが言葉で教えてくれる → 手下はウソをつく → じつは落ちている。振り向いて拾う →
 ##     追いかける(前にバケツ。よける)→ 手下に投票 → 発表
 ##   D 鬼の体験: フェイク → 黒板消し → 落とす
-##   (ボットどうしの追いかけっこはしない)
+##   (障害物は、自分が追いかける場面 C だけ)
 ##   おわり: 「準備OK!オンラインで遊ぼう」→ ロビーへ
 
 signal finished(completed: bool)
@@ -190,6 +191,13 @@ func _go(step: String) -> void:
 			# (名前は吹き出しに隠れて見えないことがあるので「落ちている人」。押す言葉は、自分の画面に出ている言葉そのもの)
 			_say(_ctrl(tr("教えてあげよう!落ちている人をクリックして、\n「%s」を送ろう(ウソをつくこともできるよ)"),
 					tr("教えてあげよう!落ちている人をタップして、\n「%s」を送ろう(ウソをつくこともできるよ)")) % _teach_word(), false, _point_actor(PICK_BOT))
+		"bot_pick":
+			_say(tr("教えてもらって気づいた!\n拾って鬼を追いかけるよ"), false, _point_actor(PICK_BOT))
+		"banana":
+			_say(_ctrl(tr("座っている人は、バナナを投げてじゃまできる!\nBキーで鬼にバナナを投げてみよう"),
+					tr("座っている人は、バナナを投げてじゃまできる!\n「鬼にバナナ」を押してみよう")), false, _point_actor(s.oni_id))
+		"banana_done":
+			_say(tr("ナイス!踏むと転ぶよ。\n追いかける人に投げることもできる"), true)
 		"teach_done":
 			if _taught_right:
 				_say(tr("本当のことを教えたね!\nウソを送って、だますこともできるよ"), true)
@@ -266,7 +274,7 @@ func _on_next() -> void:
 			_go("oni_walk")
 		"see_back":
 			_go("teach")
-		"teach_done":
+		"teach_done", "banana_done":
 			_go("look_rule")
 		"look_rule":
 			_go("try_look")
@@ -302,6 +310,17 @@ func update(delta: float) -> void:
 	# (ランダムの障害物で鬼がすぐ転ぶと、拾った瞬間にタッチになってしまうので)。state.tick の前に呼ばれる
 	_setup_chase()
 	match _step:
+		"bot_pick":
+			# 教えてもらったボットが拾う(鬼が1席先まで歩いて止まってから。すぐ拾うと、拾った瞬間にタッチになるので)
+			if not _flag and _t >= 1.0 and s.oni_pause_left > 100.0 and s.phase == GameState.Phase.DROPPED:
+				_flag = true
+				s.pick_up(PICK_BOT)
+				_setup_chase()
+			if s.phase == GameState.Phase.CHASE and _t >= 1.0:
+				_go("banana")
+		"banana":
+			if s.phase == GameState.Phase.RESULT:
+				_go("look_rule")
 		"out":
 			if not _flag and _t >= 3.4:
 				_flag = true
@@ -343,6 +362,10 @@ func _setup_chase() -> void:
 	var s := _state()
 	if s.phase == GameState.Phase.CHASE and not _chase_ready:
 		_chase_ready = true
+		if s.chaser_id != _me():
+			# ボットが追いかけるとき(バナナの説明)は、障害物なし
+			s.obstacles = []
+			return
 		# バケツは、追いかける人と鬼のあいだ(鬼の足もとに置くと、鬼が転んでしまうので)
 		var chaser := s.get_actor(s.chaser_id)
 		var gap := fposmod(s.runner_angle(s.get_actor(s.oni_id)) - s.runner_angle(chaser), TAU)
@@ -360,7 +383,10 @@ func on_event(e: Dictionary) -> void:
 		"teach":
 			if t == "stamp" and e.get("sender", -1) == _me() and e.get("target", -1) == PICK_BOT:
 				_taught_right = Stamps.says_look(str(e.get("kind", "")))
-				_go("teach_done")
+				_go("bot_pick")
+		"bot_pick", "banana":
+			if t == "banana" and e.get("sender", -1) == _me():
+				_go("banana_done")
 		"try_look":
 			if t == "otetsuki" and e.get("actor", -1) == _me():
 				_go("out")

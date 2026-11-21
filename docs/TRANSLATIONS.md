@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(446)
+## 一覧(450)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -322,6 +322,10 @@
 | 教えてあげよう!落ちている人をクリックして、<br>「%s」を送ろう(ウソをつくこともできるよ) | Let's tell them! Click the one with the item behind them<br>and send "%s" (you could also lie) |
 | 教えてあげよう!落ちている人をタップして、<br>「%s」を送ろう(ウソをつくこともできるよ) | Let's tell them! Tap the one with the item behind them<br>and send "%s" (you could also lie) |
 | 「%s」を押してね | Press "%s" |
+| 教えてもらって気づいた!<br>拾って鬼を追いかけるよ | They got the hint!<br>They grab it and chase the oni |
+| 座っている人は、バナナを投げてじゃまできる!<br>Bキーで鬼にバナナを投げてみよう | Seated players can throw bananas to get in the way!<br>Press B to throw one at the oni |
+| 座っている人は、バナナを投げてじゃまできる!<br>「鬼にバナナ」を押してみよう | Seated players can throw bananas to get in the way!<br>Tap "Banana the oni" |
+| ナイス!踏むと転ぶよ。<br>追いかける人に投げることもできる | Nice! Step on one and you fall.<br>You can throw at the chaser too |
 | まだだよ!みんなの言葉を待とう | Not yet! Wait for the messages |
 | スペースキーで振り向いてみよう(いまは何もないよ) | Press Space to look back (nothing's there right now) |
 | 「振り向く」ボタンで振り向いてみよう(いまは何もないよ) | Tap the Look back button (nothing's there right now) |

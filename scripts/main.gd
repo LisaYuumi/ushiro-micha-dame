@@ -478,7 +478,8 @@ func _physics_process(delta: float) -> void:
 	if ov:
 		# 牛乳がかかっている間は名札も見えない(鬼の名札で場所がわからないように)。吹き出しは出したまま
 		# (夜の教室のフラッシュは、まぶしい間は言葉の吹き出しも見えない)
-		ov.visible = (not showing_result or voting or revealing) and not _play_ui_hidden
+		# (お手つきで自分の顔を大きく映している間は、名札が顔にかぶらないように隠す)
+		ov.visible = (not showing_result or voting or revealing) and not _play_ui_hidden and not view.self_close_up
 		ov.set_tags_hidden(state.is_milked(me) and not showing_result)
 		ov.set_bubbles_hidden(_flashed(me) and not showing_result)
 		if showing_result:
