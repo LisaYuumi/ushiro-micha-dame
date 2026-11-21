@@ -350,10 +350,10 @@ UIを消す(H),UIを消す(H),Hide UI (H)
 だれかのうしろに落とし物を落とすよ","鬼がみんなのうしろを歩いて、
 だれかのうしろに落とし物を落とすよ","The oni walks behind everyone
 and drops an item behind someone"
-"自分のうしろは見えないけど、ほかの人のうしろは見える。
-ほら、落ちてる!","自分のうしろは見えないけど、ほかの人のうしろは見える。
-ほら、落ちてる!","You can't see behind yourself, but you can see behind others.
-Look, it's there!"
+"自分と両どなりのうしろは見えないけど、
+ほかの人のうしろは見える。ほら、落ちてる!","自分と両どなりのうしろは見えないけど、
+ほかの人のうしろは見える。ほら、落ちてる!","You can't see behind yourself or your neighbors,
+but you can see behind the others. Look, it's there!"
 落とされた人は、拾って鬼を追いかけるよ,落とされた人は、拾って鬼を追いかけるよ,Whoever it was dropped behind picks it up and chases the oni
 "振り向くのは、ここぞという1回だけ。
 何もないのに振り向くと「お手つき」!","振り向くのは、ここぞという1回だけ。

@@ -312,7 +312,7 @@
 | スキップ | Skip |
 | ようこそ!遊びながら覚えよう(3分くらい) | Welcome! Let's learn by playing (about 3 min) |
 | 鬼がみんなのうしろを歩いて、<br>だれかのうしろに落とし物を落とすよ | The oni walks behind everyone<br>and drops an item behind someone |
-| 自分のうしろは見えないけど、ほかの人のうしろは見える。<br>ほら、落ちてる! | You can't see behind yourself, but you can see behind others.<br>Look, it's there! |
+| 自分と両どなりのうしろは見えないけど、<br>ほかの人のうしろは見える。ほら、落ちてる! | You can't see behind yourself or your neighbors,<br>but you can see behind the others. Look, it's there! |
 | 落とされた人は、拾って鬼を追いかけるよ | Whoever it was dropped behind picks it up and chases the oni |
 | 振り向くのは、ここぞという1回だけ。<br>何もないのに振り向くと「お手つき」! | Only look back when it counts.<br>Look back at nothing and it's a wrong look! |
 | スペースキーで振り向いてみよう(いまは何もないよ) | Press Space to look back (nothing's there right now) |

@@ -341,7 +341,7 @@ EN = {
     "スキップ": "Skip",
     "ようこそ!遊びながら覚えよう(3分くらい)": "Welcome! Let's learn by playing (about 3 min)",
     "鬼がみんなのうしろを歩いて、\nだれかのうしろに落とし物を落とすよ": "The oni walks behind everyone\nand drops an item behind someone",
-    "自分のうしろは見えないけど、ほかの人のうしろは見える。\nほら、落ちてる!": "You can't see behind yourself, but you can see behind others.\nLook, it's there!",
+    "自分と両どなりのうしろは見えないけど、\nほかの人のうしろは見える。ほら、落ちてる!": "You can't see behind yourself or your neighbors,\nbut you can see behind the others. Look, it's there!",
     "落とされた人は、拾って鬼を追いかけるよ": "Whoever it was dropped behind picks it up and chases the oni",
     "振り向くのは、ここぞという1回だけ。\n何もないのに振り向くと「お手つき」!": "Only look back when it counts.\nLook back at nothing and it's a wrong look!",
     "スペースキーで振り向いてみよう(いまは何もないよ)": "Press Space to look back (nothing's there right now)",
