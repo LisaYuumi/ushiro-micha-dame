@@ -220,7 +220,15 @@ func _check_tutorial() -> void:
 					s.set_looking_back(s.local_player_id, true)
 					s.pick_up(s.local_player_id)
 				"teach":
-					s.send_stamp(s.local_player_id, Tutorial.PICK_BOT, Stamps.DROPPED)
+					# 言われた人・言われた言葉以外は送れない
+					_main._stamp_target = 1
+					_main._send_stamp(Stamps.DROPPED)
+					_main._stamp_target = Tutorial.PICK_BOT
+					_main._send_stamp(Stamps.SAFE)
+					_check(s.stamp_log.is_empty(), "チュートリアル: 言われた人・言われた言葉以外は送れない")
+					_check(not tu.allows_stamp_target(1) and tu.allows_stamp_target(Tutorial.PICK_BOT), "チュートリアル: 送る相手に選べるのは落ちている人だけ")
+					_main._stamp_target = Tutorial.PICK_BOT
+					_main._send_stamp(Stamps.DROPPED)
 				"vote_now":
 					_main._on_vote_pressed(Tutorial.MINION_ID)
 				"fake":

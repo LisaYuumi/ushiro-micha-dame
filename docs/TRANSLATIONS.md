@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(445)
+## 一覧(446)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -314,13 +314,14 @@
 | 鬼がみんなのうしろを歩いて、<br>だれかのうしろに落とし物を落とすよ | The oni walks behind everyone<br>and drops an item behind someone |
 | 自分と両どなりのうしろは見えないけど、<br>ほかの人のうしろは見える。ほら、落ちてる! | You can't see behind yourself or your neighbors,<br>but you can see behind the others. Look, it's there! |
 | 振り向くのは、ここぞという1回だけ。<br>何もないのに振り向くと「お手つき」! | Only look back when it counts.<br>Look back at nothing and it's a wrong look! |
-| 教えてあげよう!%sをクリックして言葉を送ろう。<br>ウソをついて、だますこともできるよ | Let's tell them! Click %s and send a message.<br>You can also lie to trick them |
-| 教えてあげよう!%sをタップして言葉を送ろう。<br>ウソをついて、だますこともできるよ | Let's tell them! Tap %s and send a message.<br>You can also lie to trick them |
 | 本当のことを教えたね!<br>ウソを送って、だますこともできるよ | You told the truth!<br>You could also send a lie to trick them |
 | ウソでだまそうとしたね!<br>本当のことを教えるのも、だますのも作戦 | You tried to trick them with a lie!<br>Telling the truth and lying are both strategies |
 | 鬼が自分のうしろを通ったら、<br>まわりが言葉で教えてくれるよ | When the oni passes behind you,<br>others will send you messages |
 | Mキーで黒板消しを持って、座っている人をクリック。<br>その人の画面が、しばらく白くなるよ | Press M for the eraser, then click a seated player.<br>Their screen goes white for a while |
 | 「黒板消し」ボタンを押して、座っている人をタップ。<br>その人の画面が、しばらく白くなるよ | Tap Eraser, then tap a seated player.<br>Their screen goes white for a while |
+| 教えてあげよう!落ちている人をクリックして、<br>「%s」を送ろう(ウソをつくこともできるよ) | Let's tell them! Click the one with the item behind them<br>and send "%s" (you could also lie) |
+| 教えてあげよう!落ちている人をタップして、<br>「%s」を送ろう(ウソをつくこともできるよ) | Let's tell them! Tap the one with the item behind them<br>and send "%s" (you could also lie) |
+| 「%s」を押してね | Press "%s" |
 | まだだよ!みんなの言葉を待とう | Not yet! Wait for the messages |
 | スペースキーで振り向いてみよう(いまは何もないよ) | Press Space to look back (nothing's there right now) |
 | 「振り向く」ボタンで振り向いてみよう(いまは何もないよ) | Tap the Look back button (nothing's there right now) |

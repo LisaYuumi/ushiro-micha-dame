@@ -187,8 +187,9 @@ func _go(step: String) -> void:
 		"see_back":
 			_say(tr("自分と両どなりのうしろは見えないけど、\nほかの人のうしろは見える。ほら、落ちてる!"), true, _point_item())
 		"teach":
-			_say(_ctrl(tr("教えてあげよう!%sをクリックして言葉を送ろう。\nウソをついて、だますこともできるよ"),
-					tr("教えてあげよう!%sをタップして言葉を送ろう。\nウソをついて、だますこともできるよ")) % _main._name(PICK_BOT), false, _point_actor(PICK_BOT))
+			# (名前は吹き出しに隠れて見えないことがあるので「落ちている人」。押す言葉は、自分の画面に出ている言葉そのもの)
+			_say(_ctrl(tr("教えてあげよう!落ちている人をクリックして、\n「%s」を送ろう(ウソをつくこともできるよ)"),
+					tr("教えてあげよう!落ちている人をタップして、\n「%s」を送ろう(ウソをつくこともできるよ)")) % _teach_word(), false, _point_actor(PICK_BOT))
 		"teach_done":
 			if _taught_right:
 				_say(tr("本当のことを教えたね!\nウソを送って、だますこともできるよ"), true)
@@ -437,6 +438,30 @@ func _end(completed: bool) -> void:
 ## スマホの指: 「次へ」「スキップ」「ロビーへ」を押す
 func _input(event: InputEvent) -> void:
 	UiStyle.tap_buttons(event, [_end_button, _next, _skip])
+
+
+## 教える場面で押す言葉(自分の画面の「落ちてる」の言葉)
+func _teach_word() -> String:
+	return HeadOverlay.stamp_text(_state(), _me(), Stamps.DROPPED)
+
+
+## チュートリアル中に、この人へ言葉を送る相手として選べるか(教える場面の、落ちている人だけ)
+func allows_stamp_target(id: int) -> bool:
+	return _step == "teach" and id == PICK_BOT
+
+
+## この言葉を送れるか(教える場面の「落ちてる」だけ)。送れないときは、押す言葉を案内する
+func allows_stamp_kind(kind: String) -> bool:
+	if _step == "teach" and kind == Stamps.DROPPED:
+		return true
+	if _step == "teach":
+		_main.hud.show_message(tr("「%s」を押してね") % _teach_word(), Color(0.3, 0.3, 0.3), 1.2)
+	return false
+
+
+## 黒板消しを使えるか(鬼の場面の、黒板消しの説明のときだけ)
+func allows_milk() -> bool:
+	return _step == "eraser"
 
 
 ## 今の段階(テスト用)

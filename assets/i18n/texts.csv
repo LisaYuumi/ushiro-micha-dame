@@ -358,14 +358,6 @@ but you can see behind the others. Look, it's there!"
 何もないのに振り向くと「お手つき」!","振り向くのは、ここぞという1回だけ。
 何もないのに振り向くと「お手つき」!","Only look back when it counts.
 Look back at nothing and it's a wrong look!"
-"教えてあげよう!%sをクリックして言葉を送ろう。
-ウソをついて、だますこともできるよ","教えてあげよう!%sをクリックして言葉を送ろう。
-ウソをついて、だますこともできるよ","Let's tell them! Click %s and send a message.
-You can also lie to trick them"
-"教えてあげよう!%sをタップして言葉を送ろう。
-ウソをついて、だますこともできるよ","教えてあげよう!%sをタップして言葉を送ろう。
-ウソをついて、だますこともできるよ","Let's tell them! Tap %s and send a message.
-You can also lie to trick them"
 "本当のことを教えたね!
 ウソを送って、だますこともできるよ","本当のことを教えたね!
 ウソを送って、だますこともできるよ","You told the truth!
@@ -386,6 +378,15 @@ Their screen goes white for a while"
 その人の画面が、しばらく白くなるよ","「黒板消し」ボタンを押して、座っている人をタップ。
 その人の画面が、しばらく白くなるよ","Tap Eraser, then tap a seated player.
 Their screen goes white for a while"
+"教えてあげよう!落ちている人をクリックして、
+「%s」を送ろう(ウソをつくこともできるよ)","教えてあげよう!落ちている人をクリックして、
+「%s」を送ろう(ウソをつくこともできるよ)","Let's tell them! Click the one with the item behind them
+and send ""%s"" (you could also lie)"
+"教えてあげよう!落ちている人をタップして、
+「%s」を送ろう(ウソをつくこともできるよ)","教えてあげよう!落ちている人をタップして、
+「%s」を送ろう(ウソをつくこともできるよ)","Let's tell them! Tap the one with the item behind them
+and send ""%s"" (you could also lie)"
+「%s」を押してね,「%s」を押してね,"Press ""%s"""
 まだだよ!みんなの言葉を待とう,まだだよ!みんなの言葉を待とう,Not yet! Wait for the messages
 スペースキーで振り向いてみよう(いまは何もないよ),スペースキーで振り向いてみよう(いまは何もないよ),Press Space to look back (nothing's there right now)
 「振り向く」ボタンで振り向いてみよう(いまは何もないよ),「振り向く」ボタンで振り向いてみよう(いまは何もないよ),Tap the Look back button (nothing's there right now)

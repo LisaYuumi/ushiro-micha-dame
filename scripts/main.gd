@@ -995,6 +995,8 @@ func _on_tap(pos: Vector2) -> void:
 		id = view.pick_actor_at(state, pos)
 	# 鬼が牛乳ボタンを押したあと(「えいっ」): タップした座っている人にかける(スタンプは出さない)
 	if _milk_aiming:
+		if _tutorial and not _tutorial.allows_milk():
+			return
 		if id >= 0 and state.can_milk(id):
 			cmds.oni_milk(state.local_player_id, id)
 			_milk_aiming = false
@@ -1006,6 +1008,9 @@ func _on_tap(pos: Vector2) -> void:
 		if id == was or id < 0:
 			return
 	if id < 0:
+		return
+	# チュートリアル中は、言われた人にだけ送れる
+	if _tutorial and not _tutorial.allows_stamp_target(id):
 		return
 	# 送れない相手(8人のときの両どなり・このラウンド送った人)は、タップしても何もしない(名札が薄い)
 	var why := state.stamp_block_reason(state.local_player_id, id)
@@ -1092,6 +1097,8 @@ func _close_picker() -> void:
 
 func _send_stamp(kind: String) -> void:
 	if _stamp_target < 0:
+		return
+	if _tutorial and not (_tutorial.allows_stamp_target(_stamp_target) and _tutorial.allows_stamp_kind(kind)):
 		return
 	cmds.send_stamp(state.local_player_id, _stamp_target, kind)
 	# 押したときの短い効果音
