@@ -7,6 +7,7 @@ extends SceneTree
 const STEP := 1.0 / 60.0
 const MAIN_SCENE_FRAMES := 200
 var _chase_lasted := false
+var _chase_time := 0.0
 
 var _failures := 0
 var _frames := 0
@@ -235,6 +236,9 @@ func _check_tutorial() -> void:
 					s.throw_banana(s.local_player_id, s.oni_id)
 				"fake":
 					s.oni_feint(s.local_player_id)
+				"oni_stamp":
+					_main._stamp_target = s.get_actor_at_seat(2).id
+					_main._send_stamp(Stamps.SAFE)
 				"eraser":
 					s.oni_milk(s.local_player_id, s.get_actor_at_seat(1).id)
 				"drop":
@@ -243,9 +247,12 @@ func _check_tutorial() -> void:
 					tu._end(true)
 		if st == "chase" and s.phase == GameState.Phase.CHASE and since > 1.5:
 			_chase_lasted = true
+		if st == "chase":
+			_chase_time = since
 		_main._physics_process(1.0 / 30.0)
 	_check(_chase_lasted, "チュートリアル: 拾ってすぐタッチで終わらない(追いかけっこが続く)")
-	for st in ["oni_walk", "see_back", "teach", "bot_pick", "banana", "banana_done", "try_look", "out", "words", "minion", "pick", "chase", "vote_now", "revealed", "fake", "eraser", "drop", "end"]:
+	_check(_chase_time <= Tutorial.CHASE_LIMIT + 1.0, "チュートリアル: 自分の追いかけっこは短い(%.1f秒)" % _chase_time)
+	for st in ["oni_walk", "see_back", "teach", "bot_pick", "banana", "banana_done", "try_look", "out", "words", "minion", "pick", "chase", "vote_now", "revealed", "fake", "oni_stamp", "eraser", "drop", "end"]:
 		_check(seen.has(st), "チュートリアル: 「%s」まで進む" % st)
 	_check(_main._tutorial == null and _main.mode == _main.Mode.LOBBY and _main.lobby.visible, "チュートリアルが終わるとロビーにもどる")
 	_check(Profile.tutorial == 2, "チュートリアルを最後までやったことを覚える")

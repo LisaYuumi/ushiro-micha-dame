@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(450)
+## 一覧(452)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -317,8 +317,6 @@
 | 本当のことを教えたね!<br>ウソを送って、だますこともできるよ | You told the truth!<br>You could also send a lie to trick them |
 | ウソでだまそうとしたね!<br>本当のことを教えるのも、だますのも作戦 | You tried to trick them with a lie!<br>Telling the truth and lying are both strategies |
 | 鬼が自分のうしろを通ったら、<br>まわりが言葉で教えてくれるよ | When the oni passes behind you,<br>others will send you messages |
-| Mキーで黒板消しを持って、座っている人をクリック。<br>その人の画面が、しばらく白くなるよ | Press M for the eraser, then click a seated player.<br>Their screen goes white for a while |
-| 「黒板消し」ボタンを押して、座っている人をタップ。<br>その人の画面が、しばらく白くなるよ | Tap Eraser, then tap a seated player.<br>Their screen goes white for a while |
 | 教えてあげよう!落ちている人をクリックして、<br>「%s」を送ろう(ウソをつくこともできるよ) | Let's tell them! Click the one with the item behind them<br>and send "%s" (you could also lie) |
 | 教えてあげよう!落ちている人をタップして、<br>「%s」を送ろう(ウソをつくこともできるよ) | Let's tell them! Tap the one with the item behind them<br>and send "%s" (you could also lie) |
 | 「%s」を押してね | Press "%s" |
@@ -326,6 +324,10 @@
 | 座っている人は、バナナを投げてじゃまできる!<br>Bキーで鬼にバナナを投げてみよう | Seated players can throw bananas to get in the way!<br>Press B to throw one at the oni |
 | 座っている人は、バナナを投げてじゃまできる!<br>「鬼にバナナ」を押してみよう | Seated players can throw bananas to get in the way!<br>Tap "Banana the oni" |
 | ナイス!踏むと転ぶよ。<br>追いかける人に投げることもできる | Nice! Step on one and you fall.<br>You can throw at the chaser too |
+| 鬼も言葉を送れるよ。座っている人をクリックして送ろう<br>(ウソでだますのもアリ) | The oni can send messages too. Click a seated player<br>(lying to trick them is fine) |
+| 鬼も言葉を送れるよ。座っている人をタップして送ろう<br>(ウソでだますのもアリ) | The oni can send messages too. Tap a seated player<br>(lying to trick them is fine) |
+| 黒板消しで画面を白くして、うしろを見えなくできる!<br>Mキーを押して、座っている人をクリック | The eraser whites out a screen so they can't see behind!<br>Press M, then click a seated player |
+| 黒板消しで画面を白くして、うしろを見えなくできる!<br>「黒板消し」を押して、座っている人をタップ | The eraser whites out a screen so they can't see behind!<br>Tap Eraser, then tap a seated player |
 | まだだよ!みんなの言葉を待とう | Not yet! Wait for the messages |
 | スペースキーで振り向いてみよう(いまは何もないよ) | Press Space to look back (nothing's there right now) |
 | 「振り向く」ボタンで振り向いてみよう(いまは何もないよ) | Tap the Look back button (nothing's there right now) |

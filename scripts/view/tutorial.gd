@@ -10,7 +10,7 @@ extends CanvasLayer
 ##   B 振り向くのはここぞの1回 → 振り向いてみる(何もない)→ ガーン、お手つきで体育座り
 ##   C 鬼が自分のうしろを通ったら、まわりが言葉で教えてくれる → 手下はウソをつく → じつは落ちている。振り向いて拾う →
 ##     追いかける(前にバケツ。よける)→ 手下に投票 → 発表
-##   D 鬼の体験: フェイク → 黒板消し → 落とす
+##   D 鬼の体験: フェイク → 鬼も言葉を送れる → 黒板消しで画面を白くして見えなくする → 落とす
 ##   (障害物は、自分が追いかける場面 C だけ)
 ##   おわり: 「準備OK!オンラインで遊ぼう」→ ロビーへ
 
@@ -21,6 +21,8 @@ const SEAT_COUNT := 6          # 席の数(鬼を入れて7人)
 const SEED := 20261119
 const STAMP_DELAYS := [0.6, 1.6]  # C: 本当のこと → ウソ の言葉が届くまで
 const DEMO_OBSTACLE_AHEAD := 3.5  # C: 追いかける自分の前に置くバケツ(メートル)
+const ONI_TRIP_AHEAD := 2.5    # C: 鬼の前に置くバケツ(鬼が転んで追いつけるように。追いかけっこを短くする)
+const CHASE_LIMIT := 6.0       # C: 追いかけっこがこれより長くなったら、追いついたことにする(秒)
 const MINION_ID := 4           # C: 手下(席4。正面の少し右)
 const HONEST_ID := 2           # C: 本当のことを言う人(席2。正面の少し左)
 const PICK_BOT := 3            # A: 落とされる人(席3。正面)
@@ -254,9 +256,12 @@ func _go(step: String) -> void:
 			s.oni_pause_left = 0.0
 			_say(_ctrl(tr("Fキーで「フェイク」。\n落とす音だけ出して、だまそう"),
 					tr("「フェイク」ボタンで、\n落とす音だけ出して、だまそう")), false)
+		"oni_stamp":
+			_say(_ctrl(tr("鬼も言葉を送れるよ。座っている人をクリックして送ろう\n(ウソでだますのもアリ)"),
+					tr("鬼も言葉を送れるよ。座っている人をタップして送ろう\n(ウソでだますのもアリ)")), false)
 		"eraser":
-			_say(_ctrl(tr("Mキーで黒板消しを持って、座っている人をクリック。\nその人の画面が、しばらく白くなるよ"),
-					tr("「黒板消し」ボタンを押して、座っている人をタップ。\nその人の画面が、しばらく白くなるよ")), false)
+			_say(_ctrl(tr("黒板消しで画面を白くして、うしろを見えなくできる!\nMキーを押して、座っている人をクリック"),
+					tr("黒板消しで画面を白くして、うしろを見えなくできる!\n「黒板消し」を押して、座っている人をタップ")), false)
 		"drop":
 			_say(_ctrl(tr("Eキーで、本当に落とそう"), tr("「落とす」ボタンで、本当に落とそう")), false)
 		"oni_done":
@@ -342,6 +347,10 @@ func update(delta: float) -> void:
 			# (読んでいる間に言葉が消えないように、鬼は1席先で止めたまま。拾えば走り出す。
 			#  言葉は時間ではなく、鬼が歩いた分で消える)
 			pass
+		"chase":
+			# 長くなりすぎたら、追いついたことにする(チュートリアルは短く)
+			if s.phase == GameState.Phase.CHASE and _t >= CHASE_LIMIT:
+				s._finish(_me(), s.oni_id, "touched")
 		"vote":
 			if s.voting_open:
 				# ボットは手下に投票(手下は投票しない)
@@ -371,6 +380,8 @@ func _setup_chase() -> void:
 		var gap := fposmod(s.runner_angle(s.get_actor(s.oni_id)) - s.runner_angle(chaser), TAU)
 		var ahead := minf(DEMO_OBSTACLE_AHEAD, gap * 0.5 * float(GameConfig.LANE_RADII[chaser.lane]))
 		_demo_obstacle = s.script_obstacle(s.chaser_id, ahead, "bucket", true)
+		# 鬼の前にもバケツ(鬼が転ぶので、追いつきやすい。追いかけっこを短くする)
+		s.script_obstacle(s.oni_id, ONI_TRIP_AHEAD, "bucket", false)
 
 
 ## ゲームのお知らせ(main から)
@@ -399,6 +410,12 @@ func on_event(e: Dictionary) -> void:
 				_go("vote")
 		"fake":
 			if t == "rustle":
+				_go("oni_stamp")
+			elif t == "dropped":
+				_state().oni_pause_left = 999.0
+				_go("oni_done")
+		"oni_stamp":
+			if t == "stamp" and e.get("sender", -1) == _me():
 				_go("eraser")
 			elif t == "dropped":
 				_state().oni_pause_left = 999.0
@@ -473,12 +490,12 @@ func _teach_word() -> String:
 
 ## チュートリアル中に、この人へ言葉を送る相手として選べるか(教える場面の、落ちている人だけ)
 func allows_stamp_target(id: int) -> bool:
-	return _step == "teach" and id == PICK_BOT
+	return (_step == "teach" and id == PICK_BOT) or _step == "oni_stamp"
 
 
 ## この言葉を送れるか(教える場面の「落ちてる」だけ)。送れないときは、押す言葉を案内する
 func allows_stamp_kind(kind: String) -> bool:
-	if _step == "teach" and kind == Stamps.DROPPED:
+	if (_step == "teach" and kind == Stamps.DROPPED) or _step == "oni_stamp":
 		return true
 	if _step == "teach":
 		_main.hud.show_message(tr("「%s」を押してね") % _teach_word(), Color(0.3, 0.3, 0.3), 1.2)

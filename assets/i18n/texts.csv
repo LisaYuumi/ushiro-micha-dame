@@ -370,14 +370,6 @@ Telling the truth and lying are both strategies"
 まわりが言葉で教えてくれるよ","鬼が自分のうしろを通ったら、
 まわりが言葉で教えてくれるよ","When the oni passes behind you,
 others will send you messages"
-"Mキーで黒板消しを持って、座っている人をクリック。
-その人の画面が、しばらく白くなるよ","Mキーで黒板消しを持って、座っている人をクリック。
-その人の画面が、しばらく白くなるよ","Press M for the eraser, then click a seated player.
-Their screen goes white for a while"
-"「黒板消し」ボタンを押して、座っている人をタップ。
-その人の画面が、しばらく白くなるよ","「黒板消し」ボタンを押して、座っている人をタップ。
-その人の画面が、しばらく白くなるよ","Tap Eraser, then tap a seated player.
-Their screen goes white for a while"
 "教えてあげよう!落ちている人をクリックして、
 「%s」を送ろう(ウソをつくこともできるよ)","教えてあげよう!落ちている人をクリックして、
 「%s」を送ろう(ウソをつくこともできるよ)","Let's tell them! Click the one with the item behind them
@@ -403,6 +395,22 @@ Tap ""Banana the oni"""
 追いかける人に投げることもできる","ナイス!踏むと転ぶよ。
 追いかける人に投げることもできる","Nice! Step on one and you fall.
 You can throw at the chaser too"
+"鬼も言葉を送れるよ。座っている人をクリックして送ろう
+(ウソでだますのもアリ)","鬼も言葉を送れるよ。座っている人をクリックして送ろう
+(ウソでだますのもアリ)","The oni can send messages too. Click a seated player
+(lying to trick them is fine)"
+"鬼も言葉を送れるよ。座っている人をタップして送ろう
+(ウソでだますのもアリ)","鬼も言葉を送れるよ。座っている人をタップして送ろう
+(ウソでだますのもアリ)","The oni can send messages too. Tap a seated player
+(lying to trick them is fine)"
+"黒板消しで画面を白くして、うしろを見えなくできる!
+Mキーを押して、座っている人をクリック","黒板消しで画面を白くして、うしろを見えなくできる!
+Mキーを押して、座っている人をクリック","The eraser whites out a screen so they can't see behind!
+Press M, then click a seated player"
+"黒板消しで画面を白くして、うしろを見えなくできる!
+「黒板消し」を押して、座っている人をタップ","黒板消しで画面を白くして、うしろを見えなくできる!
+「黒板消し」を押して、座っている人をタップ","The eraser whites out a screen so they can't see behind!
+Tap Eraser, then tap a seated player"
 まだだよ!みんなの言葉を待とう,まだだよ!みんなの言葉を待とう,Not yet! Wait for the messages
 スペースキーで振り向いてみよう(いまは何もないよ),スペースキーで振り向いてみよう(いまは何もないよ),Press Space to look back (nothing's there right now)
 「振り向く」ボタンで振り向いてみよう(いまは何もないよ),「振り向く」ボタンで振り向いてみよう(いまは何もないよ),Tap the Look back button (nothing's there right now)
