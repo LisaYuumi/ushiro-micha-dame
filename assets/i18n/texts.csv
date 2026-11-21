@@ -354,35 +354,41 @@ and drops an item behind someone"
 ほかの人のうしろは見える。ほら、落ちてる!","自分と両どなりのうしろは見えないけど、
 ほかの人のうしろは見える。ほら、落ちてる!","You can't see behind yourself or your neighbors,
 but you can see behind the others. Look, it's there!"
-落とされた人は、拾って鬼を追いかけるよ,落とされた人は、拾って鬼を追いかけるよ,Whoever it was dropped behind picks it up and chases the oni
 "振り向くのは、ここぞという1回だけ。
 何もないのに振り向くと「お手つき」!","振り向くのは、ここぞという1回だけ。
 何もないのに振り向くと「お手つき」!","Only look back when it counts.
 Look back at nothing and it's a wrong look!"
-"教えてあげよう!%sをクリックして、
-赤い「落ちてる」の言葉を送ろう","教えてあげよう!%sをクリックして、
-赤い「落ちてる」の言葉を送ろう","Let's tell them! Click %s
-and send a red ""it's there"" message"
-"教えてあげよう!%sをタップして、
-赤い「落ちてる」の言葉を送ろう","教えてあげよう!%sをタップして、
-赤い「落ちてる」の言葉を送ろう","Let's tell them! Tap %s
-and send a red ""it's there"" message"
-"教えてもらって気づいた!
-拾って鬼を追いかけるよ","教えてもらって気づいた!
-拾って鬼を追いかけるよ","They got the hint!
-They grab it and chase the oni"
-"それは「まだへいき」(見ないで)の意味だよ。
-でも自分で気づいたみたい!","それは「まだへいき」(見ないで)の意味だよ。
-でも自分で気づいたみたい!","That one means ""you're safe"" (don't look).
-But they noticed anyway!"
+"教えてあげよう!%sをクリックして言葉を送ろう。
+ウソをついて、だますこともできるよ","教えてあげよう!%sをクリックして言葉を送ろう。
+ウソをついて、だますこともできるよ","Let's tell them! Click %s and send a message.
+You can also lie to trick them"
+"教えてあげよう!%sをタップして言葉を送ろう。
+ウソをついて、だますこともできるよ","教えてあげよう!%sをタップして言葉を送ろう。
+ウソをついて、だますこともできるよ","Let's tell them! Tap %s and send a message.
+You can also lie to trick them"
+"本当のことを教えたね!
+ウソを送って、だますこともできるよ","本当のことを教えたね!
+ウソを送って、だますこともできるよ","You told the truth!
+You could also send a lie to trick them"
+"ウソでだまそうとしたね!
+本当のことを教えるのも、だますのも作戦","ウソでだまそうとしたね!
+本当のことを教えるのも、だますのも作戦","You tried to trick them with a lie!
+Telling the truth and lying are both strategies"
+"鬼が自分のうしろを通ったら、
+まわりが言葉で教えてくれるよ","鬼が自分のうしろを通ったら、
+まわりが言葉で教えてくれるよ","When the oni passes behind you,
+others will send you messages"
+"Mキーで黒板消しを持って、座っている人をクリック。
+その人の画面が、しばらく白くなるよ","Mキーで黒板消しを持って、座っている人をクリック。
+その人の画面が、しばらく白くなるよ","Press M for the eraser, then click a seated player.
+Their screen goes white for a while"
+"「黒板消し」ボタンを押して、座っている人をタップ。
+その人の画面が、しばらく白くなるよ","「黒板消し」ボタンを押して、座っている人をタップ。
+その人の画面が、しばらく白くなるよ","Tap Eraser, then tap a seated player.
+Their screen goes white for a while"
 まだだよ!みんなの言葉を待とう,まだだよ!みんなの言葉を待とう,Not yet! Wait for the messages
-"バケツやいすは、左右に動いてよける。
-ぶつかると転ぶよ","バケツやいすは、左右に動いてよける。
-ぶつかると転ぶよ","Dodge buckets and chairs by moving sideways.
-Bump into one and you fall"
 スペースキーで振り向いてみよう(いまは何もないよ),スペースキーで振り向いてみよう(いまは何もないよ),Press Space to look back (nothing's there right now)
 「振り向く」ボタンで振り向いてみよう(いまは何もないよ),「振り向く」ボタンで振り向いてみよう(いまは何もないよ),Tap the Look back button (nothing's there right now)
-みんなが言葉で、うしろに落ちてるか教えてくれるよ,みんなが言葉で、うしろに落ちてるか教えてくれるよ,Others send you messages about what's behind you
 鬼がうしろを通るよ…,鬼がうしろを通るよ…,The oni is passing behind you…
 "でも、ウソをつく「鬼の手下」がまぎれている!
 だれが何と言ったか、覚えておこう","でも、ウソをつく「鬼の手下」がまぎれている!

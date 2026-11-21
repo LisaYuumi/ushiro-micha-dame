@@ -313,17 +313,17 @@
 | ようこそ!遊びながら覚えよう(3分くらい) | Welcome! Let's learn by playing (about 3 min) |
 | 鬼がみんなのうしろを歩いて、<br>だれかのうしろに落とし物を落とすよ | The oni walks behind everyone<br>and drops an item behind someone |
 | 自分と両どなりのうしろは見えないけど、<br>ほかの人のうしろは見える。ほら、落ちてる! | You can't see behind yourself or your neighbors,<br>but you can see behind the others. Look, it's there! |
-| 落とされた人は、拾って鬼を追いかけるよ | Whoever it was dropped behind picks it up and chases the oni |
 | 振り向くのは、ここぞという1回だけ。<br>何もないのに振り向くと「お手つき」! | Only look back when it counts.<br>Look back at nothing and it's a wrong look! |
-| 教えてあげよう!%sをクリックして、<br>赤い「落ちてる」の言葉を送ろう | Let's tell them! Click %s<br>and send a red "it's there" message |
-| 教えてあげよう!%sをタップして、<br>赤い「落ちてる」の言葉を送ろう | Let's tell them! Tap %s<br>and send a red "it's there" message |
-| 教えてもらって気づいた!<br>拾って鬼を追いかけるよ | They got the hint!<br>They grab it and chase the oni |
-| それは「まだへいき」(見ないで)の意味だよ。<br>でも自分で気づいたみたい! | That one means "you're safe" (don't look).<br>But they noticed anyway! |
+| 教えてあげよう!%sをクリックして言葉を送ろう。<br>ウソをついて、だますこともできるよ | Let's tell them! Click %s and send a message.<br>You can also lie to trick them |
+| 教えてあげよう!%sをタップして言葉を送ろう。<br>ウソをついて、だますこともできるよ | Let's tell them! Tap %s and send a message.<br>You can also lie to trick them |
+| 本当のことを教えたね!<br>ウソを送って、だますこともできるよ | You told the truth!<br>You could also send a lie to trick them |
+| ウソでだまそうとしたね!<br>本当のことを教えるのも、だますのも作戦 | You tried to trick them with a lie!<br>Telling the truth and lying are both strategies |
+| 鬼が自分のうしろを通ったら、<br>まわりが言葉で教えてくれるよ | When the oni passes behind you,<br>others will send you messages |
+| Mキーで黒板消しを持って、座っている人をクリック。<br>その人の画面が、しばらく白くなるよ | Press M for the eraser, then click a seated player.<br>Their screen goes white for a while |
+| 「黒板消し」ボタンを押して、座っている人をタップ。<br>その人の画面が、しばらく白くなるよ | Tap Eraser, then tap a seated player.<br>Their screen goes white for a while |
 | まだだよ!みんなの言葉を待とう | Not yet! Wait for the messages |
-| バケツやいすは、左右に動いてよける。<br>ぶつかると転ぶよ | Dodge buckets and chairs by moving sideways.<br>Bump into one and you fall |
 | スペースキーで振り向いてみよう(いまは何もないよ) | Press Space to look back (nothing's there right now) |
 | 「振り向く」ボタンで振り向いてみよう(いまは何もないよ) | Tap the Look back button (nothing's there right now) |
-| みんなが言葉で、うしろに落ちてるか教えてくれるよ | Others send you messages about what's behind you |
 | 鬼がうしろを通るよ… | The oni is passing behind you… |
 | でも、ウソをつく「鬼の手下」がまぎれている!<br>だれが何と言ったか、覚えておこう | But a lying "minion" is hiding among them!<br>Remember who said what |
 | じつは本当に落ちてるよ!<br>スペースキーで振り向いて拾おう | It really is behind you!<br>Press Space to look back and grab it |
