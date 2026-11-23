@@ -314,6 +314,11 @@ func update(delta: float) -> void:
 	# 追いかけっこが始まった瞬間: ランダムの障害物は消して、追いかける人の前(鬼より手前)にバケツを1つだけ置く
 	# (ランダムの障害物で鬼がすぐ転ぶと、拾った瞬間にタッチになってしまうので)。state.tick の前に呼ばれる
 	_setup_chase()
+	# 投票は、投票の場面(C)だけ。ほかの場面で勝敗が出ても(ボットの追いかけっこなど)、投票は始めない
+	# (吹き出しと投票の文字が重なってしまうので)
+	if s.phase == GameState.Phase.RESULT and not (_step in ["chase", "vote", "vote_now", "revealed"]):
+		s.vote_wait = maxf(s.vote_wait, 999.0)
+		s.voting_open = false
 	match _step:
 		"bot_pick":
 			# 教えてもらったボットが拾う(鬼が1席先まで歩いて止まってから。すぐ拾うと、拾った瞬間にタッチになるので)

@@ -8,6 +8,7 @@ const STEP := 1.0 / 60.0
 const MAIN_SCENE_FRAMES := 200
 var _chase_lasted := false
 var _chase_time := 0.0
+var _vote_outside := ""
 
 var _failures := 0
 var _frames := 0
@@ -212,7 +213,11 @@ func _check_tutorial() -> void:
 		var s: GameState = _main.state
 		if since > 0.5:
 			match st:
-				"intro", "see_back", "banana_done", "look_rule", "words", "minion", "revealed", "oni_intro", "oni_done":
+				"banana_done":
+					# (読んでいる間にボットの追いかけっこが終わっても、投票が始まらないことを確かめる)
+					if since > 12.0:
+						tu._on_next()
+				"intro", "see_back", "look_rule", "words", "minion", "revealed", "oni_intro", "oni_done":
 					tu._on_next()
 				"out":
 					if since > 3.6:
@@ -249,7 +254,10 @@ func _check_tutorial() -> void:
 			_chase_lasted = true
 		if st == "chase":
 			_chase_time = since
+		if s.voting_open and not (st in ["chase", "vote", "vote_now", "revealed"]):
+			_vote_outside = st
 		_main._physics_process(1.0 / 30.0)
+	_check(_vote_outside == "", "チュートリアル: 投票は投票の場面だけ(%s で投票が始まった)" % _vote_outside)
 	_check(_chase_lasted, "チュートリアル: 拾ってすぐタッチで終わらない(追いかけっこが続く)")
 	_check(_chase_time <= Tutorial.CHASE_LIMIT + 1.0, "チュートリアル: 自分の追いかけっこは短い(%.1f秒)" % _chase_time)
 	for st in ["oni_walk", "see_back", "teach", "bot_pick", "banana", "banana_done", "try_look", "out", "words", "minion", "pick", "chase", "vote_now", "revealed", "fake", "oni_stamp", "eraser", "drop", "end"]:
