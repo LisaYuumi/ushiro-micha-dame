@@ -338,41 +338,69 @@ func _test_drop_happens_for_every_seed() -> void:
 	_check(seats_hit.size() == GameConfig.SEAT_COUNT, "プレイヤーもボットも全員が落とされることがある")
 
 
-## 称号: 本当に目立った人だけ、最大3つ。2位とはっきり差があるときだけ。最後がオチ。だれもいなければ空
+## 称号: 1人1つ・同じ称号は1つ・最大3つ。優先の称号・オチ・同じ称号が続かない工夫・理由の文のちがい
 func _test_titles() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 5
+	var ids := [0, 1, 2, 3, 4, 5]
 	var stats := {
-		0: {"otetsuki": 3, "found": 1},
-		1: {"otetsuki": 1, "dragged": 1},
-		2: {"found": 3, "stamps_sent": 5},
-		3: {},
-		4: {"banana": 3, "otetsuki": 1},
-		5: {"missed": 2},
+		0: {"otetsuki": 3, "looks": 3, "early_otetsuki": 1, "early_sec": 4},
+		1: {"dragged": 2, "otetsuki": 1, "looks": 1},
+		2: {"found": 3, "instinct": 1, "looks": 3},
+		3: {"looks": 2, "banana_hits": 3},
+		4: {"banana": 3, "otetsuki": 1, "looks": 1},
+		5: {"missed": 2, "looks": 1, "dropped_on": 3},
 	}
-	var t := Titles.decide(stats, [0, 1, 2, 3, 4, 5], "classroom", rng)
+	var t := Titles.decide(stats, ids, "classroom", rng)
 	_check(t.size() == Titles.MAX_AWARDS, "称号: 最大3つ(%d)" % t.size())
-	_check(t.size() > 0 and t[t.size() - 1]["title"] == "気づかな賞", "称号: 最後はいちばん面白い称号(オチ)")
-	var ids := {}
+	var names := t.map(func(a): return a["title"])
+	_check("早とちり大王" in names and "逆転の道連れ王" in names, "称号: 優先の称号(早とちり大王・逆転の道連れ王)が選ばれる(%s)" % str(names))
+	_check(t[t.size() - 1]["tone"] == "funny", "称号: 最後は笑える称号(オチ)")
+	var who := {}
 	for a in t:
-		ids[a["id"]] = true
-	_check(ids.size() == t.size(), "称号: 1人1つ")
-	_check(Titles.decide({}, [0, 1, 2], "beach", rng).is_empty(), "称号: だれも当てはまらなければ、称号なし")
-	# 3つに足りないときは、条件をゆるめて足す(ゆるめた称号ほど先。最後はいちばん厳しい条件の称号)
-	var few := Titles.decide({0: {"missed": 2}, 1: {"found": 2}, 2: {"stamps_sent": 4}, 3: {"stamps_sent": 1}}, [0, 1, 2, 3], "classroom", rng)
-	_check(few.size() == 3, "称号: 足りないときは条件をゆるめて3つ出す(%d)" % few.size())
-	_check(few.size() == 3 and few[2]["title"] == "気づかな賞", "称号: 最後はいちばん厳しい条件の称号")
-	var tie := Titles.decide({0: {"otetsuki": 3}, 1: {"otetsuki": 3}}, [0, 1], "classroom", rng)
-	_check(tie.size() == 1, "称号: 同点しかいなくても、ゆるめた段で1つは出す")
-	var t3 := Titles.decide({0: {"tool_hit": 2}}, [0], "beach", rng)
-	_check(t3.size() == 1 and t3[0]["title"] == "びしょぬれ賞", "称号: 海辺で水鉄砲を2回くらった人は「びしょぬれ賞」")
-	_check(Titles.reason_text({"reason": "お手つき %d回", "n": 3}) == "お手つき 3回", "称号: 理由の文に回数が入る")
-	for title in ["マイペースで賞", "無口な人"]:
-		var found := false
-		for row in Titles.LIST:
-			if row[0] == title:
-				found = true
-		_check(not found, "称号: 「%s」はない" % title)
+		who[a["id"]] = true
+	_check(who.size() == t.size(), "称号: 1人1つ")
+	var early := {}
+	for a in t:
+		if a["title"] == "早とちり大王":
+			early = a
+	_check(not early.is_empty() and Titles.reason_text(early).find("4") >= 0, "称号: 早とちり大王の理由に秒数が入る(%s)" % Titles.reason_text(early))
+	# 回数の称号は、2位と同点なら出さない(ゆるめた段では出ることもある)
+	var tie := Titles._candidate(Titles.find("体育座りのプロ"), false, {0: {"otetsuki": 3}, 1: {"otetsuki": 3}}, [0, 1], "classroom", rng)
+	_check(tie.is_empty(), "称号: 一番が同点なら出さない")
+	# 直前の試合で出た称号は、ほかに当てはまる称号があれば出さない
+	var hist := {"recent": [["早とちり大王", "逆転の道連れ王"]], "counts": {}, "last_by_actor": {}}
+	var t2 := Titles.decide(stats, ids, "classroom", rng, hist)
+	var names2 := t2.map(func(a): return a["title"])
+	_check(not ("早とちり大王" in names2) and not ("逆転の道連れ王" in names2), "称号: 直前の試合の称号は続けて出さない(%s)" % str(names2))
+	var hist3 := {"recent": [["大ウソつき"], ["韋駄天"], ["早とちり大王"]], "counts": {}, "last_by_actor": {}}
+	var names3 := Titles.decide(stats, ids, "classroom", rng, hist3).map(func(a): return a["title"])
+	_check(not ("早とちり大王" in names3), "称号: 直近3試合で出た称号は、ほかに当てはまれば選ばない(%s)" % str(names3))
+	var only := Titles.decide({0: {"early_otetsuki": 1, "early_sec": 3, "otetsuki": 1, "looks": 1}}, [0], "classroom", rng,
+			{"recent": [["早とちり大王"]], "counts": {}, "last_by_actor": {}})
+	_check(only.size() == 1, "称号: ほかに当てはまる称号がなければ、続けて出てもよい")
+	# 毎回少しずつちがう組み合わせ(何回か決めると、ちがう称号が出る)
+	var seen := {}
+	for k in 20:
+		for a in Titles.decide(stats, ids, "classroom", rng):
+			seen[a["title"]] = true
+	_check(seen.size() > 3, "称号: 毎回少しずつちがう組み合わせ(%d種類)" % seen.size())
+	# 理由の文は、称号ごとに2〜3通り
+	var ok := true
+	for d in Titles.LIST + Titles.EXTRA:
+		var n: int = (d["reasons"] as Array).size()
+		if n < 2 or n > 3:
+			ok = false
+	_check(ok, "称号: 理由の文は称号ごとに2〜3通り")
+	# すごい称号は金色、それ以外は紫
+	var gold := ["名探偵", "名演技賞", "野生の勘", "韋駄天", "忍者", "フェイクの達人", "逃げ足No.1", "バナナ職人"]
+	var tone_ok := true
+	for d in Titles.LIST + Titles.EXTRA:
+		if (d["tone"] == "good") != (d["title"] in gold):
+			tone_ok = false
+	_check(tone_ok, "称号: すごい称号だけ金色")
+	_check(Titles.decide({}, [], "beach", rng).is_empty(), "称号: だれもいなければ称号なし")
+	_check(Titles.reason_text({"reason": "%d回もだまされた", "n": 3}) == "3回もだまされた", "称号: 理由の文に回数が入る")
 	# 出来事を数える
 	var s := GameState.new()
 	s.start_round(1)

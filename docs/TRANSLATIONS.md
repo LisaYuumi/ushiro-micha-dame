@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(443)
+## 一覧(530)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -354,9 +354,101 @@
 | ロビーへ ▶ | To the lobby ▶ |
 | 称号発表! | Awards! |
 | みんながだまされる中、手下を %d回見抜いた | Saw through the minion while others were fooled: %d |
-| 鬼で %d回 逃げ切った | Got away as the oni: %d |
 | %s ・ %s | %s · %s |
 | 記念写真 | Group Photo |
+| 正直者がバカを見た賞 | Honesty Didn't Pay |
+| 名演技賞 | Best Actor |
+| 逆転の道連れ王 | Dragged Them Down |
+| 早とちり大王 | Jumped the Gun |
+| 本当のことしか言わないのに %d票 | Only told the truth, still got %d votes |
+| 正直者なのに %d票も入った | Honest, yet %d votes |
+| ウソゼロなのに疑われた(%d票) | Zero lies, still suspected (%d votes) |
+| 大ウソつき | Big Fibber |
+| 手下でもないのにウソを %d回 | Not a minion, still lied %d times |
+| ふつうの人なのにウソ %d回 | Lied %d times for no reason |
+| ウソの言葉を %d回も送った | Sent %d lies |
+| 手下なのにほぼノーマーク | A minion nobody suspected |
+| 手下だとバレずに %d回 | Went unnoticed as a minion %d times |
+| だれにも疑われない名演技(%d回) | Flawless acting (%d times) |
+| みんなの信用ゼロ | Zero Trust |
+| 手下じゃないのに %d回も一番票 | Innocent, but top-voted %d times |
+| %d回も手下だと思われた | Mistaken for the minion %d times |
+| 無実なのに %dラウンド疑われた | Innocent, suspected for %d rounds |
+| オオカミ少年 | The Boy Who Cried Wolf |
+| 「落ちてる!」がウソだった %d回 | Fake "It's there!" %d times |
+| 何もないのに「落ちてる!」%d回 | "It's there!" with nothing there: %d |
+| 「落ちてる!」%d回、全部ハズレ | %d "It's there!"s, all wrong |
+| 手下で %d人をひっかけた | Tricked %d people as a minion |
+| 少数派で手下を当てた(%d回) | Caught the minion against the crowd (%d) |
+| %d回もだまされた | Fooled %d times |
+| %d秒で振り向いて、お手つき | Looked back after %d sec. Wrong! |
+| 開始%d秒でガマンできなかった | Couldn't wait past %d sec |
+| %d秒で振り向いた。早すぎ! | Looked back at %d sec. Too soon! |
+| 体育座りのプロ | Professional Sitter |
+| 真ん中で体育座り %d回 | Sat out in the middle %d times |
+| お手つきで %d回お休み | Benched %d times for wrong looks |
+| 休みながら %d人をお手つきに | Tricked %d people while benched |
+| ただでは転ばない(道連れ %d人) | Took %d down too |
+| 信じる者は救われなかった賞 | Trusted the Wrong People |
+| 「落ちてる」を信じたら何もなかった(%d回) | Believed "It's there", found nothing (%d) |
+| みんなを信じて振り向いたのに…(%d回) | Trusted everyone and looked back… (%d) |
+| 野生の勘 | Pure Instinct |
+| だれにも教わらずに %d回見つけた | Found it %d times with no hints |
+| ノーヒントで %d回見つけた | No hints, found it %d times |
+| %d回も見つけた | Found it %d times |
+| 暗くてあわてて %d回お手つき | Panicked in the dark %d times |
+| ピカッと光った瞬間に見つけた(%d回) | Spotted it in a flash (%d) |
+| 鈍感力No.1 | Totally Oblivious |
+| %d回も気づかなかった | Didn't notice %d times |
+| 背中で語る人 | Favorite Target |
+| %d回もうしろに落とされた | Had it dropped behind %d times |
+| 鬼に %d回ねらわれた | Targeted by the oni %d times |
+| 平和主義者 | Pacifist |
+| 一度も振り向かなかった | Never looked back once |
+| 最後まで前だけを見ていた | Eyes forward the whole match |
+| バナナ職人 | Banana Master |
+| バナナで %d人を転ばせた | Tripped %d people with bananas |
+| 投げたバナナが %d回命中 | Landed %d bananas |
+| %d回もバナナを踏んだ | Stepped on %d bananas |
+| ずっこけ大賞 | Clumsiest |
+| 1回の追いかけっこで %d回転んだ | Fell %d times in one chase |
+| 追いかけっこ中に %d回ずっこけた | Tripped %d times mid-chase |
+| 重いの担当 | Heavy Lifter |
+| 重い落とし物を %d回かかえて走った | Ran with a heavy item %d times |
+| 重いものばかり %d回運んだ | Hauled the heavy stuff %d times |
+| あと一歩の人 | So Close |
+| あと1秒で追いつけたのに(%d回) | One second short (%d) |
+| あと一歩で鬼に逃げられた(%d回) | The oni barely got away (%d) |
+| 韋駄天 | Lightning Feet |
+| 一度も転ばずに鬼をつかまえた(%d回) | Caught the oni without a fall (%d) |
+| ノーミスで %d回タッチ | %d flawless tags |
+| %d回も鬼をつかまえた | Caught the oni %d times |
+| 忍者 | Ninja |
+| 鬼で %d回、一周気づかれなかった | Went unnoticed for a lap %d times |
+| 気配を消して %d回成功 | Vanished %d times |
+| フェイクの達人 | Master of Fakes |
+| フェイクの音で %d人をお手つきに | Faked out %d people |
+| ニセの音で %d人をだました | Fooled %d with fake sounds |
+| 鬼で %d回、一度もつかまらなかった | Never caught as the oni (%d escapes) |
+| %d回逃げ切って無敗 | %d escapes, never caught |
+| 粉まみれ | Covered in Chalk |
+| チョークの粉で %d回まっしろ | Whited out by chalk %d times |
+| びしょぬれ | Soaked |
+| %d回もびしょぬれ | Soaked %d times |
+| %d回もパシャッとやられた | Flashed %d times |
+| 骨折り損 | All Bones, No Glory |
+| ガイコツをかかえて走ったのに… | Ran with the skeleton, for nothing… |
+| ガイコツと走って、鬼に逃げられた | Carried the skeleton, the oni got away |
+| モナリザに見つめられた人 | Stared Down by Mona Lisa |
+| うしろのモナリザに気づかなかった | Missed the Mona Lisa behind them |
+| モナリザがずっと見ていたのに… | Mona Lisa was watching the whole time… |
+| 停電の被害者 | Lights Out Victim |
+| 停電中に落とされて気づかなかった | Missed a drop during the blackout |
+| まっくらの中で、一周気づかなかった | Didn't notice for a whole lap in the dark |
+| %d回も手下を見つけた | Found the minion %d times |
+| 正直な言葉を %d回 | %d honest messages |
+| %d回もしゃべった | Talked %d times |
+| %dラウンドも鬼だった | Was the oni for %d rounds |
 | 手下ハンター | Minion Hunter |
 | 手下を %d回当てた | Minions caught: %d |
 | 信じられる人 | Most Trustworthy |
@@ -369,7 +461,6 @@
 | お手つきのあと %d人を道連れ | Dragged down after going out: %d |
 | ウソつき大賞 | Grand Liar Award |
 | 手下として %d人をだました | People fooled as a minion: %d |
-| 気づかな賞 | Totally Oblivious |
 | 一周まわっても気づかず %d回 | Missed it for a full lap: %d |
 | バナナの被害者 | Banana Victim |
 | バナナで %d回転んだ | Banana slips: %d |
@@ -379,15 +470,11 @@
 | 暗やみでお手つき %d回 | Wrong looks in the dark: %d |
 | カミナリの目撃者 | Lightning Witness |
 | カミナリの光で %d回見つけた | Spotted in a lightning flash: %d |
-| お手つき王 | King of Wrong Looks |
-| お手つき %d回 | Wrong looks: %d |
-| 粉まみれ賞 | Chalk Dust Award |
 | 黒板消しを %d回くらった | Eraser hits taken: %d |
-| びしょぬれ賞 | Soaking Wet Award |
 | 水鉄砲を %d回くらった | Water gun hits taken: %d |
 | まぶしかった賞 | Dazzled Award |
 | フラッシュを %d回くらった | Flash hits taken: %d |
-| 逃げ足No.1 | Fastest Feet |
+| 逃げ足No.1 | Escape Artist |
 | 名探偵 | Great Detective |
 | 振り向き名人 | Eagle Eye |
 | 振り向いて %d回見つけた | Found by looking back: %d |

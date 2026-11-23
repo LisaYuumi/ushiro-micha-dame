@@ -196,6 +196,18 @@ var scripted := false
 var match_stats: Dictionary = {}
 ## 試合の最後の称号(試合が終わったら決まる)。発表する順の配列(最大3つ。空もある)。Titles.decide
 var titles: Array = []
+## 称号の記録(同じルームで続けて遊ぶとき、同じ称号ばかりにならないように。試合をまたいで残す)
+## title_recent: 直近の試合の称号(新しい順)/title_counts: 称号ごとの出た回数/title_last_by_name: 名前 -> 直前の試合の称号
+var title_recent: Array = []
+var title_counts: Dictionary = {}
+var title_last_by_name: Dictionary = {}
+## 称号のための時計(ラウンドが始まってからの秒数・試合の秒数)と、ラウンド・追いかけっこの中の出来事
+var _round_time := 0.0
+var _match_clock := 0.0
+var _last_fake_clock := -1000.0
+var _chase_slips := {}
+var _drop_in_blackout := false
+var _drop_mona := false
 ## 人ごとの、自分で決めたスタンプの言葉(id -> {種類: 言葉})。ない人・ない種類は初期の言葉
 var stamp_words: Dictionary = {}
 ## 人ごとの言語(id -> "ja" / "en")。自作の言葉は、受け取った人と言語が同じときだけ出す
@@ -344,7 +356,24 @@ func next_round() -> bool:
 		var ids := []
 		for a in actors:
 			ids.append(a.id)
-		titles = Titles.decide(match_stats, ids, stage, rng)
+		var last_by := {}
+		for a in actors:
+			if title_last_by_name.has(a.display_name):
+				last_by[a.id] = title_last_by_name[a.display_name]
+		titles = Titles.decide(match_stats, ids, stage, rng,
+				{"recent": title_recent, "counts": title_counts, "last_by_actor": last_by})
+		# 記録を更新する
+		var names := []
+		title_last_by_name = {}
+		for t in titles:
+			names.append(t["title"])
+			title_counts[t["title"]] = int(title_counts.get(t["title"], 0)) + 1
+			var who := get_actor(int(t["id"]))
+			if who:
+				title_last_by_name[who.display_name] = t["title"]
+		title_recent.push_front(names)
+		while title_recent.size() > Titles.RECENT_MATCHES:
+			title_recent.pop_back()
 		events.append({"type": "match_over", "scores": scores.duplicate(), "titles": titles.duplicate(true)})
 		return false
 	var seats := _lineup_after_result()
@@ -411,6 +440,10 @@ func _lineup_after_result() -> Array:
 ## seat_ids[i] の人を席 i に座らせ、oni を鬼にしてラウンドを始める
 func _begin_round(seat_ids: Array, oni: int) -> void:
 	events.clear()
+	_round_time = 0.0
+	_chase_slips = {}
+	_drop_in_blackout = false
+	_drop_mona = false
 	round_serial += 1
 	_round_start_lineup = seat_ids.duplicate()
 	_round_start_oni = oni
@@ -498,6 +531,9 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 
 ## 時間を delta 秒すすめる。
 func tick(delta: float) -> void:
+	_match_clock += delta
+	if phase == Phase.WALKING or phase == Phase.DROPPED:
+		_round_time += delta
 	_tick_vote(delta)
 	_tick_stamps(delta)
 	for i in seat_pass_age.size():
@@ -564,6 +600,7 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 			return
 		a.looks_left -= 1
 		a.looks_used += 1
+		_stat(actor_id, "looks")
 	a.looking_back = value
 	# 追いかけっこ中・勝敗が出た後は、振り向いて見物してもお手つきにならない
 	if not value or not judged:
@@ -575,6 +612,7 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 	if has_handkerchief_behind(a):
 		events.append({"type": "found", "actor": actor_id})
 		_count_found(actor_id)
+		_count_instinct(actor_id)
 		# 本当の「落ちてる!」などで振り向けた: 教えた人に点
 		for st in shown:
 			if st["scorable"] and Stamps.says_look(st["kind"]) and st["truthful"] and not st["credited"]:
@@ -586,6 +624,20 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 		_stat(actor_id, "otetsuki")
 		if blackout or dark_hides(a.seat_index):
 			_stat(actor_id, "otetsuki_dark")
+		# 早とちり: ラウンドが始まってすぐのお手つき
+		if _round_time <= Titles.EARLY_SECONDS:
+			_stat(actor_id, "early_otetsuki")
+			_stat_min(actor_id, "early_sec", maxi(1, ceili(_round_time)))
+		# 「落ちてる」を2人以上から受け取って振り向いたのに、何もなかった
+		var look_senders := {}
+		for st in shown:
+			if st["kind"] == Stamps.DROPPED:
+				look_senders[st["sender"]] = true
+		if look_senders.size() >= 2:
+			_stat(actor_id, "trusted_wrong")
+		# 鬼のフェイクの音にだまされた
+		if _match_clock - _last_fake_clock <= Titles.FAKE_WINDOW:
+			_stat(oni_id, "fake_hits")
 		events.append({
 			"type": "otetsuki",
 			"actor": actor_id,
@@ -721,6 +773,9 @@ func pick_up(actor_id: int) -> void:
 	# 追いかけっこが始まったら、電気がつく
 	_lights_on()
 	events.append({"type": "picked_up", "actor": a.id})
+	_chase_slips = {}
+	if item_weight() >= Titles.HEAVY_WEIGHT:
+		_stat(a.id, "heavy")
 	if is_night() and round_index == Items.NIGHT_SKELETON:
 		_stat(a.id, "skeleton")
 
@@ -777,6 +832,11 @@ func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
 	var truthful := Stamps.says_look(kind) == has_handkerchief_behind(target)
 	if not truthful:
 		lie_counts[sender_id] = int(lie_counts.get(sender_id, 0)) + 1
+		_stat(sender_id, "lies")
+		if stamp_role_of(sender_id) == "normal":
+			_stat(sender_id, "lies_normal")
+		if kind == Stamps.DROPPED:
+			_stat(sender_id, "wolf")
 	_stat(sender_id, "stamps_sent")
 	if truthful:
 		_stat(sender_id, "stamps_true")
@@ -1017,6 +1077,7 @@ func oni_feint(actor_id: int) -> void:
 func _emit_fake_drop() -> void:
 	if phase != Phase.WALKING and phase != Phase.DROPPED:
 		return
+	_last_fake_clock = _match_clock
 	var crossing := _nearest_seat_crossing()
 	events.append({
 		"type": "rustle",
@@ -1543,9 +1604,13 @@ func _check_obstacles(a: Actor) -> void:
 			t *= lerpf(1.0, GameConfig.SLIP_HEAVY_MULT, item_weight())
 		a.slip_left = t
 		a.immune_left = t + GameConfig.HIT_IMMUNE_TIME
+		_chase_slips[a.id] = int(_chase_slips.get(a.id, 0)) + 1
+		_stat_max(a.id, "max_slips", int(_chase_slips[a.id]))
 		if ob["kind"] == "banana":
 			obstacles.remove_at(i)
 			_stat(a.id, "banana")
+			if int(ob.get("sender", -1)) >= 0 and int(ob["sender"]) != a.id:
+				_stat(int(ob["sender"]), "banana_hits")
 		events.append({"type": "slip", "actor": a.id, "sender": ob["sender"], "kind": ob["kind"]})
 		return
 
@@ -1657,6 +1722,20 @@ func close_vote() -> void:
 	if not correct.is_empty() and correct.size() * 2 <= votes.size():
 		for v in correct:
 			_stat(v, "vote_sharp")
+	# 投票で集めた票: 手下じゃない人は「疑われた」票、手下は「ほぼノーマーク」(0〜1票)
+	var top_votes := 0
+	for id in tally:
+		top_votes = maxi(top_votes, int(tally[id]))
+	for a in actors:
+		var got_votes := int(tally.get(a.id, 0))
+		if is_minion(a.id):
+			if got_votes <= 1 and not votes.is_empty():
+				_stat(a.id, "minion_low_votes")
+		else:
+			if got_votes > 0:
+				_stat(a.id, "votes_innocent", got_votes)
+			if got_votes > 0 and got_votes == top_votes:
+				_stat(a.id, "top_voted_innocent")
 	var fooled := []
 	var busted := []
 	for m in minion_ids:
@@ -1694,11 +1773,24 @@ func _finish(winner_id: int, loser_id: int, reason: String) -> void:
 		"sat":
 			scores[winner_id] += GameConfig.SCORE_ONI_SAT
 			_stat(winner_id, "escaped")
+			# あと一歩: 追いかけた人が、あと少しで追いつけた
+			if loser_id >= 0 and chaser_gap_m() / GameConfig.CHASE_SPEED <= Titles.SO_CLOSE_SECONDS:
+				_stat(loser_id, "so_close")
+			if is_night() and round_index == Items.NIGHT_SKELETON:
+				_stat(loser_id, "skeleton_fail")
 		"missed":
 			_stat(loser_id, "missed")
+			_stat(winner_id, "ninja")
+			if _drop_in_blackout:
+				_stat(loser_id, "blackout_missed")
+			if _drop_mona:
+				_stat(loser_id, "mona_missed")
 		"touched":
 			scores[winner_id] += GameConfig.SCORE_CHASER_TOUCHED
 			_stat(winner_id, "touched")
+			_stat(loser_id, "oni_caught")
+			if int(_chase_slips.get(winner_id, 0)) == 0:
+				_stat(winner_id, "clean_catch")
 	if loser_id >= 0:
 		scores[loser_id] += GameConfig.SCORE_LOSE
 	# 表示中のスタンプは、ここで消える(「まだ平気」の点もここで決まる)
@@ -1752,6 +1844,30 @@ func _stat(actor_id: int, key: String, n: int = 1) -> void:
 	match_stats[actor_id][key] = int(match_stats[actor_id].get(key, 0)) + n
 
 
+func _stat_min(actor_id: int, key: String, v: int) -> void:
+	if actor_id < 0:
+		return
+	if not match_stats.has(actor_id):
+		match_stats[actor_id] = {}
+	match_stats[actor_id][key] = mini(int(match_stats[actor_id].get(key, v)), v)
+
+
+func _stat_max(actor_id: int, key: String, v: int) -> void:
+	if actor_id < 0:
+		return
+	if not match_stats.has(actor_id):
+		match_stats[actor_id] = {}
+	match_stats[actor_id][key] = maxi(int(match_stats[actor_id].get(key, 0)), v)
+
+
+## だれからも言葉を受け取らずに見つけた(野生の勘)
+func _count_instinct(actor_id: int) -> void:
+	for st in stamp_log:
+		if st["target"] == actor_id:
+			return
+	_stat(actor_id, "instinct")
+
+
 func _count_found(actor_id: int) -> void:
 	_stat(actor_id, "found")
 	if lightning_left > 0.0:
@@ -1779,9 +1895,14 @@ func _drop() -> void:
 	})
 	# 振り向いたまま待っていた人の後ろに落とした場合は、その場で見つかる
 	var target := get_actor_at_seat(drop_target_seat)
+	if target:
+		_stat(target.id, "dropped_on")
+	_drop_in_blackout = blackout
+	_drop_mona = is_night() and round_index == Items.NIGHT_MONA_LISA
 	if target and target.looking_back:
 		events.append({"type": "found", "actor": target.id})
 		_count_found(target.id)
+		_count_instinct(target.id)
 
 
 func _sit(actor: Actor, seat: int) -> void:

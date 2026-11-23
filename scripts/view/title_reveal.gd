@@ -19,13 +19,6 @@ const COLOR_GOLD := Color("F6C945")
 const COLOR_GOLD_DARK := Color("B07A10")
 const COLOR_FUNNY := Color("6E56A8")
 const COLOR_TITLE := Color("7A3FB8")
-## 称号に合ったポーズ(CharacterModel.set_gesture)。書いていない称号(黒板消しなど)は shrug
-const GESTURES := {
-	"名探偵": "magnifier", "ウソつき大賞": "chin", "道連れ名人": "chin", "バナナの被害者": "banana",
-	"気づかな賞": "shrug", "だまされ王": "head", "暗やみパニック賞": "head", "お手つき王": "head",
-	"振り向き名人": "cheer", "逃げ足No.1": "peace", "タッチの達人": "cheer", "カミナリの目撃者": "cheer",
-	"手下ハンター": "magnifier", "信じられる人": "peace", "おしゃべりさん": "wave", "鬼の常連": "chin",
-}
 ## 称号のない人のポーズ(順番に。全員が同じ棒立ちにならないように)
 const OTHER_GESTURES := ["peace", "wave", "", "cheer", "wave", "peace", "", "wave", "cheer", "peace"]
 
@@ -182,8 +175,11 @@ func _focus(i: int) -> void:
 	AudioDirector.sfx("drumroll", -9.0)
 
 
+## 称号のポーズ(称号の表 Titles.LIST の gesture)
 func _gesture_of(a: Dictionary) -> String:
-	return str(GESTURES.get(str(a.get("title", "")), "shrug"))
+	if a.has("gesture"):
+		return str(a["gesture"])
+	return str(Titles.find(str(a.get("title", ""))).get("gesture", "shrug"))
 
 
 func _face_of(a: Dictionary) -> String:
