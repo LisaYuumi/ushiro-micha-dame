@@ -508,6 +508,25 @@ def gull():
     return norm(out, 0.75)
 
 
+def water_pyuu():
+    # 水鉄砲「ピューッ!」: 高い笛のような音がすっと下がり、最後に「バシャッ」
+    d = 0.75
+    ln = 0.42
+    f = glide(2400, 1300, ln)
+    whistle = (tone(f, ln) * 0.5 + bandpass(noise(ln), 1500, 4000) * 0.35) * env_ar(ln, 0.02, 0.1)
+    splash = bandpass(noise(0.35), 500, 5000) * env_exp(0.35, 0.09)
+    return norm(mix(at(whistle, 0.0, d), at(splash * 0.9, 0.36, d)), 0.8)
+
+
+def zazaa():
+    # 砂のお城が崩れる「ザザーッ」: ざらざらした砂の音が流れ落ちる
+    d = 1.0
+    t = t_of(d)
+    grains = bandpass(noise(d), 1200, 6000) * (0.6 + 0.4 * (np.random.rand(len(t)) > 0.7))
+    e = np.minimum(t / 0.05, 1.0) * np.exp(-t * 2.6)
+    return norm(mix(grains * e, lowpass(noise(d), 400) * e * 0.5), 0.8)
+
+
 def bgm_ending():
     # 試合の終わり(試合終了 → 表彰台 → 称号発表): わくわくする行進曲(ト長調、112bpm、8小節)。小太鼓がだんだん大きく
     bpm, bars = 112, 8
@@ -1255,6 +1274,7 @@ SOUNDS = {
     "title_pon": title_pon,
     "bgm_ending": bgm_ending, "bgm_photo": bgm_photo,
     "shh": shh, "wind_gust": wind_gust, "gull": gull,
+    "water_pyuu": water_pyuu, "zazaa": zazaa,
 }
 
 

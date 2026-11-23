@@ -382,3 +382,12 @@ const CHIME_ONI_SPEED := 1.25
 ## カモメ: ボットが、ほかの人のうしろの貝がらを落とし物だと思う確率/自分のうしろに置かれた貝がらに振り向いてしまう確率
 const GULL_BOT_FOOL_CHANCE := 0.5
 const GULL_BOT_LOOK_CHANCE := 0.3
+
+# --- 海辺の砂のお城(4ラウンド目の落とし物) ---
+## 抱えて走ると、1メートルごとにこれだけ小さくなる(大きさ 1 = はじめ)。いちばん小さくてこの大きさ
+const CASTLE_SHRINK_PER_M := 0.008
+const CASTLE_MIN := 0.35
+## 転んで崩れたとき、残る大きさの割合
+const CASTLE_CRUMBLE_KEEP := 0.7
+## 大きさ 1 のお城を抱えていると、走る速さがこれだけ遅い(小さくなるほど軽くなって速くなる)
+const CASTLE_SLOW := 0.06

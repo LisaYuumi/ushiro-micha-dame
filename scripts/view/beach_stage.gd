@@ -221,12 +221,14 @@ static func seat_mark(v: WorldView, pos: Vector3) -> void:
 
 # --- 落とし物 ---
 
+## 砂の城の大きさの倍率(キャラの背丈くらい)
+const CASTLE_SCALE := 2.0
 ## 落とし物の大きさ(持ち方と、床に置く高さに使う)
 const ITEM_SIZES := [
 	Vector3(0.3, 0.08, 0.28),   # 貝殻
 	Vector3(0.42, 0.42, 0.42),  # ビーチボール
 	Vector3(0.7, 0.2, 0.7),     # 浮き輪
-	Vector3(0.7, 0.75, 0.7),    # 砂の城
+	Vector3(0.7, 0.75, 0.7) * 2.0,  # 砂の城(CASTLE_SCALE 倍)
 	Vector3(0.6, 0.5, 1.9),     # バナナボート
 ]
 
@@ -277,13 +279,18 @@ static func build_item(item: Node3D, index: int) -> void:
 				item.add_child(band)
 		3:
 			# 砂の城: 四角い土台、まん中の大きい塔、四すみの小さい塔(とんがり屋根)、旗
+			# (キャラの背丈くらいの大きさ。CASTLE_SCALE 倍。抱えると顔が少し隠れる)
+			var castle := Node3D.new()
+			castle.name = "Castle"
+			castle.scale = Vector3.ONE * CASTLE_SCALE
+			item.add_child(castle)
 			var sand := COLOR_SAND_DARK
 			var base := Toon.mesh(StaticBatch.chamfer_mesh(Vector3(0.62, 0.2, 0.62), 0.03), sand, 0.03)
 			base.position.y = 0.1
-			item.add_child(base)
+			castle.add_child(base)
 			var keep := Toon.mesh(StaticBatch.chamfer_mesh(Vector3(0.28, 0.3, 0.28), 0.02), sand, 0.03)
 			keep.position.y = 0.35
-			item.add_child(keep)
+			castle.add_child(keep)
 			for x in [-0.24, 0.24]:
 				for z in [-0.24, 0.24]:
 					var tower := CylinderMesh.new()
@@ -293,7 +300,7 @@ static func build_item(item: Node3D, index: int) -> void:
 					tower.radial_segments = 10
 					var tw := Toon.mesh(tower, sand, 0.025)
 					tw.position = Vector3(x, 0.35, z)
-					item.add_child(tw)
+					castle.add_child(tw)
 					var roof := CylinderMesh.new()
 					roof.top_radius = 0.0
 					roof.bottom_radius = 0.1
@@ -301,13 +308,13 @@ static func build_item(item: Node3D, index: int) -> void:
 					roof.radial_segments = 10
 					var rf := Toon.mesh(roof, COLOR_SAND, 0.025)
 					rf.position = Vector3(x, 0.57, z)
-					item.add_child(rf)
+					castle.add_child(rf)
 			var pole := Toon.mesh(StaticBatch.chamfer_mesh(Vector3(0.02, 0.26, 0.02), 0.005), Color("8B6240"), 0.01)
 			pole.position.y = 0.63
-			item.add_child(pole)
+			castle.add_child(pole)
 			var flag := Toon.mesh(StaticBatch.chamfer_mesh(Vector3(0.14, 0.09, 0.01), 0.004), Color("E5483B"), 0.01)
 			flag.position = Vector3(0.08, 0.71, 0)
-			item.add_child(flag)
+			castle.add_child(flag)
 		_:
 			# バナナボート: 黄色い長い胴(前が少し上がる)・先の顔の黒い点・青い取っ手・左右の浮き
 			var body := CapsuleMesh.new()

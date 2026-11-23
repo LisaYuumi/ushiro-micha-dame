@@ -385,6 +385,7 @@ EN = {
     "みんながだまされる中、手下を %d回見抜いた": "Saw through the minion while others were fooled: %d",
     "%s ・ %s": "%s · %s",
     "記念写真": "Group Photo",
+    "びしょびしょ…": "Soaking wet…",
     "カモメにだまされた人": "Fooled by a Seagull",
     "カモメの貝がらに振り向いて、お手つき": "Looked back at a seagull's shell. Wrong!",
     "落とし物だと思ったら、貝がらだった": "Thought it was the item. It was a shell",

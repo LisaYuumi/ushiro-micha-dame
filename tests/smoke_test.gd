@@ -953,6 +953,34 @@ func _test_events() -> void:
 	_check(s.event_log.size() >= 1, "イベント: 起きたイベントを記録する")
 
 
+## 海辺の砂のお城: 抱えて走ると小さくなり、転ぶと崩れてもっと小さくなる。小さいほど少し速い
+func _test_castle() -> void:
+	var s := GameState.new()
+	s.stage = "beach"
+	s.start_match(9)
+	s.round_index = 3
+	s.restart_round()
+	_check(s.is_castle_round() and s.castle_size == 1.0, "お城: はじめは大きさ 1")
+	_run_until(s, "dropped", 120.0)
+	var target := s.get_actor_at_seat(s.drop_target_seat)
+	s.pick_up(target.id)
+	var w0 := s.item_weight()
+	for i in 40:
+		s.tick(0.05)
+		if s.phase != GameState.Phase.CHASE:
+			break
+	_check(s.castle_size < 1.0, "お城: 抱えて走ると砂がこぼれて小さくなる(%.2f)" % s.castle_size)
+	_check(s.item_weight() < w0, "お城: 小さくなるほど軽い")
+	var before := s.castle_size
+	var chaser := s.get_actor(s.chaser_id)
+	if chaser:
+		s.obstacles = []
+		s._add_obstacle(s.runner_angle(chaser), chaser.lane, "bucket")
+		s._check_obstacles(chaser)
+		var ev := s.take_events()
+		_check(_has(ev, "castle_crumble") and s.castle_size < before, "お城: 転ぶと崩れて小さくなる")
+
+
 func _test_blackout() -> void:
 	# 1試合に1回、2〜4ラウンド目のどれかでイベントが起きる(ステージに合ったもの。停電はその1つ)
 	for seed_value in 10:
@@ -963,6 +991,7 @@ func _test_blackout() -> void:
 		_check(s0.event_kind in GameConfig.EVENTS_BY_STAGE["classroom"], "教室のイベントは教室のものから(%s)" % s0.event_kind)
 		_check((s0.event_kind == "blackout") == (s0.blackout_round >= 0), "停電のときだけ、停電するラウンドが決まる")
 	_test_events()
+	_test_castle()
 	# 停電するラウンドでは、ラウンドの途中でとつぜん停電する。拾って追いかけっこになったら電気がつく
 	var s := GameState.new()
 	s.start_match(7)

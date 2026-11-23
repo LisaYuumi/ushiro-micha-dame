@@ -327,7 +327,10 @@ func sync(state: GameState, delta: float) -> void:
 				# 鬼だけが学校の黄色い帽子をかぶる
 				model.set_hat(a.id == state.oni_id, _beach)
 				# 称号発表・記念写真のポーズ
-				model.set_gesture(str(_cer_gestures.get(a.id, "")) if _cer_mode != "" else "")
+				# 砂のお城を抱えて走る人は、両腕でかかえる
+				var hug: bool = _beach and _item_index == 3 and a.id == state.chaser_id and state.phase == GameState.Phase.CHASE \
+						and a.slip_left <= 0.0
+				model.set_gesture(str(_cer_gestures.get(a.id, "")) if _cer_mode != "" else ("hug" if hug else ""))
 			_update_expression(state, a, model, delta)
 			_update_milk(state, a, model)
 	_update_missed_scene(state, delta)
@@ -372,6 +375,8 @@ func sync(state: GameState, delta: float) -> void:
 	# (背負う紐は、背負っている間だけ。_carry_item が出す)
 	if _straps and is_instance_valid(_straps):
 		_straps.visible = false
+	if _sand_fx and is_instance_valid(_sand_fx):
+		_sand_fx.emitting = false
 	var tucker := _tucker
 	_tucker = null
 	if _item_head_id >= 0 and _actor_nodes.has(_item_head_id):
@@ -384,6 +389,8 @@ func sync(state: GameState, delta: float) -> void:
 	elif holder:
 		# 追いかける人が持って走る: ハンカチ・上履きは右手に、大きい物は背中に背負う
 		_handkerchief.visible = true
+		_castle_size = state.castle_size
+		_castle_down = holder.slip_left > 0.0
 		_carry_item(_actor_nodes.get(holder.id) as CharacterModel)
 	else:
 		# 停電中は、落とし物はだれにも見えない(誰の後ろに落ちたか、みんなわからなくなる)。落とした鬼だけは見える
@@ -998,6 +1005,8 @@ func on_event(e: Dictionary) -> void:
 			AudioDirector.sfx("thunder", -3.0)
 		"lights_on":
 			AudioDirector.sfx("power_on", -3.0)
+		"castle_crumble":
+			_castle_crumble(e.get("pos", Vector3.ZERO), float(e.get("size", 1.0)))
 		"out":
 			# ハズレ: 「ガーン!」。ズッコケてから、とぼとぼ真ん中まで歩いて体育座り(みんなの画面で見える)
 			var who: int = e["actor"]
@@ -1021,7 +1030,13 @@ func on_event(e: Dictionary) -> void:
 		"milk":
 			_surprise_until[e["target"]] = _clock + 1.2
 			if _beach:
-				_pop(e["target"], tr("ばしゃっ"), Color.WHITE)
+				# 水鉄砲: 「ピューッ!」→ びしょびしょ…(ぶるぶる体をふるう)
+				_pop(e["target"], tr("びしょびしょ…"), Color("BFE6FF"))
+				_play_actor(e["target"], "water_pyuu", -2.0, -5.0)
+				var wet := _actor_nodes.get(e["target"]) as CharacterModel
+				if wet:
+					wet.shiver(0.9)
+				_shiver_next[e["target"]] = _clock + 2.2
 			elif _night:
 				# 夜の教室: カメラのフラッシュ「パシャッ!」
 				_pop(e["target"], tr("パシャッ!"), Color("FFE58A"))
@@ -1887,6 +1902,29 @@ func _build_milk_splash() -> Node3D:
 			var ang := TAU * (float(k) + 0.25) / 4.0
 			d.position = Vector3(sin(ang) * 0.21, 0.24 - 0.05 * float(k % 2), cos(ang) * 0.21)
 			root.add_child(d)
+		# びしょぬれ: 頭と体から、しずくがぽたぽた落ち続ける
+		var drip := CPUParticles3D.new()
+		drip.amount = 14
+		drip.lifetime = 0.9
+		drip.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		drip.emission_sphere_radius = 0.24
+		drip.direction = Vector3(0, -1, 0)
+		drip.spread = 15.0
+		drip.gravity = Vector3(0, -6.0, 0)
+		drip.initial_velocity_min = 0.2
+		drip.initial_velocity_max = 0.6
+		var dm := SphereMesh.new()
+		dm.radius = 0.025
+		dm.height = 0.06
+		dm.radial_segments = 6
+		dm.rings = 3
+		var dmat := StandardMaterial3D.new()
+		dmat.albedo_color = Color(0.55, 0.8, 1.0)
+		dmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		dm.material = dmat
+		drip.mesh = dm
+		drip.position = Vector3(0, 0.1, 0)
+		root.add_child(drip)
 	else:
 		# 教室: 黒板消しのチョークの粉が、頭のまわりでもくもく(白と灰色の丸いかたまり)
 		for k in 6:
@@ -1977,7 +2015,16 @@ func _update_milk_ring(state: GameState, delta: float) -> void:
 
 
 ## 牛乳がかかっている人は、頭の上に牛乳が乗っている(全員から見える)
+## 水鉄砲でぬれている人が、次にぶるぶるする時刻(id -> _clock)
+var _shiver_next := {}
+
+
 func _update_milk(state: GameState, a: GameState.Actor, model: CharacterModel) -> void:
+	# 海辺: びしょぬれの間は、ときどきぶるぶる体をふるう(まわりから見ても分かる)
+	if _beach and model and state.is_milked(a) and state.phase != GameState.Phase.RESULT \
+			and _clock >= float(_shiver_next.get(a.id, 0.0)):
+		model.shiver(0.7)
+		_shiver_next[a.id] = _clock + randf_range(1.8, 2.8)
 	var milk: Node3D = _milk_nodes.get(a.id)
 	if milk == null:
 		return
@@ -2138,7 +2185,11 @@ func _carry_item(m: CharacterModel) -> void:
 	var body := m.global_transform.basis.orthonormalized()
 	# キャラの正面は -Z、背中は +Z
 	var back := body.z.normalized()
-	# 大きな物(机・教卓・砂の城・バナナボート)は、紐で背中にくくりつける
+	# 砂のお城は、前で両腕にかかえる(顔が少し隠れる)
+	if _beach and _item_index == 3:
+		_carry_castle(m, body, back)
+		return
+	# 大きな物(机・教卓・バナナボート)は、紐で背中にくくりつける
 	if _item_index >= 3 and not _night:
 		_carry_on_back(m, body, back)
 		return
@@ -2315,6 +2366,101 @@ func _update_night_item(state: GameState, delta: float, carried: bool) -> void:
 
 ## 海辺の落とし物の持ち方: 貝殻は手に、ビーチボールは胸の前に抱え、浮き輪は腰に通し、
 ## 砂の城とバナナボートは頭の上に担ぐ
+## 砂のお城(海辺の4ラウンド目)の大きさと、抱えている人が転んでいるか(update で状態からうつす)
+var _castle_size := 1.0
+var _castle_down := false
+var _sand_fx: CPUParticles3D
+var _sand_piles: Array = []
+
+
+## 砂のお城を前で抱える。大きさは state.castle_size(走ると砂がこぼれて小さくなる)。
+## 転んでいる間はお城を隠す(崩れて砂山になっている。起き上がったら、小さくなったお城を拾い直したように抱える)
+func _carry_castle(m: CharacterModel, body: Basis, back: Vector3) -> void:
+	var s := _castle_size
+	if _castle_down:
+		_handkerchief.visible = false
+		_set_sand_fx(Vector3.ZERO, false)
+		return
+	var chest := m.bone_world("DEF-spine.003").origin
+	var head := m.bone_world("DEF-head").origin
+	var h: float = BeachStage.ITEM_SIZES[3].y * s
+	var front := -back
+	var pos := Vector3(chest.x, 0.0, chest.z) + front * (BeachStage.ITEM_SIZES[3].x * 0.5 * s + 0.12)
+	# お城のてっぺんが頭より少し上(顔が少し隠れる)
+	pos.y = maxf(0.05, head.y + 0.28 - h)
+	_handkerchief.transform = Transform3D(body.scaled(Vector3.ONE * s), pos)
+	# 走ると、上のほうから砂がぽろぽろこぼれる
+	_set_sand_fx(pos + Vector3(0, h * 0.9, 0), true)
+
+
+func _set_sand_fx(at: Vector3, on: bool) -> void:
+	if _sand_fx == null or not is_instance_valid(_sand_fx):
+		if not on:
+			return
+		_sand_fx = CPUParticles3D.new()
+		_sand_fx.amount = 24
+		_sand_fx.lifetime = 0.8
+		_sand_fx.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		_sand_fx.emission_sphere_radius = 0.2
+		_sand_fx.direction = Vector3(0, 1, 0)
+		_sand_fx.spread = 70.0
+		_sand_fx.gravity = Vector3(0, -7.0, 0)
+		_sand_fx.initial_velocity_min = 0.3
+		_sand_fx.initial_velocity_max = 1.0
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(0.04, 0.04, 0.04)
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = BeachStage.COLOR_SAND_DARK
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mesh.material = mat
+		_sand_fx.mesh = mesh
+		add_child(_sand_fx)
+	_sand_fx.emitting = on
+	if on:
+		_sand_fx.global_position = at
+
+
+## お城がザザーッと崩れて砂山になる(転んだ場所。この試合の残りのあいだ残る)
+func _castle_crumble(pos: Vector3, size: float) -> void:
+	var pile := Node3D.new()
+	add_child(pile)
+	pile.position = Vector3(pos.x, 0.0, pos.z)
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.06
+	cone.bottom_radius = 0.5 * maxf(size, 0.5)
+	cone.height = 0.4 * maxf(size, 0.5)
+	cone.radial_segments = 12
+	var cm := Toon.mesh(cone, BeachStage.COLOR_SAND_DARK, 0.02)
+	cm.position.y = cone.height / 2.0
+	pile.add_child(cm)
+	pile.scale = Vector3(1.0, 0.2, 1.0)
+	pile.create_tween().tween_property(pile, "scale", Vector3.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_sand_piles.append(pile)
+	# 砂ぼこり
+	var burst := CPUParticles3D.new()
+	burst.one_shot = true
+	burst.explosiveness = 0.9
+	burst.amount = 40
+	burst.lifetime = 0.9
+	burst.direction = Vector3(0, 1, 0)
+	burst.spread = 80.0
+	burst.gravity = Vector3(0, -6.0, 0)
+	burst.initial_velocity_min = 1.0
+	burst.initial_velocity_max = 2.6
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.05, 0.05, 0.05)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = BeachStage.COLOR_SAND_DARK
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mesh.material = mat
+	burst.mesh = mesh
+	add_child(burst)
+	burst.position = pile.position + Vector3(0, 0.4, 0)
+	burst.emitting = true
+	get_tree().create_timer(1.5).timeout.connect(burst.queue_free)
+	AudioDirector.sfx("zazaa", -2.0)
+
+
 func _carry_beach_item(m: CharacterModel, body: Basis, back: Vector3) -> void:
 	match _item_index:
 		0:
@@ -3138,8 +3284,10 @@ func _update_seat_camera(state: GameState, delta: float) -> void:
 		# 追いかけっこで走っている: 走る人のすぐ後ろ・少し上から、走る先を見る(走る向きが画面の奥)
 		var ang := state.runner_angle(me)
 		var fwd := Vector3(cos(ang), 0.0, -sin(ang))
-		var want_r := Vector3(me.position.x, 0.0, me.position.z) - fwd * GameConfig.CHASE_CAM_DISTANCE \
-				+ Vector3(0, GameConfig.CHASE_CAM_HEIGHT, 0)
+		# 砂のお城を抱えて走るときは、カメラを少し寄せて、お城がよく見えるように
+		var near := 0.72 if _beach and _item_index == 3 and me.id == state.chaser_id else 1.0
+		var want_r := Vector3(me.position.x, 0.0, me.position.z) - fwd * GameConfig.CHASE_CAM_DISTANCE * near \
+				+ Vector3(0, GameConfig.CHASE_CAM_HEIGHT * lerpf(1.0, near, 0.6), 0)
 		var wr := 1.0 if delta == 0.0 else clampf(delta * 6.0, 0.0, 1.0)
 		if _seat_cam.position.distance_to(want_r) > 6.0:
 			wr = 1.0

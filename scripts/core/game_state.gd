@@ -154,6 +154,8 @@ var gust_left := 0.0
 var chime_on := false
 var shell_seat := -1
 var _event_angle := INF
+## 砂のお城の大きさ(1 = はじめ。抱えて走ると砂がこぼれて小さくなり、転ぶと崩れてもっと小さくなる)
+var castle_size := 1.0
 ## 夜の教室: 雷で明るい残りの秒数(0 なら暗いまま)
 var lightning_left: float = 0.0
 var blackout: bool = false
@@ -412,7 +414,15 @@ func item_name() -> String:
 
 
 func item_weight() -> float:
+	# 砂のお城は、小さくなるほど軽い
+	if is_castle_round():
+		return Items.weight_of(round_index) * lerpf(0.5, 1.0, castle_size)
 	return Items.weight_of(round_index)
+
+
+## 海辺の砂のお城のラウンドか
+func is_castle_round() -> bool:
+	return stage == "beach" and round_index == 3
 
 
 ## 配列を、この試合の乱数で並べかえる(同じ種なら同じ並び)
@@ -512,6 +522,7 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	# ほかのイベント(先生の見回り・突風・チャイム・カモメ)も、鬼が少し歩いたところで起きる
 	teacher_left = 0.0
 	gust_left = 0.0
+	castle_size = 1.0
 	chime_on = false
 	shell_seat = -1
 	_event_angle = INF
@@ -1288,6 +1299,7 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"gust_left": gust_left,
 		"chime_on": chime_on,
 		"shell_seat": shell_seat,
+		"castle_size": castle_size,
 		"stamp_words": stamp_words,
 		"stamp_langs": stamp_langs,
 		"stamp_picks": stamp_picks,
@@ -1366,6 +1378,7 @@ func apply_snapshot(s: Dictionary) -> void:
 	gust_left = s.get("gust_left", 0.0)
 	chime_on = s.get("chime_on", false)
 	shell_seat = s.get("shell_seat", -1)
+	castle_size = s.get("castle_size", 1.0)
 	stamp_words = s.get("stamp_words", {})
 	stamp_langs = s.get("stamp_langs", {})
 	stamp_picks = s.get("stamp_picks", {})
@@ -1663,7 +1676,13 @@ func _run(a: Actor, delta: float, is_oni: bool) -> void:
 	# 内側の近道は、少しだけ効く(LANE_SHORTCUT)。回る速さは「まん中の列に近づけた半径」で決める
 	var mid: float = GameConfig.LANE_RADII[1]
 	var eff_r := mid + (a.run_r - mid) * GameConfig.LANE_SHORTCUT
-	var step := GameConfig.CHASE_SPEED * delta / maxf(eff_r, 0.5)
+	var speed := GameConfig.CHASE_SPEED
+	var castle := not is_oni and a.id == chaser_id and is_castle_round()
+	if castle:
+		# 砂のお城を抱えて走る人は、お城が大きいほど少し遅い。走ると砂がこぼれて小さくなる
+		speed *= 1.0 - GameConfig.CASTLE_SLOW * castle_size
+		castle_size = maxf(GameConfig.CASTLE_MIN, castle_size - speed * delta * GameConfig.CASTLE_SHRINK_PER_M)
+	var step := speed * delta / maxf(eff_r, 0.5)
 	ang += step
 	if is_oni:
 		ang = minf(ang, oni_seat_angle)
@@ -1699,6 +1718,10 @@ func _check_obstacles(a: Actor) -> void:
 		a.slip_left = t
 		a.immune_left = t + GameConfig.HIT_IMMUNE_TIME
 		_chase_slips[a.id] = int(_chase_slips.get(a.id, 0)) + 1
+		if a.id == chaser_id and is_castle_round():
+			# 転んだら、お城がザザーッと崩れて砂山に(起き上がったら、小さくなったお城を拾い直して走る)
+			castle_size = maxf(GameConfig.CASTLE_MIN, castle_size * GameConfig.CASTLE_CRUMBLE_KEEP)
+			events.append({"type": "castle_crumble", "actor": a.id, "pos": a.position, "size": castle_size})
 		_stat_max(a.id, "max_slips", int(_chase_slips[a.id]))
 		if ob["kind"] == "banana":
 			obstacles.remove_at(i)

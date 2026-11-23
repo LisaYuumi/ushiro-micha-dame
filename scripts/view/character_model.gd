@@ -1073,6 +1073,14 @@ func set_kneel(v: bool) -> void:
 
 
 ## 毎フレームの動き。running: 走っている(大げさに揺れる)
+## ぶるぶると体をふるう(seconds 秒)
+var _shiver_left := 0.0
+
+
+func shiver(seconds: float) -> void:
+	_shiver_left = maxf(_shiver_left, seconds)
+
+
 func animate(delta: float, running: bool) -> void:
 	_time += delta
 	_update_blink(delta)
@@ -1104,6 +1112,12 @@ func animate(delta: float, running: bool) -> void:
 		_pivot.position.x = 0.0
 	else:
 		_pivot.position.x = 0.0
+	# ぶるぶる(水をかけられて、体をふるう。犬がぬれた体をふるうように左右に速く)
+	if _shiver_left > 0.0:
+		_shiver_left = maxf(_shiver_left - delta, 0.0)
+		var sk := clampf(_shiver_left / 0.3, 0.0, 1.0)
+		_pivot.rotation.z += sin(_time * 48.0) * 0.12 * sk
+		_pivot.position.x += sin(_time * 48.0 + 1.3) * 0.02 * sk
 	# 座っているときは、ゆっくり少し揺れる
 	if _pose == "sit" or _pose == "floor":
 		_pivot.rotation.z += sin(_time * 1.6 + float(get_instance_id() % 7)) * 0.025
@@ -1227,7 +1241,7 @@ func _apply_tuck(delta: float) -> void:
 
 ## 記念写真・称号発表のポーズ(腕の形と、手に持つ小道具)。"" でふつう
 ## cheer(両手を上げる)/wave(手を振る)/peace(ピース)/magnifier(虫めがね)/banana(バナナを持つ)/
-## chin(あごに手。ニヤリ)/shrug(手を広げる)/head(頭をかかえる)
+## chin(あごに手。ニヤリ)/shrug(手を広げる)/head(頭をかかえる)/hug(前で両腕にかかえる)
 const GESTURE_TIME := 0.25
 var _gesture := ""
 var _gesture_shown := ""
@@ -1284,6 +1298,10 @@ func _apply_gesture(delta: float) -> void:
 			dirs = [-up + rt * 0.6, rt * 0.7 + fw * 0.6 + up * 0.2, -up - rt * 0.6, -rt * 0.7 + fw * 0.6 + up * 0.2]
 		"head":
 			dirs = [up * 0.6 + rt * 0.8, up * 0.4 - rt * 0.9, up * 0.6 - rt * 0.8, up * 0.4 + rt * 0.9]
+		"hug":
+			# 大きな物を前で両腕にかかえる
+			dirs = [fw * 0.7 - up * 0.45 + rt * 0.35, fw * 0.8 - rt * 0.55 + up * 0.1,
+					fw * 0.7 - up * 0.45 - rt * 0.35, fw * 0.8 + rt * 0.55 + up * 0.1]
 	var bones := [uar, far, ual, fal]
 	for i in 4:
 		var d: Vector3 = dirs[i]

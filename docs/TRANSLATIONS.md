@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(549)
+## 一覧(550)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -356,6 +356,7 @@
 | みんながだまされる中、手下を %d回見抜いた | Saw through the minion while others were fooled: %d |
 | %s ・ %s | %s · %s |
 | 記念写真 | Group Photo |
+| びしょびしょ… | Soaking wet… |
 | カモメにだまされた人 | Fooled by a Seagull |
 | カモメの貝がらに振り向いて、お手つき | Looked back at a seagull's shell. Wrong! |
 | 落とし物だと思ったら、貝がらだった | Thought it was the item. It was a shell |
