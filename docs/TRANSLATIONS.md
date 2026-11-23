@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(530)
+## 一覧(534)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -356,6 +356,10 @@
 | みんながだまされる中、手下を %d回見抜いた | Saw through the minion while others were fooled: %d |
 | %s ・ %s | %s · %s |
 | 記念写真 | Group Photo |
+| 試合終了! | Match Over! |
+| そして…称号発表! | And now… the Awards! |
+| はい、チーズ! | Say cheese! |
+| スキップ ▶▶ | Skip ▶▶ |
 | 正直者がバカを見た賞 | Honesty Didn't Pay |
 | 名演技賞 | Best Actor |
 | 逆転の道連れ王 | Dragged Them Down |

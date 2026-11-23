@@ -311,7 +311,7 @@ func sync(state: GameState, delta: float) -> void:
 				# 振り向いた姿は全員に見える(頭→上半身の順に後ろを向く)
 				# (見逃しの人は体ごと振り向くので、頭はひねらない)
 				model.set_look(a.looking_back and not forced and cer.is_empty())
-				model.set_pose("idle" if not cer.is_empty() else _pose_of(state, a))
+				model.set_pose(("walk" if cer.get("walk", false) else "idle") if not cer.is_empty() else _pose_of(state, a))
 				# 転んで止まっている間は、前にばったり倒れている(お手つきの演出中は、後ろへズッコケる)
 				if not cer.is_empty():
 					model.set_kneel(bool(cer.get("kneel", false)))
@@ -2502,101 +2502,151 @@ func _update_vote_view(state: GameState, delta: float) -> void:
 	_top_cam.global_transform = _vote_from.interpolate_with(want, k)
 
 
-# --- 称号発表と記念写真(TitleReveal から。見た目だけ) ---
-## "focus": 称号の人にカメラが寄る(その人は立って、喜ぶ/ガーン)/"photo": 全員が黒板の前に横に並んで記念写真
+# --- 試合の終わりの演出(TitleReveal から。見た目だけ) ---
+## 同じ教室の中で、カメラが動いてつなぐ:
+##   ceremony_gather: 全員が立ち上がって表彰台のまわりへ歩いて集まる(1〜3位は台の前、ほかは台の左右)
+##   ceremony_step_up: その人が台に上がる / ceremony_view("podium" / "wide"): 表彰台を映す・少し引く
+##   ceremony_focus: 称号の人にカメラが寄る / ceremony_photo: 全員が横に並んで記念写真
 var _cer_mode := ""
-var _cer_id := -1
-var _cer_face := ""
-var _cer_kneel := false
+var _cer_cam := ""
+var _cer_focus_id := -1
 var _cer_t := 0.0
 var _cer_from := Transform3D.IDENTITY
-var _cer_photo := {}
+## 人の動き id -> {"from", "to", "t", "time", "hop"}(歩いて集まる・台に上がる)と、止まったときの位置
+var _cer_moves := {}
 var _cer_faces := {}
-var _cer_center := Vector3.ZERO
 var _cer_gestures := {}
-var _podium_box: Node3D
-## 1位の台の高さと、前に出る量(メートル)
-const PODIUM_HEIGHT := 0.32
-const PODIUM_FRONT := 0.4
+var _cer_center := Vector3.ZERO
 var _cer_dist := 4.0
-## 記念写真の列の場所(黒板の前、輪と教卓のあいだ)と、人の間隔
+var _cer_props: Node3D
+## 表彰台と記念写真の場所(黒板の前、輪と教卓のあいだ)
 const PHOTO_Z := -4.6
 const PHOTO_SPACING_MIN := 0.62
 const PHOTO_SPACING_MAX := 0.9
-## 称号の人に寄るカメラ: 顔の前の距離と、カメラが動く時間(秒)
+## 表彰台: 1位・2位・3位の台の高さと横の位置(メートル)。4位からは台の左右に立つ
+const PODIUM_HEIGHTS := [0.6, 0.42, 0.28]
+const PODIUM_XS := [0.0, -0.9, 0.9]
+const PODIUM_SIDE_X := 1.85
+const PODIUM_SIDE_SPACING := 0.62
+## 記念写真の1位の台
+const PHOTO_PODIUM_HEIGHT := 0.32
+const PHOTO_PODIUM_FRONT := 0.4
+## 歩いて集まる時間・台に上がる時間・カメラが動く時間(秒)
+const GATHER_TIME := 1.4
+const STEP_UP_TIME := 0.4
+const CAM_MOVE_TIME := 0.9
+## 称号の人に寄るカメラ: 顔の前の距離
 const FOCUS_DIST := 2.5
-const FOCUS_MOVE := 0.45
 
 
 func in_ceremony() -> bool:
 	return _cer_mode != ""
 
 
-## 称号の人にカメラを寄せる。face: 表情(CharacterModel の WIN など)。kneel: ガーンでひざから崩れる。
-## gesture: ポーズ(CharacterModel.set_gesture)
-func ceremony_focus(id: int, face: String, kneel: bool, gesture: String = "") -> void:
-	_cer_begin()
-	_cer_mode = "focus"
-	_cer_id = id
-	_cer_face = face
-	_cer_kneel = kneel
-	_cer_gestures = {id: gesture}
+## 全員が立ち上がって、表彰台のまわりへ歩いて集まる。ranked は順位の高い順
+func ceremony_gather(ranked: Array) -> void:
+	_cer_start()
+	_cer_mode = "podium"
+	_build_award_podium(3)
+	var targets := {}
+	var side := 0
+	for i in ranked.size():
+		var id := int(ranked[i])
+		if i < 3:
+			# 台の前の床(順番に台に上がる)
+			targets[id] = Vector3(PODIUM_XS[i], 0.0, PHOTO_Z + 0.75)
+		else:
+			var k := side
+			side += 1
+			var dir := -1.0 if k % 2 == 0 else 1.0
+			# (台より少しうしろ。台の前に入らないように)
+			targets[id] = Vector3(dir * (PODIUM_SIDE_X + float(k / 2) * PODIUM_SIDE_SPACING), 0.0, PHOTO_Z - 0.25)
+	_cer_move_all(targets, GATHER_TIME)
+	ceremony_view("podium")
+
+
+## その人が台に上がる(rank: 0 = 1位)
+func ceremony_step_up(id: int, rank: int) -> void:
+	if rank < 0 or rank >= PODIUM_HEIGHTS.size():
+		return
+	_cer_move(id, Vector3(PODIUM_XS[rank], PODIUM_HEIGHTS[rank], PHOTO_Z), STEP_UP_TIME, true)
+
+
+## カメラ: "podium"(表彰台)/"wide"(少し引いて全体)
+func ceremony_view(kind: String) -> void:
+	_cer_cam_to(kind)
+
+
+## 表情とポーズ(id -> CharacterModel の表情 / set_gesture の名前)。足していく
+func ceremony_set_face(id: int, face: String, gesture: String = "") -> void:
+	_cer_faces[id] = face
+	_cer_gestures[id] = gesture
+
+
+## 称号の人にカメラを寄せる(人はその場のまま)。face: 表情、gesture: ポーズ
+func ceremony_focus(id: int, face: String, kneel: bool = false, gesture: String = "") -> void:
+	if _cer_mode == "":
+		_cer_start()
+		_cer_mode = "podium"
+	_cer_focus_id = id
+	ceremony_set_face(id, face, gesture)
 	var m := _actor_nodes.get(id) as CharacterModel
 	if m and not kneel:
 		m.hop()
+	_cer_cam_to("focus")
 
 
 ## 記念写真: ranked は順位の高い順。1位はまん中の台の上、そのあと左右に交互に並べ、上位ほど少し前。
-## faces: id -> 表情、gestures: id -> ポーズ
-func ceremony_photo(ranked: Array, faces: Dictionary, gestures: Dictionary = {}) -> void:
-	_cer_begin()
+## 全員が歩いて並ぶ(instant = true ならすぐ並ぶ)。faces: id -> 表情、gestures: id -> ポーズ
+func ceremony_photo(ranked: Array, faces: Dictionary, gestures: Dictionary = {}, instant: bool = false) -> void:
+	if _cer_mode == "":
+		_cer_start()
 	_cer_mode = "photo"
 	_cer_faces = faces.duplicate()
 	_cer_gestures = gestures.duplicate()
-	_cer_photo.clear()
 	var n := ranked.size()
 	var sp := clampf(6.4 / maxf(n - 1, 1), PHOTO_SPACING_MIN, PHOTO_SPACING_MAX)
+	var targets := {}
 	for i in n:
 		# まん中から: 0, -1, +1, -2, +2 ...(席の番号 × 間隔)
 		var slot := 0 if i == 0 else (int((i + 1) / 2) * (-1 if i % 2 == 1 else 1))
 		var x := float(slot) * sp
-		var z := PHOTO_Z + (PODIUM_FRONT if i == 0 else (0.18 if i <= 2 else 0.0))
-		var y := PODIUM_HEIGHT if i == 0 else 0.0
-		_cer_photo[int(ranked[i])] = Vector3(x, y, z)
-	# 1位の台
-	if n > 0:
-		_build_podium_box(_cer_photo[int(ranked[0])])
-	# 全員(と頭の上のバッジ)が入る距離
+		var z := PHOTO_Z + (PHOTO_PODIUM_FRONT if i == 0 else (0.18 if i <= 2 else 0.0))
+		var y := PHOTO_PODIUM_HEIGHT if i == 0 else 0.0
+		targets[int(ranked[i])] = Vector3(x, y, z)
+	_build_award_podium(1, targets[int(ranked[0])] if n > 0 else Vector3.ZERO)
+	_cer_move_all(targets, 0.0 if instant else GATHER_TIME * 0.8)
+	# 全員(と頭の上のバッジ)が入る距離。並びのまん中をねらう(左右の数がちがうことがあるので)
 	var vp := get_viewport().get_visible_rect().size
 	var aspect := vp.x / maxf(vp.y, 1.0)
 	var vfov := deg_to_rad(42.0)
 	var hfov := 2.0 * atan(tan(vfov / 2.0) * aspect)
-	# (まん中から左右に交互に並べるので、左右の数がちがうことがある。並びのまん中をねらう)
 	var min_x := INF
 	var max_x := -INF
-	for id in _cer_photo:
-		min_x = minf(min_x, (_cer_photo[id] as Vector3).x)
-		max_x = maxf(max_x, (_cer_photo[id] as Vector3).x)
+	for id in targets:
+		min_x = minf(min_x, (targets[id] as Vector3).x)
+		max_x = maxf(max_x, (targets[id] as Vector3).x)
 	var width := (max_x - min_x) + 1.4
 	_cer_dist = maxf(3.4, width / 2.0 / tan(hfov / 2.0))
 	_cer_center = Vector3((min_x + max_x) / 2.0, 1.15, PHOTO_Z)
-	# 椅子は隠す(列の前に入らないように)
-	for c in _chairs:
-		if is_instance_valid(c):
-			c.visible = false
+	_cer_cam_to("photo")
+	if instant:
+		_cer_t = CAM_MOVE_TIME
 
 
-## 称号発表・記念写真をやめて、ふだんのカメラに戻す
+## 試合の終わりの演出をやめて、ふだんのカメラに戻す
 func ceremony_end() -> void:
 	if _cer_mode == "":
 		return
 	_cer_mode = ""
-	_cer_photo.clear()
+	_cer_cam = ""
+	_cer_moves.clear()
 	_cer_faces.clear()
 	_cer_gestures.clear()
-	if _podium_box and is_instance_valid(_podium_box):
-		_podium_box.queue_free()
-	_podium_box = null
+	_cer_focus_id = -1
+	if _cer_props and is_instance_valid(_cer_props):
+		_cer_props.queue_free()
+	_cer_props = null
 	for id in _actor_nodes:
 		var m := _actor_nodes[id] as CharacterModel
 		if m:
@@ -2608,82 +2658,127 @@ func ceremony_end() -> void:
 		_seat_cam.make_current()
 
 
-func _cer_begin() -> void:
+func _cer_start() -> void:
 	var cam := get_viewport().get_camera_3d()
-	_cer_from = cam.global_transform if cam else _top_cam.global_transform
-	_cer_t = 0.0
 	_top_cam.fov = 42.0
-	_top_cam.global_transform = _cer_from
+	_top_cam.global_transform = cam.global_transform if cam else _top_cam.global_transform
 	_top_cam.make_current()
+	# 椅子は隠す(集まる人や台の前に入らないように)
+	for c in _chairs:
+		if is_instance_valid(c):
+			c.visible = false
 
 
-## この人の、称号発表・記念写真での置き方({} ならふだんどおり)
+## カメラを、今の位置から次のねらいへ、なめらかに動かす
+func _cer_cam_to(kind: String) -> void:
+	_cer_from = _top_cam.global_transform
+	_cer_cam = kind
+	_cer_t = 0.0
+
+
+## みんなを targets(id -> 位置)へ歩かせる(time 秒。0 ならすぐ)
+func _cer_move_all(targets: Dictionary, time: float) -> void:
+	for id in targets:
+		_cer_move(int(id), targets[id], time, false)
+
+
+func _cer_move(id: int, to: Vector3, time: float, hop: bool) -> void:
+	var node: Node3D = _actor_nodes.get(id)
+	var from := node.position if node else to
+	_cer_moves[id] = {"from": from, "to": to, "t": 0.0 if time > 0.0 else 1.0, "time": maxf(time, 0.001), "hop": hop}
+	var m := node as CharacterModel
+	if hop and m:
+		m.hop()
+
+
+## この人の、試合の終わりの演出での置き方({} ならふだんどおり)
 func _cer_override(id: int) -> Dictionary:
-	if _cer_mode == "photo" and _cer_photo.has(id):
-		return {"pos": _cer_photo[id], "yaw": PI}
-	if _cer_mode == "focus" and id == _cer_id:
-		return {"kneel": _cer_kneel and _cer_t > 0.35}
-	return {}
+	if _cer_mode == "" or not _cer_moves.has(id):
+		return {}
+	var mv: Dictionary = _cer_moves[id]
+	var k := clampf(float(mv["t"]), 0.0, 1.0)
+	var e := k * k * (3.0 - 2.0 * k)
+	var from: Vector3 = mv["from"]
+	var to: Vector3 = mv["to"]
+	var pos := from.lerp(to, e)
+	if bool(mv["hop"]):
+		pos.y += sin(k * PI) * 0.25
+	var walking := k < 1.0 and not bool(mv["hop"]) and from.distance_to(to) > 0.3
+	var yaw := PI
+	if walking:
+		var d := to - from
+		yaw = atan2(-d.x, -d.z)
+	return {"pos": pos, "yaw": yaw, "walk": walking}
 
 
-## 1位の台(白い箱に金の「1」)
-func _build_podium_box(at: Vector3) -> void:
-	if _podium_box and is_instance_valid(_podium_box):
-		_podium_box.queue_free()
-	_podium_box = Node3D.new()
-	add_child(_podium_box)
-	_podium_box.position = Vector3(at.x, 0.0, at.z)
-	var bm := BoxMesh.new()
-	bm.size = Vector3(0.8, PODIUM_HEIGHT, 0.7)
-	var box := Toon.mesh(bm, Color("FFF6E4"), 0.02)
-	box.position = Vector3(0, PODIUM_HEIGHT / 2.0, 0)
-	_podium_box.add_child(box)
-	var lab := Label3D.new()
-	lab.text = "1"
-	lab.font = HudFont.get_font()
-	lab.font_size = 96
-	lab.pixel_size = 0.0032
-	lab.modulate = Color("E0A820")
-	lab.outline_size = 14
-	lab.outline_modulate = GameConfig.COLOR_INK
-	lab.position = Vector3(0, PODIUM_HEIGHT / 2.0, 0.36)
-	_podium_box.add_child(lab)
+## 台(白い箱に金・銀・銅の数字)。count = 3 なら表彰台、1 なら記念写真の1位の台(at の場所)
+func _build_award_podium(count: int, at: Vector3 = Vector3.ZERO) -> void:
+	if _cer_props and is_instance_valid(_cer_props):
+		_cer_props.queue_free()
+	_cer_props = Node3D.new()
+	add_child(_cer_props)
+	var colors := [Color("E0A820"), Color("A8B4C0"), Color("C0794A")]
+	for i in count:
+		var h: float = PHOTO_PODIUM_HEIGHT if count == 1 else PODIUM_HEIGHTS[i]
+		var pos := Vector3(at.x, 0.0, at.z) if count == 1 else Vector3(PODIUM_XS[i], 0.0, PHOTO_Z)
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.84, h, 0.7)
+		var box := Toon.mesh(bm, Color("FFF6E4"), 0.02)
+		box.position = pos + Vector3(0, h / 2.0, 0)
+		_cer_props.add_child(box)
+		var lab := Label3D.new()
+		lab.text = str(i + 1)
+		lab.font = HudFont.get_font()
+		lab.font_size = 96
+		lab.pixel_size = 0.0032
+		lab.modulate = colors[i]
+		lab.outline_size = 14
+		lab.outline_modulate = GameConfig.COLOR_INK
+		lab.position = pos + Vector3(0, h / 2.0, 0.36)
+		_cer_props.add_child(lab)
 
 
 func _ceremony_face(id: int) -> String:
-	if _cer_mode == "photo":
-		return str(_cer_faces.get(id, CharacterModel.NORMAL))
-	if _cer_mode == "focus" and id == _cer_id:
-		return _cer_face
-	return ""
+	if _cer_mode == "":
+		return ""
+	return str(_cer_faces.get(id, ""))
 
 
 func _update_ceremony(delta: float) -> void:
 	if _cer_mode == "":
 		return
 	_cer_t += delta
+	for id in _cer_moves:
+		var mv: Dictionary = _cer_moves[id]
+		mv["t"] = float(mv["t"]) + delta / float(mv["time"])
 	if get_viewport().get_camera_3d() != _top_cam:
 		_top_cam.make_current()
-	var want := Transform3D.IDENTITY
-	if _cer_mode == "focus":
-		var node: Node3D = _actor_nodes.get(_cer_id)
-		if node == null:
-			return
-		var m := node as CharacterModel
-		var head := node.global_position + Vector3(0, 1.3, 0)
-		if m:
-			head = m.bone_world("DEF-head").origin
-		var facing := -node.global_transform.basis.z
-		facing.y = 0.0
-		facing = facing.normalized() if facing.length() > 0.01 else Vector3.BACK
-		var right := (-facing).cross(Vector3.UP).normalized()
-		var pos := head + facing * FOCUS_DIST + Vector3(0, 0.05, 0)
-		# 人は画面の左寄り(右半分に称号のカード)。上半身が入るように、少し下をねらう
-		want = Transform3D.IDENTITY.translated(pos).looking_at(head + right * 0.85 + Vector3(0, -0.35, 0), Vector3.UP)
-	else:
-		var pos := _cer_center + Vector3(0, 0.35, _cer_dist)
-		want = Transform3D.IDENTITY.translated(pos).looking_at(_cer_center + Vector3(0, 0.05, 0), Vector3.UP)
-	var k := clampf(_cer_t / FOCUS_MOVE, 0.0, 1.0)
+	var want := _top_cam.global_transform
+	match _cer_cam:
+		"podium":
+			var c := Vector3(0, 1.0, PHOTO_Z)
+			want = Transform3D.IDENTITY.translated(c + Vector3(0, 0.8, 6.0)).looking_at(c + Vector3(0, 0.15, 0), Vector3.UP)
+		"wide":
+			var c := Vector3(0, 1.0, PHOTO_Z)
+			want = Transform3D.IDENTITY.translated(c + Vector3(0, 1.1, 6.6)).looking_at(c, Vector3.UP)
+		"focus":
+			var node: Node3D = _actor_nodes.get(_cer_focus_id)
+			if node:
+				var m := node as CharacterModel
+				var head := node.global_position + Vector3(0, 1.3, 0)
+				if m:
+					head = m.bone_world("DEF-head").origin
+				var facing := -node.global_transform.basis.z
+				facing.y = 0.0
+				facing = facing.normalized() if facing.length() > 0.01 else Vector3.BACK
+				var right := (-facing).cross(Vector3.UP).normalized()
+				var pos := head + facing * FOCUS_DIST + Vector3(0, 0.05, 0)
+				# 人は画面の左寄り(右半分に称号のカード)。上半身が入るように、少し下をねらう
+				want = Transform3D.IDENTITY.translated(pos).looking_at(head + right * 0.85 + Vector3(0, -0.35, 0), Vector3.UP)
+		"photo":
+			var pos := _cer_center + Vector3(0, 0.35, _cer_dist)
+			want = Transform3D.IDENTITY.translated(pos).looking_at(_cer_center + Vector3(0, 0.05, 0), Vector3.UP)
+	var k := clampf(_cer_t / CAM_MOVE_TIME, 0.0, 1.0)
 	k = k * k * (3.0 - 2.0 * k)
 	_top_cam.global_transform = _cer_from.interpolate_with(want, k)
 

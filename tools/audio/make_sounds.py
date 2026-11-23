@@ -477,6 +477,55 @@ def bgm_lobby():
     return norm(_render_song(bpm, bars, parts), 0.8)
 
 
+def bgm_ending():
+    # 試合の終わり(試合終了 → 表彰台 → 称号発表): わくわくする行進曲(ト長調、112bpm、8小節)。小太鼓がだんだん大きく
+    bpm, bars = 112, 8
+    prog = [(55, False), (60, False), (62, False), (55, False), (64, True), (60, False), (62, False), (62, False)]
+    melody = [67, 0, 71, 74, 72, 71, 69, 0, 67, 69, 71, 72, 74, 0, 79, 0,
+              76, 74, 72, 71, 69, 71, 72, 0, 74, 72, 71, 69, 67, 0, 74, 0]
+    parts = []
+    for b, (root, minor) in enumerate(prog):
+        for k in [0, 2]:
+            parts.append((b * 4 + k, 0.9, lambda d, r=root: pluck(midi(r - 24), d, 0.15, 0.4), 0.6))
+        for k in [1, 3]:
+            for n in _chord_notes(root, minor):
+                parts.append((b * 4 + k, 0.5, lambda d, n=n: pluck(midi(n), d, 0.1, 0.5), 0.14))
+        parts.append((b * 4 + 0, 0.5, _kick, 0.5))
+        parts.append((b * 4 + 2, 0.5, _kick, 0.45))
+        for k in range(8):
+            parts.append((b * 4 + k * 0.5, 0.3, _snare, 0.08 + 0.025 * b))
+    for i, n in enumerate(melody):
+        if n:
+            parts.append((i * 1.0, 0.9, lambda d, n=n: mix(_brass(midi(n), d) * 0.5, bell(midi(n), d, 0.3, 0.4) * 0.2), 0.32))
+    return norm(_render_song(bpm, bars, parts), 0.8)
+
+
+def bgm_photo():
+    # 記念写真: 明るく、はずむ曲(ヘ長調、140bpm、8小節)
+    bpm, bars = 140, 8
+    prog = [(53, False), (58, False), (60, False), (53, False)] * 2
+    melody = [77, 81, 84, 81, 79, 77, 79, 81, 82, 81, 79, 77, 76, 79, 77, 0,
+              77, 81, 84, 86, 84, 81, 79, 81, 82, 84, 81, 79, 77, 76, 77, 0]
+    parts = []
+    for b, (root, minor) in enumerate(prog):
+        for k in range(8):
+            parts.append((b * 4 + k * 0.5, 0.45, lambda d, r=root: pluck(midi(r - 24), d, 0.12, 0.4), 0.55))
+        for k in [0.5, 1.5, 2.5, 3.5]:
+            for n in _chord_notes(root, minor):
+                parts.append((b * 4 + k, 0.4, lambda d, n=n: pluck(midi(n), d, 0.08, 0.5), 0.12))
+        parts.append((b * 4 + 0, 0.5, _kick, 0.5))
+        parts.append((b * 4 + 2, 0.5, _kick, 0.5))
+        parts.append((b * 4 + 1, 0.5, _snare, 0.25))
+        parts.append((b * 4 + 3, 0.5, _snare, 0.25))
+        for k in range(8):
+            parts.append((b * 4 + k * 0.5, 0.25, _hat, 0.08))
+    for i, n in enumerate(melody):
+        if n:
+            parts.append((i * 1.0, 0.9, lambda d, n=n: mix(bell(midi(n), d, 0.4, 0.8) * 0.45,
+                                                           tone(midi(n), d, "tri") * env_ar(d, 0.01, 0.2) * 0.3), 0.3))
+    return norm(_render_song(bpm, bars, parts), 0.8)
+
+
 def _bgm_round(level):
     # ラウンド中: 控えめで、少し緊張感のある曲(イ短調)。ラウンドが進むほど楽器が増える(level 1〜3)。
     # 鬼との距離では変えない(BGM で鬼の場所がわからないように)
@@ -1173,6 +1222,7 @@ SOUNDS = {
     "flash_pasha": flash_pasha,
     "vote_don": vote_don, "drumroll": drumroll, "jajaan": jajaan, "vote_pon": vote_pon,
     "title_pon": title_pon,
+    "bgm_ending": bgm_ending, "bgm_photo": bgm_photo,
 }
 
 

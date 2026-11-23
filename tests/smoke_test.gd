@@ -5,7 +5,7 @@ extends SceneTree
 ## 2. 本番のシーンを数秒動かして、スクリプトのエラーが出ないか確かめる
 
 const STEP := 1.0 / 60.0
-const MAIN_SCENE_FRAMES := 200
+const MAIN_SCENE_FRAMES := 210
 var _chase_lasted := false
 var _chase_time := 0.0
 var _vote_outside := ""
@@ -130,6 +130,8 @@ func _process(delta: float) -> bool:
 	_check_photo_mode()
 	if _frames == 175:
 		_check_tutorial()
+	if _frames == 185:
+		_check_ending()
 	if (_frames < MAIN_SCENE_FRAMES or not _fall_done) and _frames < 5000:
 		return false
 	if _failures == 0:
@@ -276,6 +278,49 @@ func _check_tutorial() -> void:
 	var vp: Vector2 = ask.get_viewport_rect().size
 	_check(card.size.y < vp.y * 0.8 and card.position.y >= 0.0, "チュートリアルを見るか聞くカードが画面に収まる(高さ %d)" % card.size.y)
 	_main.lobby._close_tutorial_ask()
+	_main._on_solo()
+
+
+## 試合の終わりの演出: 試合終了 → 表彰台 → 称号発表 → 称号 → 記念写真 が、早送りでつながる。スキップで記念写真へ
+func _check_ending() -> void:
+	var s: GameState = _main.state
+	s.phase = GameState.Phase.RESULT
+	s.round_index = GameConfig.ROUNDS_PER_MATCH - 1
+	s.voting_open = false
+	s.vote_wait = 0.0
+	s.reveal_left = 0.0
+	s._stat(1, "early_otetsuki")
+	s._stat(2, "banana", 3)
+	_main._on_restart_pressed()
+	var tr: TitleReveal = _main._title_reveal
+	_check(tr != null and tr.scene() == "end", "試合の終わり: 「試合終了!」から始まる(順位のカードは出さない)")
+	_check(_main.view.in_ceremony(), "試合の終わり: 同じ教室の中でカメラが動く")
+	var scenes := [tr.scene()]
+	for i in 12:
+		tr.advance()
+		if scenes[scenes.size() - 1] != tr.scene():
+			scenes.append(tr.scene())
+		if tr.is_done() and tr._flashed:
+			break
+	_check(scenes.slice(0, 4) == ["end", "podium", "intro", "award"] and scenes[scenes.size() - 1] == "photo",
+			"試合の終わり: 試合終了 → 表彰台 → 称号発表 → 称号 → 記念写真(%s)" % str(scenes))
+	_check(tr._photo_ui != null and tr._next_button != null, "試合の終わり: 記念写真に「新しい試合へ」")
+	# 称号がない試合は、表彰台からそのまま記念写真へ。ルーム主のスキップで記念写真へ
+	_main._close_titles()
+	s.titles = []
+	_main._match_shown_serial = -1
+	_main._show_match_result()
+	tr = _main._title_reveal
+	tr.advance()
+	tr.advance()
+	_check(tr.scene() == "photo", "試合の終わり: 称号がなければ、表彰台から記念写真へ")
+	_main._close_titles()
+	_main._match_shown_serial = -1
+	_main._show_match_result()
+	_main._title_reveal.jump_to_photo()
+	_check(_main._title_reveal.scene() == "photo", "試合の終わり: スキップで記念写真へ")
+	_main._close_titles()
+	_check(not _main.view.in_ceremony(), "試合の終わり: 終わると、ふだんのカメラに戻る")
 	_main._on_solo()
 
 

@@ -516,7 +516,10 @@ func _look_tame() -> void:
 func _update_music(delta: float) -> void:
 	_jingle_hold = maxf(_jingle_hold - delta, 0.0)
 	var want := "bgm_lobby"
-	if mode != Mode.LOBBY and _studio == null:
+	if _title_reveal and is_instance_valid(_title_reveal) and _studio == null:
+		# 試合の終わり: 行進曲で盛り上げて、記念写真で明るい曲(途切れさせない)
+		want = "bgm_photo" if _title_reveal.is_done() else "bgm_ending"
+	elif mode != Mode.LOBBY and _studio == null:
 		match state.phase:
 			GameState.Phase.WALKING, GameState.Phase.DROPPED:
 				# 教室は小学校っぽい曲(リコーダー・木琴・鍵盤ハーモニカ)、海辺はハワイアン、夜の教室はちょっと怖い曲
@@ -845,16 +848,10 @@ func _show_match_result() -> void:
 		row["mark"] = "★" if rank == 1 else tr("%d位") % rank
 		row["title_id"] = ids[i]
 		rows.append(row)
-	var me_first: bool = state.scores.get(state.local_player_id, 0) == state.scores[ids[0]]
-	var title := tr("ゆうしょう!") if me_first else tr("試合おわり!")
-	if me_first:
-		hud.confetti()
-	var sub := tr("あなたがいちばん!") if me_first else tr("いちばんは %s!") % top_name
 	hud.hide_message()
-	# 点数の発表(ボタンなし)→ 少ししたら称号の発表へ
-	hud.show_result_card(title, sub, [], GameConfig.COLOR_ACCENT, rows, "")
+	# 試合の終わりの演出(試合終了 → 表彰台 → 称号発表 → 記念写真。TitleReveal)を、そのまま始める
 	_title_rows = rows
-	_titles_wait = GameConfig.TITLE_DELAY
+	_open_titles()
 
 
 var _title_rows: Array = []
@@ -875,6 +872,10 @@ func _open_titles() -> void:
 	else:
 		_title_reveal.setup(view, state, _title_rows, state.titles, tr("新しい試合へ ▶"), "")
 	_title_reveal.next_pressed.connect(hud._press_next)
+	# ルーム主の「スキップ」: 全員が記念写真へ(お知らせで参加者にも送る)
+	_title_reveal.skip_pressed.connect(func() -> void:
+		if mode != Mode.GUEST:
+			state.events.append({"type": "ending_skip"}))
 	# 称号発表と記念写真の間は、ゲームのボタンや札を隠す(スクショがきれいに撮れるように)
 	_set_ui_tree_visible(hud, false)
 	_set_ui_tree_visible(touch, false)
@@ -1245,9 +1246,11 @@ func _show_event(e: Dictionary) -> void:
 				_play_result_sounds(e)
 				_show_result(e)
 		"match_over":
-			audio.play("match_end", -2.0)
-			_jingle_hold = 3.0
 			_show_match_result()
+		"ending_skip":
+			# ルーム主が試合の終わりの演出をスキップした: 記念写真へ
+			if _title_reveal and is_instance_valid(_title_reveal):
+				_title_reveal.jump_to_photo()
 		"round_start":
 			# ラウンド開始: 学校のチャイムのような音
 			# (海辺はスチールドラムのジングル)

@@ -12,7 +12,8 @@ static var instance: AudioDirector
 const BGM_DB := {"bgm_lobby": -10.0, "bgm_round_1": -15.0, "bgm_round_2": -15.0, "bgm_round_3": -14.0, "bgm_chase": -11.0,
 		"bgm_school_1": -15.0, "bgm_school_2": -15.0, "bgm_school_3": -14.0,
 		"bgm_beach_1": -15.0, "bgm_beach_2": -15.0, "bgm_beach_3": -14.0,
-		"bgm_night_1": -15.0, "bgm_night_2": -15.0, "bgm_night_3": -14.0}
+		"bgm_night_1": -15.0, "bgm_night_2": -15.0, "bgm_night_3": -14.0,
+		"bgm_ending": -11.0, "bgm_photo": -10.0}
 const FADE_TIME := 0.8
 
 var _bgm: Array[AudioStreamPlayer] = []
