@@ -194,8 +194,8 @@ var lie_counts: Dictionary = {}
 var scripted := false
 ## 試合中の出来事の回数(称号のため。ホストだけが数える)。id -> {出来事: 回数}。出来事の名前は Titles.LIST
 var match_stats: Dictionary = {}
-## 試合の最後の称号(試合が終わったら決まる)。id -> {"title", "reason", "n"}(Titles.decide)
-var titles: Dictionary = {}
+## 試合の最後の称号(試合が終わったら決まる)。発表する順の配列(最大3つ。空もある)。Titles.decide
+var titles: Array = []
 ## 人ごとの、自分で決めたスタンプの言葉(id -> {種類: 言葉})。ない人・ない種類は初期の言葉
 var stamp_words: Dictionary = {}
 ## 人ごとの言語(id -> "ja" / "en")。自作の言葉は、受け取った人と言語が同じときだけ出す
@@ -301,7 +301,7 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 	for a in actors:
 		scores[a.id] = 0
 	match_stats = {}
-	titles = {}
+	titles = []
 	round_index = 0
 	match_over = false
 	last_minion_id = -1
@@ -1253,7 +1253,7 @@ func apply_snapshot(s: Dictionary) -> void:
 	stage = Items.clean_stage(str(s.get("stage", "classroom")))
 	scores = s["scores"]
 	match_over = s["match_over"]
-	titles = s.get("titles", {})
+	titles = s.get("titles", [])
 	obstacles = s.get("obstacles", [])
 	milk_left = s.get("milk_left", 0)
 	blackout = s.get("blackout", false)
@@ -1653,6 +1653,10 @@ func close_vote() -> void:
 			correct.append(voter)
 			_stat(voter, "vote_correct")
 			scores[voter] = scores.get(voter, 0) + GameConfig.SCORE_VOTE_CORRECT
+	# 名探偵: 当てた人が投票した人の半分以下のとき、当てた人だけ(みんながだまされる中で見抜いた)
+	if not correct.is_empty() and correct.size() * 2 <= votes.size():
+		for v in correct:
+			_stat(v, "vote_sharp")
 	var fooled := []
 	var busted := []
 	for m in minion_ids:

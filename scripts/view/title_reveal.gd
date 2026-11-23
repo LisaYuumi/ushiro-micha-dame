@@ -1,264 +1,471 @@
 class_name TitleReveal
 extends CanvasLayer
-## 試合の最後の称号発表(点数の発表のあと)。みんなの画面で同じ流れ(称号はホストが決めて match_over で届く)。
-## 順位の低い人から1人ずつ: 名前が光る → ドラムロール → 称号がポンと出る。全部で10〜15秒くらい(人数で1人の長さを変える)。
-## 最後は全員の順位・点数・称号が並んだ画面のまま止まる(スクショ・撮影用)。画面をタップすると、最後まで飛ばす。
-## ルーム主は「新しい試合へ」、ほかの人には待っている案内。見た目だけ(状態は変えない)
+## 試合の最後の称号発表と記念写真(点数の発表のあと)。みんなの画面で同じ流れ(称号はホストが決めて match_over で届く)。
+## 1. 「称号発表!」の大きな文字(称号がだれにもなければ、とばして 3 へ)
+## 2. 称号を1つずつ(最大3つ。最後がオチ): カメラがその人に寄り(まわりは暗く、その人にスポットライト)、
+##    その人が立って喜ぶ(いい称号)/ガーン(笑える称号)。画面の右半分に、くるっと回って大きな称号のカードが出て、
+##    下に理由が1行(数字入り)。いい称号は金色とファンファーレ、笑える称号は紫とガーンの音。1つ STEP 秒
+## 3. 記念写真: 全員が黒板の前に横に並び(1位がまん中)、称号のある人だけ頭の上にバッジ、足もとに名前と点数。
+##    ルーム主には「新しい試合へ」、ほかの人には待っている案内。この画面のまま止まる(スクショ・撮影用)
+## 画面をタップすると、記念写真まで飛ばす。見た目だけ(状態は変えない)
 
 signal next_pressed
 
-## 1人の長さ(秒)= 全体の長さ / 人数 を、この範囲に収める
-const STEP_TOTAL := 11.5
-const STEP_MIN := 1.1
-const STEP_MAX := 1.8
-## 見出しが出てから、1人目までの間(秒)
-const INTRO := 0.9
-## 名前が光ってから称号が出るまで(ドラムロールの長さ)
-const ROLL := 0.6
+const BANNER_TIME := 1.3
+const STEP := 3.0
+const CARD_AT := 0.45
+const REASON_AT := 0.8
+const COLOR_GOLD := Color("F6C945")
+const COLOR_GOLD_DARK := Color("B07A10")
+const COLOR_FUNNY := Color("6E56A8")
 const COLOR_TITLE := Color("7A3FB8")
 
-var _rows: Array = []   # [{"panel", "pill", "title", "reason", "id"}](出す順)
+const DIM_SHADER := """
+shader_type canvas_item;
+uniform float dim = 0.0;
+uniform vec2 size = vec2(1.0);
+uniform vec3 hole = vec3(-1000.0, -1000.0, 1.0);
+void fragment() {
+	vec2 px = UV * size;
+	float d = distance(px, hole.xy);
+	float lit = 1.0 - smoothstep(hole.z * 0.55, hole.z, d);
+	COLOR = vec4(0.02, 0.02, 0.06, dim * (1.0 - lit));
+}
+"""
+
+var _view: WorldView
+var _state: GameState
+var _rows: Array = []
+var _awards: Array = []
+var _next_label := ""
+var _footer_text := ""
 var _t := 0.0
-var _step := 0.0
-var _shown := 0
-var _lit := -1
-var _done := false
-var _footer: Control
-var _panel: PanelContainer
+var _shown := -1
+var _photo := false
+
+var _dim: ColorRect
+var _mat: ShaderMaterial
+var _fx: Control
+var _banner: Label
+var _card: PanelContainer
+var _card_style: StyleBoxFlat
+var _card_name: Label
+var _card_title: Label
+var _reason: Label
+var _photo_ui: Control
+var _badges := {}
+var _names := {}
 var _next_button: Button
+## 3D の画面(カメラ・キャラの並び)を動かすか(撮影モードの4K保存用の写しは false)
+var controls_view := true
 
 
-## スマホの指: 「新しい試合へ」を押す(発表が終わってから)
-func _input(event: InputEvent) -> void:
-	if _done and visible:
-		UiStyle.tap_buttons(event, [_next_button])
-
-
-## rows: 順位の高い順に {"id", "name", "color", "score", "mark", "me"}。titles: id -> Titles.decide の値。
-## next_label が "" ならボタンを出さず footer の案内だけ。instant = true なら演出なしで最後の画面
-func setup(rows: Array, titles: Dictionary, next_label: String, footer: String, instant: bool = false) -> void:
+## rows: 順位の高い順に {"title_id", "name", "color", "score", "mark", "me"}。awards: Titles.decide の配列(発表する順)。
+## next_label が "" ならボタンを出さず footer の案内だけ。instant = true なら演出なしで記念写真から
+func setup(view: WorldView, state: GameState, rows: Array, awards: Array, next_label: String, footer: String,
+		instant: bool = false) -> void:
 	layer = 3
-	var dim := ColorRect.new()
-	dim.color = Color(0.05, 0.04, 0.12, 0.55)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# (⚙メニューなど下のボタンは押せるように、タップは止めない。飛ばすのは _unhandled_input)
-	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(dim)
+	_view = view
+	_state = state
+	_rows = rows
+	_awards = awards
+	_next_label = next_label
+	_footer_text = footer
+	_dim = ColorRect.new()
+	_dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = DIM_SHADER
+	_mat = ShaderMaterial.new()
+	_mat.shader = sh
+	_dim.material = _mat
+	add_child(_dim)
+	_fx = Control.new()
+	_fx.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fx.draw.connect(_draw_fx)
+	add_child(_fx)
 
-	_panel = PanelContainer.new()
-	_panel.mouse_filter = Control.MOUSE_FILTER_PASS
-	var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 28, 5)
-	st.shadow_offset = Vector2(6, 8)
-	st.set_content_margin_all(24)
-	_panel.add_theme_stylebox_override("panel", st)
-	add_child(_panel)
+	_banner = _big_label(tr("称号発表!"), 96, COLOR_GOLD)
+	_banner.visible = false
+	add_child(_banner)
+
+	_card = PanelContainer.new()
+	_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_card_style = UiStyle.box(COLOR_GOLD, true, 30, 6)
+	_card_style.shadow_offset = Vector2(8, 10)
+	_card_style.set_content_margin_all(26)
+	_card.add_theme_stylebox_override("panel", _card_style)
+	_card.visible = false
+	add_child(_card)
 	var col := VBoxContainer.new()
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_theme_constant_override("separation", 12)
-	_panel.add_child(col)
-	var head := UiStyle.label(tr("称号発表!"), 46, COLOR_TITLE)
-	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	head.add_theme_color_override("font_outline_color", GameConfig.COLOR_INK)
-	head.add_theme_constant_override("outline_size", 8)
-	col.add_child(head)
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_theme_constant_override("separation", 10)
+	_card.add_child(col)
+	_card_name = UiStyle.label("", 30, GameConfig.COLOR_INK)
+	_card_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(_card_name)
+	_card_title = _big_label("", 72, Color.WHITE)
+	col.add_child(_card_title)
+	_reason = _big_label("", 34, Color.WHITE)
+	_reason.visible = false
+	add_child(_reason)
 
-	var grid := GridContainer.new()
-	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	grid.columns = 1 if rows.size() <= 5 else 2
-	grid.add_theme_constant_override("h_separation", 16)
-	grid.add_theme_constant_override("v_separation", 8)
-	col.add_child(grid)
-	# 表は順位の順(2列なら左の列が上位)。発表は順位の低い人から
-	var per_col := ceili(rows.size() / float(grid.columns))
+	if instant or _awards.is_empty():
+		_start_photo(not instant)
+	else:
+		_banner.visible = true
+		_place_center(_banner, 0.42)
+		_pop(_banner, 0.4)
+		AudioDirector.sfx("vote_don", -3.0)
+
+
+func _big_label(text: String, size: int, color: Color) -> Label:
+	var l := UiStyle.label(text, size, color)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_color_override("font_outline_color", GameConfig.COLOR_INK)
+	l.add_theme_constant_override("outline_size", maxi(6, size / 8))
+	return l
+
+
+func is_done() -> bool:
+	return _photo
+
+
+func _process(delta: float) -> void:
+	_t += delta
+	if not _photo:
+		var k := int(floor((_t - BANNER_TIME) / STEP))
+		if _t >= BANNER_TIME and _banner.visible:
+			_banner.visible = false
+		if _t >= BANNER_TIME and k >= _awards.size():
+			_start_photo(true)
+		elif _t >= BANNER_TIME and k != _shown:
+			_shown = k
+			_focus(k)
+		elif _shown >= 0:
+			var into := _t - BANNER_TIME - float(_shown) * STEP
+			if into >= CARD_AT and not _card.visible:
+				_show_card(_awards[_shown])
+			if into >= REASON_AT and not _reason.visible:
+				_reason.visible = true
+				_reason.modulate.a = 0.0
+				_reason.create_tween().tween_property(_reason, "modulate:a", 1.0, 0.2)
+	_update_dim()
+	if _photo:
+		_update_photo_ui()
+	_fx.queue_redraw()
+
+
+## その人にカメラを寄せる(まわりを暗く)
+func _focus(i: int) -> void:
+	var a: Dictionary = _awards[i]
+	_card.visible = false
+	_reason.visible = false
+	var good := str(a.get("tone", "good")) == "good"
+	var face := _face_of(a)
+	if controls_view:
+		# (ガーンでも、顔が見えるように立ったまま)
+		_view.ceremony_focus(int(a["id"]), face, false)
+	AudioDirector.sfx("drumroll", -9.0)
+
+
+func _face_of(a: Dictionary) -> String:
+	var f := str(a.get("face", ""))
+	match f:
+		"shock":
+			return CharacterModel.SHOCK
+		"awkward":
+			return CharacterModel.AWKWARD
+		"smirk":
+			return CharacterModel.SMIRK
+	return CharacterModel.WIN
+
+
+## 大きな称号のカード(くるっと回って表が出る)と、下に理由
+func _show_card(a: Dictionary) -> void:
+	var good := str(a.get("tone", "good")) == "good"
+	var actor := _state.get_actor(int(a["id"]))
+	_card_name.text = _name_of(int(a["id"]))
+	UiStyle.set_font_color(_card_name, GameConfig.COLOR_INK if good else Color.WHITE)
+	_card_title.text = Titles.title_text(a)
+	_card_style.bg_color = COLOR_GOLD if good else COLOR_FUNNY
+	_card_style.border_color = COLOR_GOLD_DARK if good else GameConfig.COLOR_INK
+	if actor:
+		_card_style.border_color = actor.color.darkened(0.25) if good else _card_style.border_color
+	_reason.text = Titles.reason_text(a)
+	var vp := get_viewport().get_visible_rect().size
+	var w := vp.x * 0.44
+	_card.custom_minimum_size = Vector2(w, vp.y * 0.36)
+	UiStyle.fit(_card_title, 72, w - 60.0, 30)
+	UiStyle.fit(_reason, 34, vp.x * 0.5, 18)
+	_card.reset_size()
+	_card.size = _card.get_combined_minimum_size()
+	_card.position = Vector2(vp.x * 0.53, vp.y * 0.18)
+	_card.pivot_offset = _card.size / 2.0
+	_card.visible = true
+	_card.scale = Vector2(0.0, 1.0)
+	_card.rotation = 0.0 if good else deg_to_rad(-3.0)
+	var tw := _card.create_tween()
+	tw.tween_property(_card, "scale", Vector2(1.08, 1.08), 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_card, "scale", Vector2.ONE, 0.1)
+	_reason.reset_size()
+	_reason.size = _reason.get_combined_minimum_size()
+	_reason.position = Vector2(_card.position.x + (_card.size.x - _reason.size.x) / 2.0, _card.position.y + _card.size.y + 14.0)
+	_reason.visible = false
+	if good:
+		AudioDirector.sfx("jajaan", -3.0)
+	else:
+		AudioDirector.sfx("gaan", -3.0)
+	AudioDirector.sfx("title_pon", -6.0)
+
+
+## 記念写真
+func _start_photo(flash: bool) -> void:
+	if _photo:
+		return
+	_photo = true
+	_banner.visible = false
+	_card.visible = false
+	_reason.visible = false
+	var by := Titles.by_actor(_awards)
+	# 1位がまん中、そのあと左右に交互
 	var order := []
-	for r in per_col:
-		for c in grid.columns:
-			var i := c * per_col + r
-			order.append(i if i < rows.size() else -1)
-	var built := {}
-	for i in order:
-		if i < 0:
-			grid.add_child(Control.new())
-			continue
-		var row: Dictionary = rows[i]
-		var b := _build_row(row, titles.get(row["title_id"], titles.get(int(row["title_id"]), {})))
-		grid.add_child(b["panel"])
-		built[i] = b
-	for i in range(rows.size() - 1, -1, -1):
-		_rows.append(built[i])
-
+	for i in _rows.size():
+		var id := int(_rows[i]["title_id"])
+		if i % 2 == 1:
+			order.push_front(id)
+		else:
+			order.push_back(id)
+	var faces := {}
+	for r in _rows:
+		var id := int(r["title_id"])
+		faces[id] = _face_of(by[id]) if by.has(id) else CharacterModel.WIN
+	if controls_view:
+		_view.ceremony_photo(order, faces)
+	_photo_ui = Control.new()
+	_photo_ui.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_photo_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_photo_ui)
+	# 上: 「記念写真」とゲームの名前・舞台
+	var head := PanelContainer.new()
+	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var hst := UiStyle.box(GameConfig.COLOR_PAPER, true, 22, 4)
+	hst.content_margin_left = 28
+	hst.content_margin_right = 28
+	hst.content_margin_top = 8
+	hst.content_margin_bottom = 8
+	head.add_theme_stylebox_override("panel", hst)
+	var hl := UiStyle.label("%s ・ %s" % [tr("うしろ見ちゃダメ!"), tr(Items.STAGE_NAMES.get(_state.stage, "教室"))], 22, GameConfig.COLOR_INK)
+	var hcol := VBoxContainer.new()
+	hcol.add_theme_constant_override("separation", -6)
+	hcol.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ht := UiStyle.label(tr("記念写真"), 40, COLOR_TITLE)
+	ht.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hcol.add_child(ht)
+	hcol.add_child(hl)
+	head.add_child(hcol)
+	_photo_ui.add_child(head)
+	head.reset_size()
+	head.size = head.get_combined_minimum_size()
+	var vp := get_viewport().get_visible_rect().size
+	head.position = Vector2((vp.x - head.size.x) / 2.0, 14.0)
+	# 頭の上の称号バッジ(称号のある人だけ)と、足もとの名前と点数
+	for r in _rows:
+		var id := int(r["title_id"])
+		if by.has(id):
+			var a: Dictionary = by[id]
+			var good := str(a.get("tone", "good")) == "good"
+			var b := PanelContainer.new()
+			b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var bst := UiStyle.box(COLOR_GOLD if good else COLOR_FUNNY, true, 16, 3)
+			bst.content_margin_left = 12
+			bst.content_margin_right = 12
+			bst.content_margin_top = 2
+			bst.content_margin_bottom = 2
+			b.add_theme_stylebox_override("panel", bst)
+			var bl := UiStyle.label(Titles.title_text(a), 26, GameConfig.COLOR_INK if good else Color.WHITE)
+			b.add_child(bl)
+			_photo_ui.add_child(b)
+			_badges[id] = b
+		var np := PanelContainer.new()
+		np.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var nst := UiStyle.box(Color("FFF6D8") if r.get("me", false) else Color.WHITE, false, 12, 3)
+		nst.border_color = r["color"]
+		nst.content_margin_left = 8
+		nst.content_margin_right = 8
+		nst.content_margin_top = 0
+		nst.content_margin_bottom = 0
+		np.add_theme_stylebox_override("panel", nst)
+		var nv := VBoxContainer.new()
+		nv.add_theme_constant_override("separation", -6)
+		nv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var mark := str(r.get("mark", ""))
+		var nl := UiStyle.label(str(r["name"]), 20, GameConfig.COLOR_INK)
+		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nl.clip_text = true
+		nl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		nl.custom_minimum_size = Vector2(76, 0)
+		var sl := UiStyle.label(("%s %s" % [mark, tr("%d点") % int(r["score"])]).strip_edges(), 18,
+				GameConfig.COLOR_ACCENT.darkened(0.2) if mark == "★" else GameConfig.COLOR_INK.lightened(0.3))
+		sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nv.add_child(nl)
+		nv.add_child(sl)
+		np.add_child(nv)
+		_photo_ui.add_child(np)
+		_names[id] = np
+	# 下: 「新しい試合へ」/待っている案内
 	var foot := VBoxContainer.new()
 	foot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(foot)
-	if footer != "":
-		var f := UiStyle.label(footer, 20, GameConfig.COLOR_INK.lightened(0.35))
-		f.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_photo_ui.add_child(foot)
+	if _footer_text != "":
+		var f := _big_label(_footer_text, 22, Color.WHITE)
 		foot.add_child(f)
-	if next_label != "":
+	if _next_label != "":
 		var nb := Button.new()
-		nb.text = next_label
-		nb.custom_minimum_size = Vector2(0, 58)
+		nb.text = _next_label
+		nb.custom_minimum_size = Vector2(380, 62)
+		nb.focus_mode = Control.FOCUS_NONE
 		UiStyle.button(nb, true, 26)
 		nb.pressed.connect(func() -> void:
 			AudioDirector.click()
 			next_pressed.emit())
 		foot.add_child(nb)
 		_next_button = nb
-	_footer = foot
-	_footer.modulate.a = 0.0
-
-	_step = clampf(STEP_TOTAL / maxf(rows.size(), 1), STEP_MIN, STEP_MAX)
-	_panel.reset_size()
-	UiStyle.center(_panel)
-	if instant:
-		_finish()
-	else:
-		AudioDirector.sfx("jajaan", -6.0)
-		_panel.pivot_offset = _panel.size / 2.0
-		_panel.scale = Vector2(0.7, 0.7)
-		var tw := create_tween()
-		tw.tween_property(_panel, "scale", Vector2.ONE, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-
-## 発表が全部終わったか
-func is_done() -> bool:
-	return _done
+	foot.reset_size()
+	foot.size = foot.get_combined_minimum_size()
+	foot.position = Vector2((vp.x - foot.size.x) / 2.0, vp.y - foot.size.y - 16.0)
+	if flash:
+		# パシャッ(白く光って消える)
+		AudioDirector.sfx("flash_pasha", -4.0)
+		var w := ColorRect.new()
+		w.color = Color.WHITE
+		w.set_anchors_preset(Control.PRESET_FULL_RECT)
+		w.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(w)
+		var tw := w.create_tween()
+		tw.tween_property(w, "color:a", 0.0, 0.45)
+		tw.tween_callback(w.queue_free)
 
 
-func _build_row(r: Dictionary, t: Dictionary) -> Dictionary:
-	var panel := PanelContainer.new()
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var st := UiStyle.box(Color("FFF6D8") if r.get("me", false) else Color.WHITE, false, 14, 3)
-	st.border_color = GameConfig.COLOR_ACCENT if r.get("me", false) else GameConfig.COLOR_INK
-	st.content_margin_left = 10
-	st.content_margin_right = 10
-	st.content_margin_top = 6
-	st.content_margin_bottom = 6
-	panel.add_theme_stylebox_override("panel", st)
-	panel.custom_minimum_size = Vector2(540, 64)
-	var h := HBoxContainer.new()
-	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	h.add_theme_constant_override("separation", 8)
-	panel.add_child(h)
-	var mk := UiStyle.label(str(r.get("mark", "")), 20, GameConfig.COLOR_ACCENT.darkened(0.2))
-	mk.custom_minimum_size = Vector2(44, 0)
-	mk.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	h.add_child(mk)
-	var dot := UiStyle.dot(r["color"], 18)
-	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	h.add_child(dot)
-	var name_col := VBoxContainer.new()
-	name_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	name_col.alignment = BoxContainer.ALIGNMENT_CENTER
-	name_col.add_theme_constant_override("separation", -4)
-	h.add_child(name_col)
-	var n := UiStyle.label(str(r["name"]), 20, GameConfig.COLOR_INK)
-	n.clip_text = true
-	n.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	n.custom_minimum_size = Vector2(150, 0)
-	name_col.add_child(n)
-	name_col.add_child(UiStyle.label(tr("%d点") % int(r["score"]), 18, GameConfig.COLOR_INK.lightened(0.3)))
-	# 称号(はじめは「?」の札。発表で中身がポンと出る)
-	var tcol := VBoxContainer.new()
-	tcol.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tcol.alignment = BoxContainer.ALIGNMENT_CENTER
-	tcol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tcol.add_theme_constant_override("separation", 0)
-	h.add_child(tcol)
-	var pill := PanelContainer.new()
-	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pill.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	var pst := UiStyle.box(Color("D9D3E6"), false, 14, 3)
-	pst.content_margin_left = 14
-	pst.content_margin_right = 14
-	pst.content_margin_top = 2
-	pst.content_margin_bottom = 2
-	pill.add_theme_stylebox_override("panel", pst)
-	tcol.add_child(pill)
-	var title_text := Titles.title_text(t) if not t.is_empty() else ""
-	var tl := UiStyle.label("?", 24, Color.WHITE)
-	tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tl.add_theme_color_override("font_outline_color", GameConfig.COLOR_INK)
-	tl.add_theme_constant_override("outline_size", 6)
-	pill.add_child(tl)
-	UiStyle.fit(tl, 24, 280.0, 14)
-	var reason := UiStyle.label(Titles.reason_text(t) if not t.is_empty() else "", 15, GameConfig.COLOR_INK.lightened(0.25))
-	reason.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	reason.modulate.a = 0.0
-	UiStyle.fit(reason, 15, 300.0, 11)
-	tcol.add_child(reason)
-	return {"panel": panel, "style": st, "pill": pill, "pill_style": pst, "label": tl,
-			"title": title_text, "reason": reason}
-
-
-func _process(delta: float) -> void:
-	if _done:
+func _update_photo_ui() -> void:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
 		return
-	_t += delta
-	var k := int(floor((_t - INTRO) / _step))
-	var into := _t - INTRO - float(k) * _step
-	if _t >= INTRO and k < _rows.size() and k != _lit:
-		_lit = k
-		_light(k)
-	if _shown < _rows.size() and _t >= INTRO + float(_shown) * _step + ROLL:
-		_reveal(_shown, true)
-		_shown += 1
-		if _shown >= _rows.size():
-			_finish()
-	elif _lit >= 0 and into < ROLL and _lit == _shown:
-		# ドラムロールの間、名前の札を少しゆらす
-		var p: Control = _rows[_lit]["panel"]
-		p.rotation = sin(_t * 40.0) * 0.012
+	var vp := get_viewport().get_visible_rect().size
+	for id in _names:
+		var np: Control = _names[id]
+		var feet := _view.actor_point(id, -0.02)
+		if cam.is_position_behind(feet):
+			continue
+		var p := cam.unproject_position(feet)
+		np.reset_size()
+		np.size = np.get_combined_minimum_size()
+		np.position = Vector2(clampf(p.x - np.size.x / 2.0, 4.0, vp.x - np.size.x - 4.0), minf(p.y + 4.0, vp.y - np.size.y - 90.0))
+	# 頭の上のバッジ: となりのバッジと重なったら、上にずらす
+	var placed: Array[Rect2] = []
+	var list := _badges.keys()
+	list.sort_custom(func(x, y): return _view.actor_point(x, 0.0).x < _view.actor_point(y, 0.0).x)
+	for id in list:
+		var b: Control = _badges[id]
+		var top := _view.actor_point(id, 1.95)
+		if cam.is_position_behind(top):
+			continue
+		var p := cam.unproject_position(top)
+		b.reset_size()
+		b.size = b.get_combined_minimum_size()
+		var r := Rect2(Vector2(clampf(p.x - b.size.x / 2.0, 4.0, vp.x - b.size.x - 4.0), maxf(p.y - b.size.y, 96.0)), b.size)
+		for q in placed:
+			if q.grow(2.0).intersects(r):
+				r.position.y = q.position.y - r.size.y - 4.0
+		placed.append(r)
+		b.position = r.position
 
 
-## この人の番: 札を明るくして、ドラムロール
-func _light(i: int) -> void:
-	var b: Dictionary = _rows[i]
-	var st: StyleBoxFlat = b["style"]
-	st.border_color = COLOR_TITLE
-	st.set_border_width_all(5)
-	AudioDirector.sfx("drumroll", -8.0)
+## まわりを暗く: 称号の人にスポットライト
+func _update_dim() -> void:
+	var vp := get_viewport().get_visible_rect().size
+	_mat.set_shader_parameter("size", vp)
+	var dim := 0.0
+	var hole := Vector3(-1000, -1000, 1)
+	if not _photo and _shown >= 0 and _shown < _awards.size():
+		dim = 0.6 * clampf((_t - BANNER_TIME - float(_shown) * STEP) / 0.3, 0.0, 1.0)
+		var cam := get_viewport().get_camera_3d()
+		var p3 := _view.actor_point(int(_awards[_shown]["id"]), 1.0)
+		if cam and not cam.is_position_behind(p3):
+			var p := cam.unproject_position(p3)
+			hole = Vector3(p.x, p.y, vp.y * 0.42)
+	elif not _photo:
+		dim = 0.35
+	_mat.set_shader_parameter("dim", dim)
+	_mat.set_shader_parameter("hole", hole)
 
 
-func _reveal(i: int, sound: bool) -> void:
-	var b: Dictionary = _rows[i]
-	var p: Control = b["panel"]
-	p.rotation = 0.0
-	var st: StyleBoxFlat = b["style"]
-	st.set_border_width_all(3)
-	st.border_color = GameConfig.COLOR_INK
-	var lbl: Label = b["label"]
-	lbl.text = b["title"]
-	UiStyle.fit(lbl, 24, 280.0, 14)
-	var pst: StyleBoxFlat = b["pill_style"]
-	pst.bg_color = COLOR_TITLE
-	(b["reason"] as Control).modulate.a = 1.0
-	if sound:
-		AudioDirector.sfx("title_pon", -4.0)
-		var pill: Control = b["pill"]
-		pill.pivot_offset = pill.size / 2.0
-		pill.scale = Vector2(0.3, 0.3)
-		var tw := pill.create_tween()
-		tw.tween_property(pill, "scale", Vector2(1.15, 1.15), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tw.tween_property(pill, "scale", Vector2.ONE, 0.08)
+## カードのまわりの飾り: いい称号は金色の星がきらきら、笑える称号は青い縦線(ガーン)
+func _draw_fx() -> void:
+	if _photo or not _card.visible or _shown < 0 or _shown >= _awards.size():
+		return
+	var good := str(_awards[_shown].get("tone", "good")) == "good"
+	var r := Rect2(_card.position, _card.size * _card.scale)
+	var tt := Time.get_ticks_msec() / 1000.0
+	if good:
+		for i in 10:
+			var a := TAU * float(i) / 10.0 + tt * 0.6
+			# (下の理由の文字にかからないように、カードの上と横だけ)
+			if sin(a) > 0.3:
+				continue
+			var c := r.get_center() + Vector2(cos(a) * r.size.x * 0.6, sin(a) * r.size.y * 0.75)
+			var s := 9.0 + 6.0 * sin(tt * 5.0 + float(i))
+			var pts := PackedVector2Array([c + Vector2(0, -s * 2), c + Vector2(s * 0.5, -s * 0.5), c + Vector2(s * 2, 0),
+					c + Vector2(s * 0.5, s * 0.5), c + Vector2(0, s * 2), c + Vector2(-s * 0.5, s * 0.5),
+					c + Vector2(-s * 2, 0), c + Vector2(-s * 0.5, -s * 0.5)])
+			_fx.draw_colored_polygon(pts, Color(1.0, 0.92, 0.45))
+	else:
+		for i in 6:
+			var x := r.position.x + 30.0 + float(i) * 22.0
+			var len := 70.0 - float(i) * 9.0
+			_fx.draw_line(Vector2(x, r.position.y - 12.0), Vector2(x, r.position.y - 12.0 - len), Color("6EA8F0"), 5.0, true)
 
 
-## 全部出した(または飛ばした): 案内とボタンを出す
-func _finish() -> void:
-	for i in range(_shown, _rows.size()):
-		_reveal(i, false)
-	_shown = _rows.size()
-	_done = true
-	if _footer:
-		_footer.modulate.a = 1.0
+func _name_of(id: int) -> String:
+	for r in _rows:
+		if int(r["title_id"]) == id:
+			return str(r["name"])
+	return ""
 
 
+func _place_center(c: Control, y_ratio: float) -> void:
+	var vp := get_viewport().get_visible_rect().size
+	c.reset_size()
+	c.size = c.get_combined_minimum_size()
+	c.position = Vector2((vp.x - c.size.x) / 2.0, vp.y * y_ratio - c.size.y / 2.0)
+	c.pivot_offset = c.size / 2.0
+
+
+func _pop(c: Control, from: float) -> void:
+	c.scale = Vector2(from, from)
+	var tw := c.create_tween()
+	tw.tween_property(c, "scale", Vector2(1.1, 1.1), 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(c, "scale", Vector2.ONE, 0.1)
+
+
+func _exit_tree() -> void:
+	if controls_view and _view and is_instance_valid(_view):
+		_view.ceremony_end()
+
+
+## スマホの指: 「新しい試合へ」を押す(記念写真のとき)
+func _input(event: InputEvent) -> void:
+	if _photo and visible:
+		UiStyle.tap_buttons(event, [_next_button])
+
+
+## 画面をタップしたら、記念写真まで飛ばす
 func _unhandled_input(ev: InputEvent) -> void:
-	if visible:
-		_on_tap(ev)
-
-
-func _on_tap(ev: InputEvent) -> void:
+	if not visible or _photo:
+		return
 	var tap: bool = (ev is InputEventMouseButton and ev.pressed) or (ev is InputEventScreenTouch and ev.pressed)
-	if tap and not _done:
-		_finish()
+	if tap:
+		_start_photo(true)

@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(452)
+## 一覧(435)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -353,6 +353,10 @@
 | オンラインで遊ぼう | Let's play online |
 | ロビーへ ▶ | To the lobby ▶ |
 | 称号発表! | Awards! |
+| みんながだまされる中、手下を %d回見抜いた | Saw through the minion while others were fooled: %d |
+| 鬼で %d回 逃げ切った | Got away as the oni: %d |
+| %s ・ %s | %s · %s |
+| 記念写真 | Group Photo |
 | 道連れ名人 | Taking You With Me |
 | お手つきのあと %d人を道連れ | Dragged down after going out: %d |
 | ウソつき大賞 | Grand Liar Award |
@@ -367,8 +371,6 @@
 | 暗やみでお手つき %d回 | Wrong looks in the dark: %d |
 | カミナリの目撃者 | Lightning Witness |
 | カミナリの光で %d回見つけた | Spotted in a lightning flash: %d |
-| ガイコツのお友だち | Skeleton's Buddy |
-| ガイコツをかかえて %d回走った | Runs with the skeleton: %d |
 | お手つき王 | King of Wrong Looks |
 | お手つき %d回 | Wrong looks: %d |
 | 粉まみれ賞 | Chalk Dust Award |
@@ -378,30 +380,11 @@
 | まぶしかった賞 | Dazzled Award |
 | フラッシュを %d回くらった | Flash hits taken: %d |
 | 逃げ足No.1 | Fastest Feet |
-| %d回 逃げ切った | Getaways: %d |
 | 名探偵 | Great Detective |
-| 手下を %d回当てた | Minions caught: %d |
 | 振り向き名人 | Eagle Eye |
 | 振り向いて %d回見つけた | Found by looking back: %d |
-| 信じられる人 | Most Trustworthy |
-| 本当の言葉を %d回送った | True messages: %d |
-| おしゃべりさん | Chatterbox |
-| 言葉を %d回送った | Messages sent: %d |
-| 無口な人 | The Silent Type |
-| 言葉は %d回だけ | Messages sent: only %d |
-| 言葉を送らなかった | Sent no messages |
-| マイペースで賞 | Own Pace Award |
-| 平和の使者 | Peacekeeper |
-| 事件にまきこまれなかった | Stayed out of trouble |
-| 縁の下の力持ち | Unsung Hero |
-| そっと輪を支えた | Quietly held the circle together |
-| 安定感No.1 | Steady as a Rock |
-| ずっと落ち着いていた | Kept calm the whole time |
 | タッチの達人 | Touch Master |
 | 鬼に %d回タッチした | Tagged the oni: %d |
-| 鬼の常連 | Oni Regular |
-| 鬼を %d回やった | Rounds as the oni: %d |
-| のんびり楽しんだ | Just enjoyed the ride |
 | チーン… | Ding… |
 | 音がガタガタ割れるときは「なめらか」を試してね | If the sound crackles, try "Smooth" |
 | 音の鳴らし方: %s ▶ | Sound mode: %s ▶ |

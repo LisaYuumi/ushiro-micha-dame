@@ -129,6 +129,11 @@ func _selected() -> GameState.Actor:
 func _process(delta: float) -> void:
 	if _view == null or not is_instance_valid(_view):
 		return
+	if _titles_node and is_instance_valid(_titles_node):
+		# 称号発表・記念写真: キャラの並びとカメラは、ゲームと同じ動き(WorldView)にまかせる
+		_view.sync(_state, delta)
+		_view.apply_night_light(_state)
+		return
 	for a in _state.actors:
 		var m := _model(a.id)
 		if m == null:
@@ -350,8 +355,14 @@ func _save_shot() -> void:
 		# 称号の画面も入れる(2D は今の画面の大きさで作って、4K に引きのばす)
 		sv.size_2d_override = Vector2i(get_viewport().get_visible_rect().size)
 		sv.size_2d_override_stretch = true
-		sv.add_child(_new_titles(true))
+		sv.add_child(_new_titles(true, false))
 	c.global_transform = _cam.global_transform
+	if _titles_node and is_instance_valid(_titles_node):
+		# 称号発表・記念写真のときは、そのときのカメラ(WorldView の称号用のカメラ)で撮る
+		var live := get_viewport().get_camera_3d()
+		if live:
+			c.fov = live.fov
+			c.global_transform = live.global_transform
 	c.current = true
 	await RenderingServer.frame_post_draw
 	await RenderingServer.frame_post_draw
@@ -547,6 +558,9 @@ func _show_titles(animate: bool) -> void:
 	if _titles_node and is_instance_valid(_titles_node):
 		_titles_node.queue_free()
 	_titles_node = null
+	if _view and is_instance_valid(_view):
+		_view.ceremony_end()
+	_cam.make_current()
 	if _titles_mode == "なし" or _state == null:
 		return
 	if _titles_data.is_empty():
@@ -556,10 +570,11 @@ func _show_titles(animate: bool) -> void:
 	move_child(_titles_node, 0)
 
 
-func _new_titles(instant: bool) -> TitleReveal:
+func _new_titles(instant: bool, controls := true) -> TitleReveal:
 	var t := TitleReveal.new()
+	t.controls_view = controls
 	t.ready.connect(func() -> void:
-		t.setup(_titles_data["rows"], _titles_data["titles"], "", "", instant), CONNECT_ONE_SHOT)
+		t.setup(_view, _state, _titles_data["rows"], _titles_data["titles"], "", "", instant), CONNECT_ONE_SHOT)
 	return t
 
 

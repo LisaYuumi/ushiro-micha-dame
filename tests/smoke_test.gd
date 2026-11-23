@@ -338,40 +338,40 @@ func _test_drop_happens_for_every_seed() -> void:
 	_check(seats_hit.size() == GameConfig.SEAT_COUNT, "プレイヤーもボットも全員が落とされることがある")
 
 
-## 称号: 出来事の回数から決める。1人1つ、多い人、当てはまらない人は予備の称号、出来事を数える
+## 称号: 本当に目立った人だけ、最大3つ。2位とはっきり差があるときだけ。最後がオチ。だれもいなければ空
 func _test_titles() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 5
 	var stats := {
 		0: {"otetsuki": 3, "found": 1},
 		1: {"otetsuki": 1, "dragged": 1},
-		2: {"found": 2, "stamps_sent": 5},
+		2: {"found": 3, "stamps_sent": 5},
 		3: {},
-		4: {"banana": 2, "otetsuki": 2},
+		4: {"banana": 3, "otetsuki": 1},
+		5: {"missed": 2},
 	}
-	var t := Titles.decide(stats, [0, 1, 2, 3, 4], "classroom", rng)
-	_check(t[1]["title"] == "道連れ名人", "称号: 珍しい「道連れ名人」が先に決まる")
-	_check(t[4]["title"] == "バナナの被害者", "称号: バナナで転んだ人は「バナナの被害者」")
-	_check(t[0]["title"] == "お手つき王", "称号: お手つきが一番多い人は「お手つき王」")
-	_check(t[2]["title"] == "振り向き名人", "称号: 見つけた回数が多い人は「振り向き名人」(%s)" % t[2]["title"])
-	_check(t[3]["title"] == "無口な人", "称号: 言葉を送らなかった人は「無口な人」(%s)" % t[3]["title"])
-	_check(Titles.reason_text(t[0]) == "お手つき 3回", "称号: 理由の文に回数が入る")
-	var t2 := Titles.decide({}, [0, 1, 2], "beach", rng)
-	var fallback := {}
-	for id in t2:
-		if Titles.is_fallback(t2[id]["title"]):
-			fallback[t2[id]["title"]] = true
-	_check(t2.size() == 3 and fallback.size() == 2, "称号: 何もない人には予備の称号(重ならない。無口な人は1人だけ)")
-	var t3 := Titles.decide({0: {"tool_hit": 1}}, [0], "beach", rng)
-	_check(t3[0]["title"] == "びしょぬれ賞", "称号: 海辺で水鉄砲をくらった人は「びしょぬれ賞」")
-	# 同点はランダム(何回か決めると、どちらにもなる)
-	var winners := {}
-	for k in 30:
-		var t4 := Titles.decide({0: {"otetsuki": 2}, 1: {"otetsuki": 2}}, [0, 1], "classroom", rng)
-		for id in t4:
-			if t4[id]["title"] == "お手つき王":
-				winners[id] = true
-	_check(winners.size() == 2, "称号: 同点のときはランダムで1人")
+	var t := Titles.decide(stats, [0, 1, 2, 3, 4, 5], "classroom", rng)
+	_check(t.size() == Titles.MAX_AWARDS, "称号: 最大3つ(%d)" % t.size())
+	_check(t.size() > 0 and t[t.size() - 1]["title"] == "気づかな賞", "称号: 最後はいちばん面白い称号(オチ)")
+	var ids := {}
+	for a in t:
+		ids[a["id"]] = true
+	_check(ids.size() == t.size(), "称号: 1人1つ")
+	_check(Titles.decide({}, [0, 1, 2], "beach", rng).is_empty(), "称号: だれも当てはまらなければ、称号なし")
+	_check(Titles.decide({0: {"found": 2}}, [0, 1], "classroom", rng).is_empty(), "称号: 振り向き名人は3回以上見つけたときだけ")
+	var tie := Titles.decide({0: {"otetsuki": 3}, 1: {"otetsuki": 3}}, [0, 1], "classroom", rng)
+	_check(tie.is_empty(), "称号: 一番が2人いる(差がない)ときは出さない")
+	var close := Titles.decide({0: {"otetsuki": 4}, 1: {"otetsuki": 3}}, [0, 1], "classroom", rng)
+	_check(close.is_empty(), "称号: 2位との差が小さいときは出さない")
+	var t3 := Titles.decide({0: {"tool_hit": 2}}, [0], "beach", rng)
+	_check(t3.size() == 1 and t3[0]["title"] == "びしょぬれ賞", "称号: 海辺で水鉄砲を2回くらった人は「びしょぬれ賞」")
+	_check(Titles.reason_text({"reason": "お手つき %d回", "n": 3}) == "お手つき 3回", "称号: 理由の文に回数が入る")
+	for title in ["マイペースで賞", "無口な人"]:
+		var found := false
+		for row in Titles.LIST:
+			if row[0] == title:
+				found = true
+		_check(not found, "称号: 「%s」はない" % title)
 	# 出来事を数える
 	var s := GameState.new()
 	s.start_round(1)
@@ -1186,22 +1186,14 @@ func _test_match_scores_and_end() -> void:
 	_check(s.match_over, "最後のラウンドのあとは試合終了")
 	var over_ev := s.take_events()
 	_check(_has(over_ev, "match_over"), "試合終了のお知らせが出る")
-	# 称号: 全員に1つずつ。お知らせと状態(参加者に送る分)にも入る
-	_check(s.titles.size() == s.actors.size(), "試合の最後に、全員に称号がつく(%d人)" % s.titles.size())
-	var seen_titles := {}
-	var dup := false
-	for id in s.titles:
-		var tt: String = s.titles[id]["title"]
-		if not Titles.is_fallback(tt) and seen_titles.has(tt):
-			dup = true
-		seen_titles[tt] = true
-	_check(not dup, "同じ称号は2人につかない(マイペースで賞のほか)")
+	# 称号: 最大3つ。お知らせと状態(参加者に送る分)にも入る
+	_check(s.titles.size() <= Titles.MAX_AWARDS, "試合の最後の称号は最大3つ(%d)" % s.titles.size())
 	for e in over_ev:
 		if e["type"] == "match_over":
-			_check((e.get("titles", {}) as Dictionary).size() == s.actors.size(), "試合終了のお知らせに称号が入る")
+			_check((e.get("titles", []) as Array).size() == s.titles.size(), "試合終了のお知らせに称号が入る")
 	var guest := GameState.new()
 	guest.apply_snapshot(s.snapshot())
-	_check(guest.titles.size() == s.actors.size(), "参加者にも同じ称号が届く")
+	_check(guest.titles.size() == s.titles.size(), "参加者にも同じ称号が届く")
 	_check(not s.match_stats.is_empty(), "試合中の出来事が数えられている")
 	_check(not s.next_round(), "試合終了のあとは次のラウンドに進めない")
 	var sum := 0

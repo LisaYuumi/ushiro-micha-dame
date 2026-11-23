@@ -479,7 +479,7 @@ func _physics_process(delta: float) -> void:
 		# 牛乳がかかっている間は名札も見えない(鬼の名札で場所がわからないように)。吹き出しは出したまま
 		# (夜の教室のフラッシュは、まぶしい間は言葉の吹き出しも見えない)
 		# (お手つきで自分の顔を大きく映している間は、名札が顔にかぶらないように隠す)
-		ov.visible = (not showing_result or voting or revealing) and not _play_ui_hidden and not view.self_close_up
+		ov.visible = (not showing_result or voting or revealing) and not _play_ui_hidden and not view.self_close_up and not view.in_ceremony()
 		ov.set_tags_hidden(state.is_milked(me) and not showing_result)
 		ov.set_bubbles_hidden(_flashed(me) and not showing_result)
 		if showing_result:
@@ -862,17 +862,23 @@ func _open_titles() -> void:
 	_title_reveal = TitleReveal.new()
 	add_child(_title_reveal)
 	if mode == Mode.GUEST:
-		_title_reveal.setup(_title_rows, state.titles, "", tr("ホストが「次へ」を押すと新しい試合"))
+		_title_reveal.setup(view, state, _title_rows, state.titles, "", tr("ホストが「次へ」を押すと新しい試合"))
 	else:
-		_title_reveal.setup(_title_rows, state.titles, tr("新しい試合へ ▶"), "")
+		_title_reveal.setup(view, state, _title_rows, state.titles, tr("新しい試合へ ▶"), "")
 	_title_reveal.next_pressed.connect(hud._press_next)
+	# 称号発表と記念写真の間は、ゲームのボタンや札を隠す(スクショがきれいに撮れるように)
+	_set_ui_tree_visible(hud, false)
+	_set_ui_tree_visible(touch, false)
 
 
 func _close_titles() -> void:
 	_titles_wait = -1.0
 	if _title_reveal and is_instance_valid(_title_reveal):
 		_title_reveal.queue_free()
+		_set_ui_tree_visible(hud, not _play_ui_hidden)
+		_set_ui_tree_visible(touch, not _play_ui_hidden)
 	_title_reveal = null
+	view.ceremony_end()
 
 
 ## 結果カードの1行。delta: このラウンドで増えた分も出すか

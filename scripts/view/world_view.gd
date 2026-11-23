@@ -286,11 +286,16 @@ func sync(state: GameState, delta: float) -> void:
 		var t: float = move_toward(_turn.get(a.id, 0.0), 1.0 if a.looking_back or forced else 0.0, turn_step * (0.6 if forced else 1.0))
 		_turn[a.id] = t
 		var node: Node3D = _actor_nodes.get(a.id)
+		# 称号発表(寄る人は立つ)と記念写真(全員が横に並ぶ)
+		var cer := _cer_override(a.id)
 		if node:
 			node.position = a.position
 			node.rotation.y = a.yaw
 			_apply_out_anim(a, node, delta)
 			_apply_missed_pos(a, node)
+			if cer.has("pos"):
+				node.position = cer["pos"]
+				node.rotation.y = cer["yaw"]
 			if forced:
 				# 見逃しでトントンされた人: 頭だけひねると、鬼の側から見て後頭部に顔があるように見えるので、
 				# 立ち上がって、体ごとくるっと鬼の方へ振り向く(椅子と重ならないように、少し後ろへ出ながら)
@@ -299,16 +304,19 @@ func sync(state: GameState, delta: float) -> void:
 				node.rotation.y = a.yaw + PI * t
 			var blob: MeshInstance3D = _blobs.get(a.id)
 			if blob:
-				blob.position = Vector3(a.position.x, 0.03, a.position.z)
+				blob.position = Vector3(node.position.x, 0.03, node.position.z)
 			_update_dust(a, delta)
 			var model := node as CharacterModel
 			if model:
 				# 振り向いた姿は全員に見える(頭→上半身の順に後ろを向く)
 				# (見逃しの人は体ごと振り向くので、頭はひねらない)
-				model.set_look(a.looking_back and not forced)
-				model.set_pose(_pose_of(state, a))
+				model.set_look(a.looking_back and not forced and cer.is_empty())
+				model.set_pose("idle" if not cer.is_empty() else _pose_of(state, a))
 				# 転んで止まっている間は、前にばったり倒れている(お手つきの演出中は、後ろへズッコケる)
-				if _out_anim.has(a.id):
+				if not cer.is_empty():
+					model.set_kneel(bool(cer.get("kneel", false)))
+					model.set_down(false)
+				elif _out_anim.has(a.id):
 					# お手つき: ひざから崩れ落ちる
 					var ot: float = float(_out_anim[a.id]["t"]) - float(_out_anim[a.id].get("d", 0.0))
 					model.set_kneel(ot >= 0.0 and ot < OUT_FALL_TIME)
@@ -323,6 +331,7 @@ func sync(state: GameState, delta: float) -> void:
 	_update_missed_scene(state, delta)
 	_update_seat_camera(state, delta)
 	_update_vote_view(state, delta)
+	_update_ceremony(delta)
 	if _overlay:
 		_overlay.update(state, get_viewport().get_camera_3d())
 	if _blackout:
@@ -706,11 +715,16 @@ func _update_expression(state: GameState, a: GameState.Actor, model: CharacterMo
 		expr = CharacterModel.SMIRK
 	elif rf == "dazed":
 		expr = CharacterModel.NORMAL
+	# 称号発表・記念写真の顔
+	var cf := _ceremony_face(a.id)
+	if cf != "":
+		expr = cf
+		rf = ""
 	model.set_expression(expr)
 	# お手つきの回数で、顔がだんだん崩れていく(3回目は放心)
 	# お手つきで抜けた人は放心の顔(ズッコケてから、体育座りしている間も)
-	var dazed := _dazed.has(a.id) or a.otetsuki_count >= GameConfig.OTETSUKI_DAZED_COUNT or a.role == GameState.Role.OUT \
-			or _ms_dazed(a.id) or rf == "dazed"
+	var dazed := (_dazed.has(a.id) or a.otetsuki_count >= GameConfig.OTETSUKI_DAZED_COUNT or a.role == GameState.Role.OUT \
+			or _ms_dazed(a.id) or rf == "dazed") and cf == ""
 	model.set_fluster(CharacterModel.FLUSTER_MAX if dazed else mini(a.otetsuki_count, 2))
 	# 振り向いた瞬間にピョンと跳ねる
 	if a.looking_back and not _was_looking.get(a.id, false):
@@ -2478,6 +2492,138 @@ func _update_vote_view(state: GameState, delta: float) -> void:
 	var k := clampf(_vote_view_t / 0.7, 0.0, 1.0)
 	k = k * k * (3.0 - 2.0 * k)
 	_top_cam.global_transform = _vote_from.interpolate_with(want, k)
+
+
+# --- 称号発表と記念写真(TitleReveal から。見た目だけ) ---
+## "focus": 称号の人にカメラが寄る(その人は立って、喜ぶ/ガーン)/"photo": 全員が黒板の前に横に並んで記念写真
+var _cer_mode := ""
+var _cer_id := -1
+var _cer_face := ""
+var _cer_kneel := false
+var _cer_t := 0.0
+var _cer_from := Transform3D.IDENTITY
+var _cer_photo := {}
+var _cer_faces := {}
+var _cer_center := Vector3.ZERO
+var _cer_dist := 4.0
+## 記念写真の列の場所(黒板の前、輪と教卓のあいだ)と、人の間隔
+const PHOTO_Z := -4.6
+const PHOTO_SPACING_MIN := 0.62
+const PHOTO_SPACING_MAX := 0.9
+## 称号の人に寄るカメラ: 顔の前の距離と、カメラが動く時間(秒)
+const FOCUS_DIST := 2.5
+const FOCUS_MOVE := 0.45
+
+
+func in_ceremony() -> bool:
+	return _cer_mode != ""
+
+
+## 称号の人にカメラを寄せる。face: 表情(CharacterModel の WIN など)。kneel: ガーンでひざから崩れる
+func ceremony_focus(id: int, face: String, kneel: bool) -> void:
+	_cer_begin()
+	_cer_mode = "focus"
+	_cer_id = id
+	_cer_face = face
+	_cer_kneel = kneel
+	var m := _actor_nodes.get(id) as CharacterModel
+	if m and not kneel:
+		m.hop()
+
+
+## 記念写真: order の順に左から並べる。faces: id -> 表情
+func ceremony_photo(order: Array, faces: Dictionary) -> void:
+	_cer_begin()
+	_cer_mode = "photo"
+	_cer_faces = faces.duplicate()
+	_cer_photo.clear()
+	var n := order.size()
+	var sp := clampf(6.4 / maxf(n - 1, 1), PHOTO_SPACING_MIN, PHOTO_SPACING_MAX)
+	for i in n:
+		var x := (float(i) - float(n - 1) / 2.0) * sp
+		_cer_photo[int(order[i])] = Vector3(x, 0.0, PHOTO_Z)
+	# 全員(と頭の上のバッジ)が入る距離
+	var vp := get_viewport().get_visible_rect().size
+	var aspect := vp.x / maxf(vp.y, 1.0)
+	var vfov := deg_to_rad(42.0)
+	var hfov := 2.0 * atan(tan(vfov / 2.0) * aspect)
+	var width := sp * float(n - 1) + 1.4
+	_cer_dist = maxf(3.4, width / 2.0 / tan(hfov / 2.0))
+	_cer_center = Vector3(0, 1.15, PHOTO_Z)
+	# 椅子は隠す(列の前に入らないように)
+	for c in _chairs:
+		if is_instance_valid(c):
+			c.visible = false
+
+
+## 称号発表・記念写真をやめて、ふだんのカメラに戻す
+func ceremony_end() -> void:
+	if _cer_mode == "":
+		return
+	_cer_mode = ""
+	_cer_photo.clear()
+	_cer_faces.clear()
+	for i in _chairs.size():
+		if is_instance_valid(_chairs[i]):
+			_chairs[i].visible = i != _hidden_chair
+	if _seat_cam:
+		_seat_cam.make_current()
+
+
+func _cer_begin() -> void:
+	var cam := get_viewport().get_camera_3d()
+	_cer_from = cam.global_transform if cam else _top_cam.global_transform
+	_cer_t = 0.0
+	_top_cam.fov = 42.0
+	_top_cam.global_transform = _cer_from
+	_top_cam.make_current()
+
+
+## この人の、称号発表・記念写真での置き方({} ならふだんどおり)
+func _cer_override(id: int) -> Dictionary:
+	if _cer_mode == "photo" and _cer_photo.has(id):
+		return {"pos": _cer_photo[id], "yaw": PI}
+	if _cer_mode == "focus" and id == _cer_id:
+		return {"kneel": _cer_kneel and _cer_t > 0.35}
+	return {}
+
+
+func _ceremony_face(id: int) -> String:
+	if _cer_mode == "photo":
+		return str(_cer_faces.get(id, CharacterModel.NORMAL))
+	if _cer_mode == "focus" and id == _cer_id:
+		return _cer_face
+	return ""
+
+
+func _update_ceremony(delta: float) -> void:
+	if _cer_mode == "":
+		return
+	_cer_t += delta
+	if get_viewport().get_camera_3d() != _top_cam:
+		_top_cam.make_current()
+	var want := Transform3D.IDENTITY
+	if _cer_mode == "focus":
+		var node: Node3D = _actor_nodes.get(_cer_id)
+		if node == null:
+			return
+		var m := node as CharacterModel
+		var head := node.global_position + Vector3(0, 1.3, 0)
+		if m:
+			head = m.bone_world("DEF-head").origin
+		var facing := -node.global_transform.basis.z
+		facing.y = 0.0
+		facing = facing.normalized() if facing.length() > 0.01 else Vector3.BACK
+		var right := (-facing).cross(Vector3.UP).normalized()
+		var pos := head + facing * FOCUS_DIST + Vector3(0, 0.05, 0)
+		# 人は画面の左寄り(右半分に称号のカード)。上半身が入るように、少し下をねらう
+		want = Transform3D.IDENTITY.translated(pos).looking_at(head + right * 0.85 + Vector3(0, -0.35, 0), Vector3.UP)
+	else:
+		var pos := _cer_center + Vector3(0, 0.35, _cer_dist)
+		want = Transform3D.IDENTITY.translated(pos).looking_at(_cer_center + Vector3(0, 0.05, 0), Vector3.UP)
+	var k := clampf(_cer_t / FOCUS_MOVE, 0.0, 1.0)
+	k = k * k * (3.0 - 2.0 * k)
+	_top_cam.global_transform = _cer_from.interpolate_with(want, k)
 
 
 ## 画面のこの位置にいる人の id(自分以外。だれでも。いなければ -1)。投票でタップした人
