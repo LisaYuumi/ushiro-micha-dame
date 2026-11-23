@@ -24,6 +24,7 @@ const GESTURES := {
 	"名探偵": "magnifier", "ウソつき大賞": "chin", "道連れ名人": "chin", "バナナの被害者": "banana",
 	"気づかな賞": "shrug", "だまされ王": "head", "暗やみパニック賞": "head", "お手つき王": "head",
 	"振り向き名人": "cheer", "逃げ足No.1": "peace", "タッチの達人": "cheer", "カミナリの目撃者": "cheer",
+	"手下ハンター": "magnifier", "信じられる人": "peace", "おしゃべりさん": "wave", "鬼の常連": "chin",
 }
 ## 称号のない人のポーズ(順番に。全員が同じ棒立ちにならないように)
 const OTHER_GESTURES := ["peace", "wave", "", "cheer", "wave", "peace", "", "wave", "cheer", "peace"]

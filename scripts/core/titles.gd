@@ -6,7 +6,12 @@ extends RefCounted
 ##   - 回数が「何回から」以上で、かつ全員の中でひとりだけ一番、2位とはっきり差がある(clear_lead)ときだけ候補
 ##   - 候補を「珍しい・面白い順」(punch が大きい順)に、1人1つ・同じ称号は1つで、MAX_AWARDS 個まで選ぶ
 ##   - 発表は punch の小さい順(最後の1つが、いちばん笑える/いちばんすごい称号=オチ)
-##   - だれも当てはまらなければ空(称号発表はとばして記念写真だけ)
+##   - 3つに足りないときは、条件をゆるめて足す(1試合でだいたい3人に出す):
+##       2段目: 同じ称号で「1回から」、2位との差は1でよい(一番がひとりだけ)
+##       3段目: よく起きる出来事の称号(EXTRA。同点はランダム)
+##       4段目: LIST の称号で「1回から」、同点はランダム
+##     ゆるめた称号ほど先に発表する(最後のオチは、いちばん厳しい条件の称号)
+##   - 出来事がまったくなければ空(称号発表はとばして記念写真だけ)
 
 const MAX_AWARDS := 3
 
@@ -27,6 +32,15 @@ const LIST := [
 	["カミナリの目撃者", "found_lightning", 1, "カミナリの光で %d回見つけた", "good", 3, "win"],
 	["TOOL", "tool_hit", 2, "", "funny", 3, "awkward"],
 ]
+## 3つに足りないときに使う、よく起きる出来事の称号(3段目)。形は LIST と同じ
+const EXTRA := [
+	["手下ハンター", "vote_correct", 1, "手下を %d回当てた", "good", 2, "win"],
+	["信じられる人", "stamps_true", 1, "本当の言葉を %d回送った", "good", 1, "win"],
+	["おしゃべりさん", "stamps_sent", 1, "言葉を %d回送った", "good", 1, "win"],
+	["鬼の常連", "oni_rounds", 1, "鬼を %d回やった", "funny", 1, "smirk"],
+]
+## 段ごとに、発表の順番(punch)から引く数(ゆるめた称号ほど先に発表する)
+const TIER_PENALTY := 20
 ## 鬼の技でくらった回数の称号(ステージごと)
 const TOOL_TITLES := {
 	"classroom": ["粉まみれ賞", "黒板消しを %d回くらった"],
@@ -41,45 +55,73 @@ static func clear_lead(n: int, second: int) -> bool:
 
 
 ## 称号を決める。戻り値: 発表する順の配列 [{"id", "title", "reason", "n", "tone", "face"}](最大 MAX_AWARDS 個。空もある)
-static func decide(stats: Dictionary, ids: Array, stage: String, _rng: RandomNumberGenerator = null) -> Array:
+static func decide(stats: Dictionary, ids: Array, stage: String, rng: RandomNumberGenerator = null) -> Array:
+	if rng == null:
+		rng = RandomNumberGenerator.new()
+		rng.randomize()
+	var picked := []
+	var used_ids := {}
+	var used_titles := {}
+	# [表, 何回からを1にするか, 2位との差の決まり("clear" / "unique" / "tie_random")]
+	var tiers := [[LIST, false, "clear"], [LIST, true, "unique"], [EXTRA, false, "tie_random"], [LIST, true, "tie_random"]]
+	for tier in tiers.size():
+		if picked.size() >= MAX_AWARDS:
+			break
+		var cands := _candidates(tiers[tier][0], bool(tiers[tier][1]), str(tiers[tier][2]), stats, ids, stage, rng)
+		cands.sort_custom(func(a, b): return a["punch"] > b["punch"])
+		for c in cands:
+			if picked.size() >= MAX_AWARDS:
+				break
+			if used_ids.has(c["id"]) or used_titles.has(c["title"]):
+				continue
+			used_ids[c["id"]] = true
+			used_titles[c["title"]] = true
+			c["punch"] = int(c["punch"]) - tier * TIER_PENALTY
+			picked.append(c)
+	# 発表は、最後がオチ(いちばん厳しい条件で、いちばん面白い称号)になる順
+	picked.sort_custom(func(a, b): return a["punch"] < b["punch"])
+	return picked
+
+
+## 1つの段の候補(称号ごとに1人)
+static func _candidates(rows: Array, relax_min: bool, rule: String, stats: Dictionary, ids: Array, stage: String,
+		rng: RandomNumberGenerator) -> Array:
 	var cands := []
-	for row in LIST:
+	for row in rows:
 		var key: String = row[1]
-		var best_id := -1
 		var best := 0
 		var second := 0
+		var tops := []
 		for id in ids:
 			var n := int((stats.get(id, {}) as Dictionary).get(key, 0))
 			if n > best:
 				second = best
 				best = n
-				best_id = id
+				tops = [id]
+			elif n == best and n > 0:
+				tops.append(id)
 			elif n > second:
 				second = n
-		if best_id < 0 or best < int(row[2]) or not clear_lead(best, second):
+		var need := 1 if relax_min else int(row[2])
+		if tops.is_empty() or best < need:
 			continue
+		match rule:
+			"clear":
+				if tops.size() > 1 or not clear_lead(best, second):
+					continue
+			"unique":
+				if tops.size() > 1:
+					continue
+		var who: int = tops[rng.randi_range(0, tops.size() - 1)]
 		var title: String = row[0]
 		var reason: String = row[3]
 		if title == "TOOL":
 			var tt: Array = TOOL_TITLES.get(stage, TOOL_TITLES["classroom"])
 			title = tt[0]
 			reason = tt[1]
-		cands.append({"id": best_id, "title": title, "reason": reason, "n": best, "tone": row[4],
+		cands.append({"id": who, "title": title, "reason": reason, "n": best, "tone": row[4],
 				"punch": int(row[5]), "face": row[6]})
-	# 珍しい・面白い順に、1人1つまで
-	cands.sort_custom(func(a, b): return a["punch"] > b["punch"])
-	var picked := []
-	var used := {}
-	for c in cands:
-		if picked.size() >= MAX_AWARDS:
-			break
-		if used.has(c["id"]):
-			continue
-		used[c["id"]] = true
-		picked.append(c)
-	# 発表は、最後がオチ(punch がいちばん大きい)になる順
-	picked.reverse()
-	return picked
+	return cands
 
 
 ## 称号のある人 id -> 称号(記念写真のバッジ用)

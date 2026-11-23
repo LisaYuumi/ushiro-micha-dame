@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(435)
+## 一覧(443)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -357,6 +357,14 @@
 | 鬼で %d回 逃げ切った | Got away as the oni: %d |
 | %s ・ %s | %s · %s |
 | 記念写真 | Group Photo |
+| 手下ハンター | Minion Hunter |
+| 手下を %d回当てた | Minions caught: %d |
+| 信じられる人 | Most Trustworthy |
+| 本当の言葉を %d回送った | True messages: %d |
+| おしゃべりさん | Chatterbox |
+| 言葉を %d回送った | Messages sent: %d |
+| 鬼の常連 | Oni Regular |
+| 鬼を %d回やった | Rounds as the oni: %d |
 | 道連れ名人 | Taking You With Me |
 | お手つきのあと %d人を道連れ | Dragged down after going out: %d |
 | ウソつき大賞 | Grand Liar Award |
