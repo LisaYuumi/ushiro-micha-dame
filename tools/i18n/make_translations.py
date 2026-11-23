@@ -377,7 +377,7 @@ EN = {
     "Eキーで、本当に落とそう": "Press E to really drop it",
     "「落とす」ボタンで、本当に落とそう": "Tap Drop to really drop it",
     "ナイス!気づかれずに1周すれば鬼の勝ち。\n気づかれたら追いかけっこ!": "Nice! Go a full lap unnoticed and the oni wins.\nIf they notice, it's a chase!",
-    "お手つき!真ん中で体育座り。\nこのラウンドはお休み(0点)": "Wrong look! You sit out in the middle.\nNo points this round",
+    "お手つき!真ん中で体育座り(このラウンドは0点)。\nお休み中も、みんなに言葉は送れるよ": "Wrong look! You sit out in the middle (no points this round).\nYou can still send messages while sitting out",
     "準備OK!": "You're ready!",
     "オンラインで遊ぼう": "Let's play online",
     "ロビーへ ▶": "To the lobby ▶",

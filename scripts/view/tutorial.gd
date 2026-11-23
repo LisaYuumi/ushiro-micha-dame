@@ -334,7 +334,7 @@ func update(delta: float) -> void:
 		"out":
 			if not _flag and _t >= 3.4:
 				_flag = true
-				_say(tr("お手つき!真ん中で体育座り。\nこのラウンドはお休み(0点)"), true)
+				_say(tr("お手つき!真ん中で体育座り(このラウンドは0点)。\nお休み中も、みんなに言葉は送れるよ"), true)
 		"wait_words":
 			if s.phase == GameState.Phase.DROPPED:
 				# 落とされた: 言葉が届く(本当のこと → ウソ)。鬼は1席ぶん先まで歩いてから止まって待つ
