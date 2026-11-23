@@ -7,7 +7,7 @@ extends CanvasLayer
 ##    下に理由が1行(数字入り)。いい称号は金色とファンファーレ、笑える称号は紫とガーンの音。1つ STEP 秒
 ## 3. 記念写真: 全員が黒板の前に横に並び(1位がまん中)、称号のある人だけ頭の上にバッジ、足もとに名前と点数。
 ##    ルーム主には「新しい試合へ」、ほかの人には待っている案内。この画面のまま止まる(スクショ・撮影用)
-## 画面をタップすると、記念写真まで飛ばす。見た目だけ(状態は変えない)
+## (タップで飛ばすことはしない。スマホで次へ進もうとしてタップすると、発表が見られなくなるので)。見た目だけ(状態は変えない)
 
 signal next_pressed
 
@@ -19,6 +19,14 @@ const COLOR_GOLD := Color("F6C945")
 const COLOR_GOLD_DARK := Color("B07A10")
 const COLOR_FUNNY := Color("6E56A8")
 const COLOR_TITLE := Color("7A3FB8")
+## 称号に合ったポーズ(CharacterModel.set_gesture)。書いていない称号(黒板消しなど)は shrug
+const GESTURES := {
+	"名探偵": "magnifier", "ウソつき大賞": "chin", "道連れ名人": "chin", "バナナの被害者": "banana",
+	"気づかな賞": "shrug", "だまされ王": "head", "暗やみパニック賞": "head", "お手つき王": "head",
+	"振り向き名人": "cheer", "逃げ足No.1": "peace", "タッチの達人": "cheer", "カミナリの目撃者": "cheer",
+}
+## 称号のない人のポーズ(順番に。全員が同じ棒立ちにならないように)
+const OTHER_GESTURES := ["peace", "wave", "", "cheer", "wave", "peace", "", "wave", "cheer", "peace"]
 
 const DIM_SHADER := """
 shader_type canvas_item;
@@ -56,6 +64,8 @@ var _photo_ui: Control
 var _badges := {}
 var _names := {}
 var _next_button: Button
+## バッジの下の三角(頭を指す) [バッジの下のまん中, 頭の上の y, 色]
+var _badge_tips: Array = []
 ## 3D の画面(カメラ・キャラの並び)を動かすか(撮影モードの4K保存用の写しは false)
 var controls_view := true
 
@@ -167,8 +177,12 @@ func _focus(i: int) -> void:
 	var face := _face_of(a)
 	if controls_view:
 		# (ガーンでも、顔が見えるように立ったまま)
-		_view.ceremony_focus(int(a["id"]), face, false)
+		_view.ceremony_focus(int(a["id"]), face, false, _gesture_of(a))
 	AudioDirector.sfx("drumroll", -9.0)
+
+
+func _gesture_of(a: Dictionary) -> String:
+	return str(GESTURES.get(str(a.get("title", "")), "shrug"))
 
 
 func _face_of(a: Dictionary) -> String:
@@ -199,7 +213,7 @@ func _show_card(a: Dictionary) -> void:
 	var w := vp.x * 0.44
 	_card.custom_minimum_size = Vector2(w, vp.y * 0.36)
 	UiStyle.fit(_card_title, 72, w - 60.0, 30)
-	UiStyle.fit(_reason, 34, vp.x * 0.5, 18)
+	UiStyle.fit(_reason, 34, vp.x * 0.46, 18)
 	_card.reset_size()
 	_card.size = _card.get_combined_minimum_size()
 	_card.position = Vector2(vp.x * 0.53, vp.y * 0.18)
@@ -212,7 +226,8 @@ func _show_card(a: Dictionary) -> void:
 	tw.tween_property(_card, "scale", Vector2.ONE, 0.1)
 	_reason.reset_size()
 	_reason.size = _reason.get_combined_minimum_size()
-	_reason.position = Vector2(_card.position.x + (_card.size.x - _reason.size.x) / 2.0, _card.position.y + _card.size.y + 14.0)
+	_reason.position = Vector2(clampf(_card.position.x + (_card.size.x - _reason.size.x) / 2.0, 8.0, vp.x - _reason.size.x - 12.0),
+			_card.position.y + _card.size.y + 14.0)
 	_reason.visible = false
 	if good:
 		AudioDirector.sfx("jajaan", -3.0)
@@ -230,20 +245,24 @@ func _start_photo(flash: bool) -> void:
 	_card.visible = false
 	_reason.visible = false
 	var by := Titles.by_actor(_awards)
-	# 1位がまん中、そのあと左右に交互
-	var order := []
+	# 順位の高い順(1位はまん中の台の上、そのあと左右に交互。並べるのは WorldView)
+	var ranked := []
+	var faces := {}
+	var gestures := {}
+	var other := 0
 	for i in _rows.size():
 		var id := int(_rows[i]["title_id"])
-		if i % 2 == 1:
-			order.push_front(id)
+		ranked.append(id)
+		if by.has(id):
+			faces[id] = _face_of(by[id])
+			gestures[id] = _gesture_of(by[id])
 		else:
-			order.push_back(id)
-	var faces := {}
-	for r in _rows:
-		var id := int(r["title_id"])
-		faces[id] = _face_of(by[id]) if by.has(id) else CharacterModel.WIN
+			faces[id] = CharacterModel.WIN
+			gestures[id] = "cheer" if i == 0 else str(OTHER_GESTURES[other % OTHER_GESTURES.size()])
+			if i > 0:
+				other += 1
 	if controls_view:
-		_view.ceremony_photo(order, faces)
+		_view.ceremony_photo(ranked, faces, gestures)
 	_photo_ui = Control.new()
 	_photo_ui.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_photo_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -286,7 +305,7 @@ func _start_photo(flash: bool) -> void:
 			bst.content_margin_top = 2
 			bst.content_margin_bottom = 2
 			b.add_theme_stylebox_override("panel", bst)
-			var bl := UiStyle.label(Titles.title_text(a), 26, GameConfig.COLOR_INK if good else Color.WHITE)
+			var bl := UiStyle.label(Titles.title_text(a), 30, GameConfig.COLOR_INK if good else Color.WHITE)
 			b.add_child(bl)
 			_photo_ui.add_child(b)
 			_badges[id] = b
@@ -350,6 +369,8 @@ func _start_photo(flash: bool) -> void:
 		tw.tween_callback(w.queue_free)
 
 
+## 称号のバッジは頭のすぐ上(下向きの三角で頭を指す。称号は最大3つなので、となり同士のときだけ上下にずらす)。
+## 名前と順位・点数は、まとめて足もと
 func _update_photo_ui() -> void:
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
@@ -357,31 +378,35 @@ func _update_photo_ui() -> void:
 	var vp := get_viewport().get_visible_rect().size
 	for id in _names:
 		var np: Control = _names[id]
-		var feet := _view.actor_point(id, -0.02)
+		# (床の高さ。1位は台の上なので、台の「1」を隠さないように台の下に)
+		var feet := _view.actor_point(id, 0.0)
+		feet.y = -0.02
 		if cam.is_position_behind(feet):
 			continue
 		var p := cam.unproject_position(feet)
 		np.reset_size()
 		np.size = np.get_combined_minimum_size()
-		np.position = Vector2(clampf(p.x - np.size.x / 2.0, 4.0, vp.x - np.size.x - 4.0), minf(p.y + 4.0, vp.y - np.size.y - 90.0))
-	# 頭の上のバッジ: となりのバッジと重なったら、上にずらす
+		np.position = Vector2(clampf(p.x - np.size.x / 2.0, 4.0, vp.x - np.size.x - 4.0), minf(p.y + 2.0, vp.y - np.size.y - 86.0))
 	var placed: Array[Rect2] = []
 	var list := _badges.keys()
 	list.sort_custom(func(x, y): return _view.actor_point(x, 0.0).x < _view.actor_point(y, 0.0).x)
+	_badge_tips.clear()
 	for id in list:
 		var b: Control = _badges[id]
-		var top := _view.actor_point(id, 1.95)
+		var top := _view.actor_point(id, 1.82)
 		if cam.is_position_behind(top):
 			continue
 		var p := cam.unproject_position(top)
 		b.reset_size()
 		b.size = b.get_combined_minimum_size()
-		var r := Rect2(Vector2(clampf(p.x - b.size.x / 2.0, 4.0, vp.x - b.size.x - 4.0), maxf(p.y - b.size.y, 96.0)), b.size)
+		var r := Rect2(Vector2(clampf(p.x - b.size.x / 2.0, 4.0, vp.x - b.size.x - 4.0), p.y - b.size.y - 22.0), b.size)
 		for q in placed:
 			if q.grow(2.0).intersects(r):
-				r.position.y = q.position.y - r.size.y - 4.0
+				r.position.y = q.position.y - r.size.y - 6.0
+		r.position.y = maxf(r.position.y, 96.0)
 		placed.append(r)
 		b.position = r.position
+		_badge_tips.append([Vector2(p.x, r.end.y), p.y - 2.0, (b.get_theme_stylebox("panel") as StyleBoxFlat).bg_color])
 
 
 ## まわりを暗く: 称号の人にスポットライト
@@ -405,7 +430,16 @@ func _update_dim() -> void:
 
 ## カードのまわりの飾り: いい称号は金色の星がきらきら、笑える称号は青い縦線(ガーン)
 func _draw_fx() -> void:
-	if _photo or not _card.visible or _shown < 0 or _shown >= _awards.size():
+	if _photo:
+		for tip in _badge_tips:
+			var at: Vector2 = tip[0]
+			var head_y: float = tip[1]
+			var y2 := maxf(at.y + 16.0, head_y)
+			var tri := PackedVector2Array([at + Vector2(-14, -3), at + Vector2(14, -3), Vector2(at.x, y2)])
+			_fx.draw_colored_polygon(tri, tip[2])
+			_fx.draw_polyline(PackedVector2Array([tri[0], tri[2], tri[1]]), GameConfig.COLOR_INK, 3.0, true)
+		return
+	if not _card.visible or _shown < 0 or _shown >= _awards.size():
 		return
 	var good := str(_awards[_shown].get("tone", "good")) == "good"
 	var r := Rect2(_card.position, _card.size * _card.scale)
@@ -460,12 +494,3 @@ func _exit_tree() -> void:
 func _input(event: InputEvent) -> void:
 	if _photo and visible:
 		UiStyle.tap_buttons(event, [_next_button])
-
-
-## 画面をタップしたら、記念写真まで飛ばす
-func _unhandled_input(ev: InputEvent) -> void:
-	if not visible or _photo:
-		return
-	var tap: bool = (ev is InputEventMouseButton and ev.pressed) or (ev is InputEventScreenTouch and ev.pressed)
-	if tap:
-		_start_photo(true)

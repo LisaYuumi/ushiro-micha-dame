@@ -326,6 +326,8 @@ func sync(state: GameState, delta: float) -> void:
 					model.set_down(a.slip_left > 0.0)
 				# 鬼だけが学校の黄色い帽子をかぶる
 				model.set_hat(a.id == state.oni_id, _beach)
+				# 称号発表・記念写真のポーズ
+				model.set_gesture(str(_cer_gestures.get(a.id, "")) if _cer_mode != "" else "")
 			_update_expression(state, a, model, delta)
 			_update_milk(state, a, model)
 	_update_missed_scene(state, delta)
@@ -1591,6 +1593,9 @@ func apply_night_light(state: GameState) -> void:
 			flash = 1.0
 		elif since >= 0.45:
 			flash = clampf(state.lightning_left / (GameConfig.LIGHTNING_TIME - 0.45), 0.0, 1.0)
+	# 称号発表・記念写真は、夜の教室でも撮影用のライトがついた明るさ
+	if _cer_mode != "":
+		flash = 1.0
 	var bright := lerpf(GameConfig.NIGHT_BRIGHTNESS, 1.0, flash)
 	Toon.set_night(lerpf(GameConfig.NIGHT_TINT, GameConfig.NIGHT_TINT * 0.4, flash))
 	Toon.set_darkness(bright, GameConfig.NIGHT_MOON_CENTER, GameConfig.NIGHT_MOON_RADIUS,
@@ -2505,6 +2510,11 @@ var _cer_from := Transform3D.IDENTITY
 var _cer_photo := {}
 var _cer_faces := {}
 var _cer_center := Vector3.ZERO
+var _cer_gestures := {}
+var _podium_box: Node3D
+## 1位の台の高さと、前に出る量(メートル)
+const PODIUM_HEIGHT := 0.32
+const PODIUM_FRONT := 0.4
 var _cer_dist := 4.0
 ## 記念写真の列の場所(黒板の前、輪と教卓のあいだ)と、人の間隔
 const PHOTO_Z := -4.6
@@ -2519,37 +2529,54 @@ func in_ceremony() -> bool:
 	return _cer_mode != ""
 
 
-## 称号の人にカメラを寄せる。face: 表情(CharacterModel の WIN など)。kneel: ガーンでひざから崩れる
-func ceremony_focus(id: int, face: String, kneel: bool) -> void:
+## 称号の人にカメラを寄せる。face: 表情(CharacterModel の WIN など)。kneel: ガーンでひざから崩れる。
+## gesture: ポーズ(CharacterModel.set_gesture)
+func ceremony_focus(id: int, face: String, kneel: bool, gesture: String = "") -> void:
 	_cer_begin()
 	_cer_mode = "focus"
 	_cer_id = id
 	_cer_face = face
 	_cer_kneel = kneel
+	_cer_gestures = {id: gesture}
 	var m := _actor_nodes.get(id) as CharacterModel
 	if m and not kneel:
 		m.hop()
 
 
-## 記念写真: order の順に左から並べる。faces: id -> 表情
-func ceremony_photo(order: Array, faces: Dictionary) -> void:
+## 記念写真: ranked は順位の高い順。1位はまん中の台の上、そのあと左右に交互に並べ、上位ほど少し前。
+## faces: id -> 表情、gestures: id -> ポーズ
+func ceremony_photo(ranked: Array, faces: Dictionary, gestures: Dictionary = {}) -> void:
 	_cer_begin()
 	_cer_mode = "photo"
 	_cer_faces = faces.duplicate()
+	_cer_gestures = gestures.duplicate()
 	_cer_photo.clear()
-	var n := order.size()
+	var n := ranked.size()
 	var sp := clampf(6.4 / maxf(n - 1, 1), PHOTO_SPACING_MIN, PHOTO_SPACING_MAX)
 	for i in n:
-		var x := (float(i) - float(n - 1) / 2.0) * sp
-		_cer_photo[int(order[i])] = Vector3(x, 0.0, PHOTO_Z)
+		# まん中から: 0, -1, +1, -2, +2 ...(席の番号 × 間隔)
+		var slot := 0 if i == 0 else (int((i + 1) / 2) * (-1 if i % 2 == 1 else 1))
+		var x := float(slot) * sp
+		var z := PHOTO_Z + (PODIUM_FRONT if i == 0 else (0.18 if i <= 2 else 0.0))
+		var y := PODIUM_HEIGHT if i == 0 else 0.0
+		_cer_photo[int(ranked[i])] = Vector3(x, y, z)
+	# 1位の台
+	if n > 0:
+		_build_podium_box(_cer_photo[int(ranked[0])])
 	# 全員(と頭の上のバッジ)が入る距離
 	var vp := get_viewport().get_visible_rect().size
 	var aspect := vp.x / maxf(vp.y, 1.0)
 	var vfov := deg_to_rad(42.0)
 	var hfov := 2.0 * atan(tan(vfov / 2.0) * aspect)
-	var width := sp * float(n - 1) + 1.4
+	# (まん中から左右に交互に並べるので、左右の数がちがうことがある。並びのまん中をねらう)
+	var min_x := INF
+	var max_x := -INF
+	for id in _cer_photo:
+		min_x = minf(min_x, (_cer_photo[id] as Vector3).x)
+		max_x = maxf(max_x, (_cer_photo[id] as Vector3).x)
+	var width := (max_x - min_x) + 1.4
 	_cer_dist = maxf(3.4, width / 2.0 / tan(hfov / 2.0))
-	_cer_center = Vector3(0, 1.15, PHOTO_Z)
+	_cer_center = Vector3((min_x + max_x) / 2.0, 1.15, PHOTO_Z)
 	# 椅子は隠す(列の前に入らないように)
 	for c in _chairs:
 		if is_instance_valid(c):
@@ -2563,6 +2590,14 @@ func ceremony_end() -> void:
 	_cer_mode = ""
 	_cer_photo.clear()
 	_cer_faces.clear()
+	_cer_gestures.clear()
+	if _podium_box and is_instance_valid(_podium_box):
+		_podium_box.queue_free()
+	_podium_box = null
+	for id in _actor_nodes:
+		var m := _actor_nodes[id] as CharacterModel
+		if m:
+			m.set_gesture("")
 	for i in _chairs.size():
 		if is_instance_valid(_chairs[i]):
 			_chairs[i].visible = i != _hidden_chair
@@ -2586,6 +2621,30 @@ func _cer_override(id: int) -> Dictionary:
 	if _cer_mode == "focus" and id == _cer_id:
 		return {"kneel": _cer_kneel and _cer_t > 0.35}
 	return {}
+
+
+## 1位の台(白い箱に金の「1」)
+func _build_podium_box(at: Vector3) -> void:
+	if _podium_box and is_instance_valid(_podium_box):
+		_podium_box.queue_free()
+	_podium_box = Node3D.new()
+	add_child(_podium_box)
+	_podium_box.position = Vector3(at.x, 0.0, at.z)
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.8, PODIUM_HEIGHT, 0.7)
+	var box := Toon.mesh(bm, Color("FFF6E4"), 0.02)
+	box.position = Vector3(0, PODIUM_HEIGHT / 2.0, 0)
+	_podium_box.add_child(box)
+	var lab := Label3D.new()
+	lab.text = "1"
+	lab.font = HudFont.get_font()
+	lab.font_size = 96
+	lab.pixel_size = 0.0032
+	lab.modulate = Color("E0A820")
+	lab.outline_size = 14
+	lab.outline_modulate = GameConfig.COLOR_INK
+	lab.position = Vector3(0, PODIUM_HEIGHT / 2.0, 0.36)
+	_podium_box.add_child(lab)
 
 
 func _ceremony_face(id: int) -> String:

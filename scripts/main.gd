@@ -823,6 +823,11 @@ func _show_match_result() -> void:
 	if _match_shown_serial == state.round_serial:
 		return
 	_match_shown_serial = state.round_serial
+	# 手下の発表の表示(投票の矢印・指マーク・「だましきった!」などの吹き出し・スポットライト)は、ここで全部消す
+	if _reveal and is_instance_valid(_reveal):
+		_reveal.queue_free()
+	_reveal = null
+	view.set_vote_view(false)
 	var ids := state.scores.keys()
 	ids.sort_custom(func(a, b): return state.scores[a] > state.scores[b])
 	var rows := []
@@ -859,6 +864,10 @@ var _title_rows: Array = []
 func _open_titles() -> void:
 	_close_titles()
 	hud.hide_result_card()
+	hud.hide_message()
+	if _reveal and is_instance_valid(_reveal):
+		_reveal.queue_free()
+	_reveal = null
 	_title_reveal = TitleReveal.new()
 	add_child(_title_reveal)
 	if mode == Mode.GUEST:

@@ -131,6 +131,7 @@ var _name_label: Label3D
 var _name_tag: Node3D
 ## 目・口・眉の色(体の色が暗いときは白)
 var _face_color: Color = GameConfig.COLOR_INK
+var _body_color := Color.WHITE
 var _eyes: Array[MeshInstance3D] = []
 var _happy_eyes: Array[Node3D] = []
 var _mouth_flat: MeshInstance3D
@@ -180,6 +181,7 @@ const COLOR_HAT_BAND := Color("F2B705")
 func build(color: Color, display_name: String, font: Font) -> void:
 	# 黒っぽい体では、目と口を白にする(黒い顔の部品が見えなくなるので)
 	_face_color = GameConfig.COLOR_PAPER if color.get_luminance() < 0.25 else GameConfig.COLOR_INK
+	_body_color = color
 	_pivot = Node3D.new()
 	add_child(_pivot)
 	_build_rig()
@@ -1181,6 +1183,7 @@ func _update_rig(delta: float) -> void:
 	_seat_shift = move_toward(_seat_shift, SEAT_SHIFT if _pose == "sit" or _pose == "floor" else 0.0, delta / 0.5 * SEAT_SHIFT)
 	_rig.position = Vector3(0, 0, -_seat_shift)
 	_apply_tuck(delta)
+	_apply_gesture(delta)
 	# 振り向き: 頭は速く、上半身はゆっくり
 	_look_head = move_toward(_look_head, _look_target, delta / LOOK_HEAD_TIME)
 	_look_body = move_toward(_look_body, _look_target, delta / LOOK_BODY_TIME)
@@ -1220,6 +1223,143 @@ func _apply_tuck(delta: float) -> void:
 	var fwd := Vector3(0, 0, 1)
 	_aim_bone(ua, (Vector3.DOWN + right * 0.45).normalized(), _ease(_tuck_w))
 	_aim_bone(fa, (Vector3.DOWN - right * 0.3 + fwd * 0.45).normalized(), _ease(_tuck_w))
+
+
+## 記念写真・称号発表のポーズ(腕の形と、手に持つ小道具)。"" でふつう
+## cheer(両手を上げる)/wave(手を振る)/peace(ピース)/magnifier(虫めがね)/banana(バナナを持つ)/
+## chin(あごに手。ニヤリ)/shrug(手を広げる)/head(頭をかかえる)
+const GESTURE_TIME := 0.25
+var _gesture := ""
+var _gesture_shown := ""
+var _gesture_w := 0.0
+var _gesture_t := 0.0
+var _props := {}
+
+
+func set_gesture(g: String) -> void:
+	if g == _gesture:
+		return
+	_gesture = g
+	if g != "":
+		_gesture_shown = g
+		_show_prop(g)
+
+
+func _apply_gesture(delta: float) -> void:
+	_gesture_t += delta
+	_gesture_w = move_toward(_gesture_w, 1.0 if _gesture != "" else 0.0, delta / GESTURE_TIME)
+	if _gesture_w <= 0.0:
+		if _gesture_shown != "":
+			_gesture_shown = ""
+			_show_prop("")
+		return
+	var uar := _skel.find_bone("DEF-upper_arm.R")
+	var far := _skel.find_bone("DEF-forearm.R")
+	var ual := _skel.find_bone("DEF-upper_arm.L")
+	var fal := _skel.find_bone("DEF-forearm.L")
+	if uar < 0 or far < 0 or ual < 0 or fal < 0:
+		return
+	var rt := (_skel.get_bone_global_pose(uar).origin - _skel.get_bone_global_pose(ual).origin)
+	rt.y = 0.0
+	rt = rt.normalized()
+	var fw := Vector3(0, 0, 1)
+	var up := Vector3.UP
+	var w := _ease(_gesture_w)
+	# [右の二の腕, 右のひじから先, 左の二の腕, 左のひじから先](Vector3.ZERO はその腕を動かさない)
+	var dirs := [Vector3.ZERO, Vector3.ZERO, Vector3.ZERO, Vector3.ZERO]
+	match _gesture_shown:
+		"cheer":
+			dirs = [up + rt * 0.35, up + rt * 0.1, up - rt * 0.35, up - rt * 0.1]
+		"wave":
+			dirs = [up * 0.8 + rt * 0.65, up + rt * sin(_gesture_t * 9.0) * 0.6, Vector3.ZERO, Vector3.ZERO]
+		"peace":
+			dirs = [rt * 0.6 - up * 0.5 + fw * 0.35, up + fw * 0.25 - rt * 0.2, Vector3.ZERO, Vector3.ZERO]
+		"magnifier":
+			dirs = [fw * 0.8 - up * 0.45 + rt * 0.2, fw * 0.9 + up * 0.35 - rt * 0.15, Vector3.ZERO, Vector3.ZERO]
+		"banana":
+			dirs = [rt * 0.4 - up * 0.4 + fw * 0.6, fw + up * 0.25, Vector3.ZERO, Vector3.ZERO]
+		"chin":
+			dirs = [fw * 0.5 - up * 0.8 + rt * 0.15, up + fw * 0.3 - rt * 0.45, Vector3.ZERO, Vector3.ZERO]
+		"shrug":
+			dirs = [-up + rt * 0.6, rt * 0.7 + fw * 0.6 + up * 0.2, -up - rt * 0.6, -rt * 0.7 + fw * 0.6 + up * 0.2]
+		"head":
+			dirs = [up * 0.6 + rt * 0.8, up * 0.4 - rt * 0.9, up * 0.6 - rt * 0.8, up * 0.4 + rt * 0.9]
+	var bones := [uar, far, ual, fal]
+	for i in 4:
+		var d: Vector3 = dirs[i]
+		if d != Vector3.ZERO:
+			_aim_bone(bones[i], d.normalized(), w)
+
+
+## 手に持つ小道具(右手の骨についていく。骨の +Y が指先の向き)
+func _show_prop(g: String) -> void:
+	var want := {"peace": "peace", "magnifier": "magnifier", "banana": "banana"}.get(g, "") as String
+	if want != "" and not _props.has(want) and _skel:
+		var hand := _skel.find_bone("DEF-hand.R")
+		if hand >= 0:
+			var node := _build_prop(want)
+			_attach("DEF-hand.R", node, _skel.get_bone_global_rest(hand))
+			_props[want] = node
+	for k in _props:
+		(_props[k] as Node3D).visible = k == want
+
+
+func _build_prop(kind: String) -> Node3D:
+	var root := Node3D.new()
+	match kind:
+		"peace":
+			# ピースの2本の指
+			for side in [-1.0, 1.0]:
+				var c := CapsuleMesh.new()
+				c.radius = 0.018
+				c.height = 0.11
+				var mi := Toon.mesh(c, _body_color, 0.008)
+				mi.position = Vector3(side * 0.022, 0.1, 0.0)
+				mi.rotation.z = -side * 0.28
+				root.add_child(mi)
+		"magnifier":
+			# 虫めがね: 黒い柄の先に、金色のわくとレンズ
+			var h := CylinderMesh.new()
+			h.top_radius = 0.016
+			h.bottom_radius = 0.016
+			h.height = 0.14
+			var hm := Toon.mesh(h, Color("3A2E2A"), 0.008)
+			hm.position = Vector3(0, 0.06, 0)
+			root.add_child(hm)
+			var ring := TorusMesh.new()
+			ring.inner_radius = 0.075
+			ring.outer_radius = 0.095
+			ring.rings = 20
+			ring.ring_segments = 8
+			var rm := Toon.mesh(ring, Color("E0B030"), 0.008)
+			rm.position = Vector3(0, 0.22, 0)
+			rm.rotation.x = PI / 2.0
+			root.add_child(rm)
+			var lens := CylinderMesh.new()
+			lens.top_radius = 0.076
+			lens.bottom_radius = 0.076
+			lens.height = 0.008
+			var lm := Toon.mesh(lens, Color(0.75, 0.9, 1.0), 0.0)
+			lm.position = Vector3(0, 0.22, 0)
+			lm.rotation.x = PI / 2.0
+			root.add_child(lm)
+		"banana":
+			# バナナ: 黄色い弓なりの実(3つの丸い部品)と茶色い先
+			for i in 3:
+				var c := CapsuleMesh.new()
+				c.radius = 0.035
+				c.height = 0.13
+				var mi := Toon.mesh(c, Color("F5D23A"), 0.01)
+				mi.position = Vector3(sin(float(i - 1) * 0.5) * 0.06, 0.08 + float(i) * 0.08, 0.0)
+				mi.rotation.z = float(i - 1) * -0.45
+				root.add_child(mi)
+			var tip := SphereMesh.new()
+			tip.radius = 0.02
+			tip.height = 0.04
+			var tm := Toon.mesh(tip, Color("6B4A2A"), 0.006)
+			tm.position = Vector3(0.05, 0.3, 0)
+			root.add_child(tm)
+	return root
 
 
 ## 骨の向き(骨の +Y)を、骨組みの中の dir に向ける(w = 0 で元の動きのまま、1 で dir)
