@@ -208,6 +208,19 @@ func _ready() -> void:
 	_host_box.add_child(_players_label)
 	_host_box.add_child(_button("スタート", func() -> void: start_pressed.emit(), Vector2(0, 100), true))
 
+	# 右下に、どのバージョンか(古いページが残っていないか確かめる用)
+	var ver := UiStyle.label("ver. " + BuildInfo.ID, 16, GameConfig.COLOR_INK.lightened(0.4))
+	ver.anchor_left = 1.0
+	ver.anchor_right = 1.0
+	ver.anchor_top = 1.0
+	ver.anchor_bottom = 1.0
+	ver.offset_left = -200
+	ver.offset_right = -UiStyle.SAFE
+	ver.offset_top = -30
+	ver.offset_bottom = -6
+	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	ver.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+	add_child(ver)
 	show_menu()
 	# はじめて起動したとき: チュートリアルを見るか聞く(「あとで」でも、あとからロビーと⚙メニューで遊べる)
 	if Profile.tutorial == 0 and DisplayServer.get_name() != "headless":

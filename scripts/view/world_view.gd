@@ -352,8 +352,11 @@ func sync(state: GameState, delta: float) -> void:
 		if not is_equal_approx(wb, _wall_bright):
 			_wall_bright = wb
 			for wl in _wall_labels:
+				# (ラウンドのあいだに消えた文字もあるので、型をつける前に確かめる)
+				if not is_instance_valid(wl[0]):
+					continue
 				var lab: Label3D = wl[0]
-				if is_instance_valid(lab):
+				if lab:
 					var m: Color = wl[1]
 					var o: Color = wl[2]
 					lab.modulate = Color(m.r * wb, m.g * wb, m.b * wb, m.a)

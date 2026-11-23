@@ -52,6 +52,11 @@ jobs:
           rm -rf templates tpl.tpz
           ls "$dest"
 
+      - name: Write build id
+        run: |
+          printf 'class_name BuildInfo\nextends RefCounted\n## どのバージョンで遊んでいるか(ロビーの右下に出す)。公開するときに、コミットの番号で書きかえる\nconst ID := "%s"\n' "${GITHUB_SHA::7}" > scripts/core/build_info.gd
+          cat scripts/core/build_info.gd
+
       - name: Import project
         run: |
           ~/godot/godot --headless --import 2>&1 | tee import.log || true
