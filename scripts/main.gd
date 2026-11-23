@@ -445,6 +445,11 @@ func _physics_process(delta: float) -> void:
 	# 牛乳がかかっている間は、画面が白い
 	# 追いかけっこで走っている間は、手で牛乳をぬぐって下のほうが見える(すぐ転ばないように)
 	hud.set_milk(state.is_milked(me) and state.phase != GameState.Phase.RESULT, state.milk_left_ratio(me), state.is_runner(me))
+	# 突風: 砂でみんなの画面が見えにくい(はじめと終わりは少しずつ)
+	var g := 0.0
+	if state.gust_left > 0.0 and state.phase != GameState.Phase.RESULT:
+		g = GameConfig.GUST_ALPHA * clampf(minf(state.gust_left, GameConfig.GUST_TIME - state.gust_left) / 0.5, 0.0, 1.0)
+	hud.set_gust(g)
 	touch.set_milk_state(state.milk_left, _milk_aiming)
 	var judged := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
 	touch.set_looks_left(me.looks_left if judged else -1)
@@ -1167,6 +1172,7 @@ func _show_event(e: Dictionary) -> void:
 					"neighbor": tr("となりの人には送れない"),
 					"already": tr("この人には、このラウンドもう送った"),
 					"full": tr("この人はスタンプがいっぱい(%d つ)\n鬼が進むと空く。また送れるよ") % GameConfig.STAMP_SLOTS,
+					"teacher": tr("しーっ! 先生が見ている"),
 				}
 				hud.show_message(why.get(e.get("reason", ""), tr("いまは送れない")), Color(0.3, 0.3, 0.3), 1.4)
 		"dropped":
@@ -1257,10 +1263,21 @@ func _show_event(e: Dictionary) -> void:
 			audio.play("beach_start" if state.stage == "beach" else "chime", -6.0)
 		"lightning":
 			# 夜の教室の雷(音と光は WorldView)。一瞬だけ、暗い席のうしろも見える
-			hud.show_message(tr("カミナリ!"), Color(0.25, 0.3, 0.6), 1.2)
+			hud.show_event(tr("カミナリ!"), tr("一瞬だけ、暗い席のうしろも見える"), Color(0.35, 0.4, 0.8))
 		"blackout":
 			# 停電イベント(音は WorldView が鳴らす)
-			hud.show_message(tr("停電!"), Color(0.15, 0.15, 0.35), 1.8)
+			hud.show_event(tr("停電!"), tr("鬼が1周するまで、まっくら"), Color(0.3, 0.3, 0.55))
+		"event":
+			# 1試合に1回のイベント(音と見た目は WorldView)
+			match str(e.get("kind", "")):
+				"teacher":
+					hud.show_event(tr("先生の見回り!"), tr("しーっ! しばらく言葉を送れない"), Color(0.25, 0.5, 0.35))
+				"gust":
+					hud.show_event(tr("突風!"), tr("砂が舞って、しばらく見えにくい"), Color(0.7, 0.5, 0.2))
+				"chime":
+					hud.show_event(tr("チャイム!"), tr("このラウンドは、鬼が少し速くなる"), Color(0.75, 0.4, 0.2))
+				"gull":
+					hud.show_event(tr("カモメ!"), tr("だれかのうしろに貝がらが…"), Color(0.3, 0.55, 0.8))
 		"last_lap":
 			# 鬼が最後の1周に入った合図
 			audio.play("lap", -4.0)

@@ -908,13 +908,61 @@ func _test_sounds() -> void:
 	_check(told or s.phase != GameState.Phase.CHASE, "鬼が最後の1周に入ると合図のお知らせ")
 
 
+## イベント: 同じイベントが続けて起きにくい・先生の見回り・チャイム・突風・カモメ
+func _test_events() -> void:
+	var s := GameState.new()
+	var repeats := 0
+	var prev := ""
+	for m in 12:
+		s.start_match(200 + m)
+		if s.event_kind == prev:
+			repeats += 1
+		prev = s.event_kind
+	_check(repeats == 0, "イベント: 同じイベントが2試合続けて起きない(%d回)" % repeats)
+	s.stage = "beach"
+	s.start_match(5)
+	_check(s.event_kind in ["gust", "gull"], "イベント: 海辺は突風かカモメ(%s)" % s.event_kind)
+	# 先生の見回り: だれも言葉を送れない
+	s.stage = "classroom"
+	s.start_match(3)
+	s.take_events()
+	s._start_event("teacher")
+	_check(_has(s.take_events(), "event"), "イベント: 先生の見回りのお知らせ")
+	var a := s.get_actor_at_seat(1)
+	var b := s.get_actor_at_seat(3)
+	_check(s.stamp_block_reason(a.id, b.id) == "teacher", "イベント: 先生の見回り中は言葉を送れない")
+	s.tick(GameConfig.TEACHER_TIME + 0.1)
+	_check(s.stamp_block_reason(a.id, b.id) != "teacher", "イベント: 見回りが終わると、また送れる")
+	# チャイム: 鬼が少し速い
+	var oni := s.get_actor(s.oni_id)
+	var v0 := s._oni_walk_speed(oni)
+	s._start_event("chime")
+	_check(s._oni_walk_speed(oni) > v0, "イベント: チャイムで鬼が速くなる")
+	# 突風: 画面が見えにくい時間
+	s._start_event("gust")
+	_check(s.gust_left > 0.0, "イベント: 突風で見えにくくなる")
+	# カモメ: だれかのうしろに貝がら。貝がらだけなら振り向くとお手つき
+	s.start_match(4)
+	s.take_events()
+	s._start_event("gull")
+	_check(s.shell_seat >= 0 and s.shell_seat != s.drop_target_seat, "イベント: カモメが落とし物ではない席に貝がらを置く")
+	var victim := s.get_actor_at_seat(s.shell_seat)
+	s.set_looking_back(victim.id, true)
+	_check(victim.role == GameState.Role.OUT and int(s.match_stats.get(victim.id, {}).get("gull_fooled", 0)) == 1,
+			"イベント: 貝がらだけならお手つき(カモメにだまされた)")
+	_check(s.event_log.size() >= 1, "イベント: 起きたイベントを記録する")
+
+
 func _test_blackout() -> void:
-	# 1試合に1回、2〜4ラウンド目のどれかで停電する
+	# 1試合に1回、2〜4ラウンド目のどれかでイベントが起きる(ステージに合ったもの。停電はその1つ)
 	for seed_value in 10:
 		var s0 := GameState.new()
 		s0.start_match(seed_value)
-		_check(s0.blackout_round >= GameConfig.BLACKOUT_ROUND_MIN and s0.blackout_round <= GameConfig.BLACKOUT_ROUND_MAX,
-				"停電するのは2〜4ラウンド目のどれか(%d)" % (s0.blackout_round + 1))
+		_check(s0.event_round >= GameConfig.BLACKOUT_ROUND_MIN and s0.event_round <= GameConfig.BLACKOUT_ROUND_MAX,
+				"イベントは2〜4ラウンド目のどれか(%d)" % (s0.event_round + 1))
+		_check(s0.event_kind in GameConfig.EVENTS_BY_STAGE["classroom"], "教室のイベントは教室のものから(%s)" % s0.event_kind)
+		_check((s0.event_kind == "blackout") == (s0.blackout_round >= 0), "停電のときだけ、停電するラウンドが決まる")
+	_test_events()
 	# 停電するラウンドでは、ラウンドの途中でとつぜん停電する。拾って追いかけっこになったら電気がつく
 	var s := GameState.new()
 	s.start_match(7)

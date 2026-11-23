@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(534)
+## 一覧(549)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -356,6 +356,21 @@
 | みんながだまされる中、手下を %d回見抜いた | Saw through the minion while others were fooled: %d |
 | %s ・ %s | %s · %s |
 | 記念写真 | Group Photo |
+| カモメにだまされた人 | Fooled by a Seagull |
+| カモメの貝がらに振り向いて、お手つき | Looked back at a seagull's shell. Wrong! |
+| 落とし物だと思ったら、貝がらだった | Thought it was the item. It was a shell |
+| しーっ! 先生が見ている | Shh! The teacher is watching |
+| 一瞬だけ、暗い席のうしろも見える | For a moment, you can see behind the dark seats |
+| 鬼が1周するまで、まっくら | Pitch dark until the oni completes a lap |
+| 先生の見回り! | Teacher Patrol! |
+| しーっ! しばらく言葉を送れない | Shh! No messages for a while |
+| 突風! | Gust of Wind! |
+| 砂が舞って、しばらく見えにくい | Blowing sand makes it hard to see |
+| チャイム! | The Bell! |
+| このラウンドは、鬼が少し速くなる | The oni walks a bit faster this round |
+| カモメ! | Seagull! |
+| だれかのうしろに貝がらが… | A shell behind someone… |
+| しーっ! | Shh! |
 | 試合終了! | Match Over! |
 | そして…称号発表! | And now… the Awards! |
 | はい、チーズ! | Say cheese! |

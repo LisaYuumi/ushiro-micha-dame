@@ -139,6 +139,21 @@ var chaser_progress: float = 0.0
 ## 停電イベント: 停電するラウンド(1試合に1回。2〜4ラウンド目のどれか。-1 = なし)と、いま停電中か。
 ## 停電は見た目だけのイベント(ルールは変わらない)。追いかけっこが始まったら電気がつく
 var blackout_round: int = -1
+## 1試合に1回のイベント: この試合のイベントと、起きるラウンド(GameConfig.EVENTS_BY_STAGE)。
+## 停電と雷は blackout_round のしくみで起きる。ほかは鬼が少し歩いたところで _start_event
+var event_kind := ""
+var event_round := -1
+## 前の試合のイベント(同じイベントが2試合続けて起きにくいように。試合をまたいで残す)
+var last_event_kind := ""
+## 起きたイベントの記録 [{"round", "kind"}](称号などに使う)
+var event_log: Array = []
+## 先生の見回りの残り秒(この間はだれも言葉を送れない)/突風の残り秒(画面が見えにくい)/
+## チャイム(このラウンドの鬼が速い)/カモメが貝がらを置いた席(-1 ならなし。貝がらは落とし物ではない)
+var teacher_left := 0.0
+var gust_left := 0.0
+var chime_on := false
+var shell_seat := -1
+var _event_angle := INF
 ## 夜の教室: 雷で明るい残りの秒数(0 なら暗いまま)
 var lightning_left: float = 0.0
 var blackout: bool = false
@@ -318,7 +333,7 @@ func start_match_custom(seed_value: int, human_ids: Array, first_oni: int, names
 	match_over = false
 	last_minion_id = -1
 	# 停電するラウンドを決めておく(2〜4ラウンド目のどれか1回)
-	blackout_round = rng.randi_range(GameConfig.BLACKOUT_ROUND_MIN, GameConfig.BLACKOUT_ROUND_MAX)
+	_choose_event()
 	var lineup := []
 	for i in seat_count + 1:
 		if i != first_oni:
@@ -494,6 +509,14 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	_blackout_angle = INF
 	if round_index == blackout_round:
 		_blackout_angle = oni_angle + TAU * rng.randf_range(GameConfig.BLACKOUT_START_LAPS_MIN, GameConfig.BLACKOUT_START_LAPS_MAX)
+	# ほかのイベント(先生の見回り・突風・チャイム・カモメ)も、鬼が少し歩いたところで起きる
+	teacher_left = 0.0
+	gust_left = 0.0
+	chime_on = false
+	shell_seat = -1
+	_event_angle = INF
+	if round_index == event_round and not (event_kind in ["blackout", "lightning"]):
+		_event_angle = oni_angle + TAU * rng.randf_range(GameConfig.BLACKOUT_START_LAPS_MIN, GameConfig.BLACKOUT_START_LAPS_MAX)
 	var step := TAU / seat_count
 	next_seat_crossing = ceilf(oni_angle / step) * step
 	if oni_is_player:
@@ -540,16 +563,23 @@ func tick(delta: float) -> void:
 		seat_pass_age[i] += delta
 	if lightning_left > 0.0:
 		lightning_left = maxf(lightning_left - delta, 0.0)
+	teacher_left = maxf(teacher_left - delta, 0.0)
+	gust_left = maxf(gust_left - delta, 0.0)
+	if (phase == Phase.WALKING or phase == Phase.DROPPED) and oni_angle >= _event_angle:
+		_event_angle = INF
+		_start_event(event_kind)
 	if is_night() and (phase == Phase.WALKING or phase == Phase.DROPPED) and oni_angle >= _blackout_angle:
 		# 夜の教室は停電の代わりに雷: 一瞬だけ部屋全体が明るくなり、暗い席のうしろも見える
 		_blackout_angle = INF
 		lightning_left = GameConfig.LIGHTNING_TIME
 		events.append({"type": "lightning"})
+		event_log.append({"round": round_index, "kind": "lightning"})
 	elif not blackout and (phase == Phase.WALKING or phase == Phase.DROPPED) and oni_angle >= _blackout_angle:
 		_blackout_angle = INF
 		blackout = true
 		_blackout_end_angle = oni_angle + TAU * GameConfig.BLACKOUT_LAPS
 		events.append({"type": "blackout"})
+		event_log.append({"round": round_index, "kind": "blackout"})
 	elif blackout and oni_angle >= _blackout_end_angle:
 		# 鬼が1周したら、電気がつく
 		_lights_on()
@@ -622,6 +652,9 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 		# 外れの振り向き: 減点はしない。回数だけ数える(表情と、だました人の点数に使う)
 		a.otetsuki_count += 1
 		_stat(actor_id, "otetsuki")
+		if shell_seat >= 0 and shell_seat == a.seat_index:
+			# カモメの貝がらにだまされた
+			_stat(actor_id, "gull_fooled")
 		if blackout or dark_hides(a.seat_index):
 			_stat(actor_id, "otetsuki_dark")
 		# 早とちり: ラウンドが始まってすぐのお手つき
@@ -792,6 +825,9 @@ func stamp_block_reason(sender_id: int, target_id: int) -> String:
 		return "invalid"
 	if phase != Phase.WALKING and phase != Phase.DROPPED:
 		return "phase"
+	# 先生の見回り中は、だれも言葉を送れない(しーっ!)
+	if teacher_left > 0.0:
+		return "teacher"
 	if sender.stamps_left == 0:
 		return "invalid"
 	if sender.role == Role.SEATED and is_stamp_neighbor(sender.seat_index, target.seat_index):
@@ -1104,6 +1140,9 @@ func _nearest_seat_crossing() -> float:
 func _oni_walk_speed(oni: Actor, delta: float = 0.0) -> float:
 	# 落とすまでは重い落とし物を持っているので遅い
 	var carry := lerpf(1.0, GameConfig.ONI_CARRY_SPEED_HEAVY, item_weight()) if phase == Phase.WALKING else 1.0
+	# チャイムのラウンドは、鬼が少し速い
+	if chime_on:
+		carry *= GameConfig.CHIME_ONI_SPEED
 	if not oni_is_player:
 		return GameConfig.ONI_WALK_SPEED * carry
 	var ang := oni_angle
@@ -1245,6 +1284,10 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"milk_left": milk_left,
 		"blackout": blackout,
 		"lightning_left": lightning_left,
+		"teacher_left": teacher_left,
+		"gust_left": gust_left,
+		"chime_on": chime_on,
+		"shell_seat": shell_seat,
 		"stamp_words": stamp_words,
 		"stamp_langs": stamp_langs,
 		"stamp_picks": stamp_picks,
@@ -1319,6 +1362,10 @@ func apply_snapshot(s: Dictionary) -> void:
 	milk_left = s.get("milk_left", 0)
 	blackout = s.get("blackout", false)
 	lightning_left = s.get("lightning_left", 0.0)
+	teacher_left = s.get("teacher_left", 0.0)
+	gust_left = s.get("gust_left", 0.0)
+	chime_on = s.get("chime_on", false)
+	shell_seat = s.get("shell_seat", -1)
 	stamp_words = s.get("stamp_words", {})
 	stamp_langs = s.get("stamp_langs", {})
 	stamp_picks = s.get("stamp_picks", {})
@@ -1369,6 +1416,53 @@ func script_obstacle(actor_id: int, ahead: float, kind: String, clear: bool) -> 
 		return {}
 	var r: float = GameConfig.LANE_RADII[a.lane]
 	return _add_obstacle(fposmod(runner_angle(a) + ahead / r, TAU), a.lane, kind)
+
+
+## この試合のイベントを決める: ステージに合ったものからランダム(前の試合と同じものは、ほかがあれば選ばない)。
+## 起きるラウンドは2〜4ラウンド目のどれか。停電と雷は blackout_round のしくみで起きる
+func _choose_event() -> void:
+	var cands: Array = (GameConfig.EVENTS_BY_STAGE.get(stage, GameConfig.EVENTS_BY_STAGE["classroom"]) as Array).duplicate()
+	if cands.size() > 1:
+		cands.erase(last_event_kind)
+	event_kind = cands[rng.randi_range(0, cands.size() - 1)]
+	event_round = rng.randi_range(GameConfig.BLACKOUT_ROUND_MIN, GameConfig.BLACKOUT_ROUND_MAX)
+	blackout_round = event_round if event_kind in ["blackout", "lightning"] else -1
+	last_event_kind = event_kind
+	event_log = []
+
+
+## イベントが起きる(停電と雷のほか)
+func _start_event(kind: String) -> void:
+	var e := {"type": "event", "kind": kind}
+	match kind:
+		"teacher":
+			teacher_left = GameConfig.TEACHER_TIME
+		"gust":
+			gust_left = GameConfig.GUST_TIME
+		"chime":
+			chime_on = true
+		"gull":
+			# だれかのうしろに貝がら(落とし物が置かれる予定の席と、もう落ちている席はさける)
+			var seats := []
+			for i in _occupied_seats():
+				if i != drop_target_seat:
+					seats.append(i)
+			if seats.is_empty():
+				seats = _occupied_seats()
+			if seats.is_empty():
+				return
+			shell_seat = seats[rng.randi_range(0, seats.size() - 1)]
+			e["seat"] = shell_seat
+			e["pos"] = _ring_point(seat_angle(shell_seat), GameConfig.DROP_RADIUS)
+		_:
+			return
+	event_log.append({"round": round_index, "kind": kind})
+	events.append(e)
+
+
+## この人のうしろに、カモメの貝がらがあるか
+func has_shell_behind(a: Actor) -> bool:
+	return a != null and shell_seat >= 0 and a.role == Role.SEATED and a.seat_index == shell_seat
 
 
 ## 落とす相手と、落とすタイミング(角度)を決める。

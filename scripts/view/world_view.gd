@@ -334,6 +334,7 @@ func sync(state: GameState, delta: float) -> void:
 	_update_seat_camera(state, delta)
 	_update_vote_view(state, delta)
 	_update_ceremony(delta)
+	_update_events(state, delta)
 	if _overlay:
 		_overlay.update(state, get_viewport().get_camera_3d())
 	if _blackout:
@@ -980,6 +981,18 @@ func on_event(e: Dictionary) -> void:
 			_play_actor(e["actor"], "banana" if e.get("kind", "") == "banana" else "fall", -2.0, -6.0)
 		"blackout":
 			AudioDirector.sfx("power_off", -2.0)
+		"event":
+			# 1試合に1回のイベント
+			match str(e.get("kind", "")):
+				"teacher":
+					AudioDirector.sfx("shh", -2.0)
+				"gust":
+					AudioDirector.sfx("wind_gust", -2.0)
+				"chime":
+					AudioDirector.sfx("chime", 0.0)
+				"gull":
+					AudioDirector.sfx("gull", -3.0)
+					_start_gull(e.get("pos", Vector3.ZERO))
 		"lightning":
 			# 雷: ピシャッ、ゴロゴロ…(夜の教室)
 			AudioDirector.sfx("thunder", -3.0)
@@ -2500,6 +2513,152 @@ func _update_vote_view(state: GameState, delta: float) -> void:
 	var k := clampf(_vote_view_t / 0.7, 0.0, 1.0)
 	k = k * k * (3.0 - 2.0 * k)
 	_top_cam.global_transform = _vote_from.interpolate_with(want, k)
+
+
+# --- 1試合に1回のイベントの見た目(先生の見回り・カモメの貝がら) ---
+var _teacher: CharacterModel
+var _teacher_say: Label3D
+var _shell: Node3D
+var _gull: Node3D
+var _gull_t := 0.0
+var _gull_to := Vector3.ZERO
+var _shell_show_at := 0.0
+## カモメが飛んでくる時間・飛んでいく時間(秒)
+const GULL_IN := 1.6
+const GULL_OUT := 1.4
+
+
+func _update_events(state: GameState, delta: float) -> void:
+	# 先生の見回り: 黒板の前に先生が立って「しーっ!」
+	var teacher_on := state.teacher_left > 0.0 and state.phase != GameState.Phase.RESULT
+	if teacher_on and (_teacher == null or not is_instance_valid(_teacher)):
+		_teacher = CharacterModel.new()
+		add_child(_teacher)
+		_teacher.build(Color("5A6478"), "", HudFont.get_font())
+		_teacher.set_name_visible(false)
+		_teacher.scale = Vector3.ONE * 1.15
+		_teacher.position = Vector3(-2.6, 0.0, PHOTO_Z - 1.2)
+		_teacher.rotation.y = PI + 0.35
+		_teacher.set_pose("idle")
+		_teacher.set_gesture("chin")
+		_teacher_say = Label3D.new()
+		_teacher_say.text = tr("しーっ!")
+		_teacher_say.font = HudFont.get_font()
+		_teacher_say.font_size = 72
+		_teacher_say.pixel_size = 0.004
+		_teacher_say.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_teacher_say.outline_size = 14
+		_teacher_say.outline_modulate = GameConfig.COLOR_INK
+		_teacher_say.position = Vector3(0, 2.25, 0)
+		_teacher.add_child(_teacher_say)
+	if _teacher and is_instance_valid(_teacher):
+		_teacher.visible = teacher_on
+		if teacher_on:
+			_teacher.set_expression(CharacterModel.SMIRK)
+			_teacher.animate(delta, false)
+	# カモメの貝がら(落とし物ではない)。見え方は落とし物と同じ(自分と両どなりのうしろは見えない)
+	if state.shell_seat >= 0 and state.phase != GameState.Phase.RESULT:
+		if _shell == null or not is_instance_valid(_shell):
+			_shell = _build_shell()
+			add_child(_shell)
+		_shell.position = _ring_point_v(state.seat_angle(state.shell_seat), GameConfig.DROP_RADIUS)
+		_shell.visible = _clock >= _shell_show_at
+		var me := state.get_local_player()
+		var hidden := me != null and me.role == GameState.Role.SEATED and state.shell_seat != me.seat_index \
+				and not state.sees_behind(me.id, state.shell_seat)
+		_set_item_layers(_shell, 1 << (HIDDEN_LAYER - 1) if hidden else 1)
+	elif _shell and is_instance_valid(_shell):
+		_shell.visible = false
+	# カモメが飛んでくる → 貝がらを置く → 飛んでいく
+	if _gull and is_instance_valid(_gull):
+		_gull_t += delta
+		var from := _gull_to + Vector3(7.0, 4.5, -3.0)
+		var away := _gull_to + Vector3(-7.0, 5.5, 4.0)
+		var above := _gull_to + Vector3(0, 1.1, 0)
+		if _gull_t < GULL_IN:
+			var k := _gull_t / GULL_IN
+			_gull.position = from.lerp(above, k * (2.0 - k))
+		else:
+			var k := clampf((_gull_t - GULL_IN) / GULL_OUT, 0.0, 1.0)
+			_gull.position = above.lerp(away, k * k)
+		var dir := (above - from) if _gull_t < GULL_IN else (away - above)
+		_gull.rotation.y = atan2(-dir.x, -dir.z)
+		var flap := sin(_gull_t * 18.0) * 0.6
+		for w in _gull.get_children():
+			if w.has_meta("wing"):
+				(w as Node3D).rotation.z = flap * float(w.get_meta("wing"))
+		if _gull_t >= GULL_IN + GULL_OUT:
+			_gull.queue_free()
+			_gull = null
+
+
+func _ring_point_v(angle: float, radius: float) -> Vector3:
+	return Vector3(sin(angle), 0.0, cos(angle)) * radius
+
+
+func _start_gull(to: Vector3) -> void:
+	if _gull and is_instance_valid(_gull):
+		_gull.queue_free()
+	_gull = Node3D.new()
+	add_child(_gull)
+	_gull_to = to
+	_gull_t = 0.0
+	_shell_show_at = _clock + GULL_IN
+	var white := Color("F4F6F8")
+	var body := CapsuleMesh.new()
+	body.radius = 0.12
+	body.height = 0.5
+	var bm := Toon.mesh(body, white, 0.02)
+	bm.rotation.x = PI / 2.0
+	_gull.add_child(bm)
+	var head := SphereMesh.new()
+	head.radius = 0.1
+	head.height = 0.2
+	var hm := Toon.mesh(head, white, 0.02)
+	hm.position = Vector3(0, 0.06, -0.26)
+	_gull.add_child(hm)
+	var beak := CylinderMesh.new()
+	beak.top_radius = 0.0
+	beak.bottom_radius = 0.035
+	beak.height = 0.12
+	var km := Toon.mesh(beak, Color("F2A33A"), 0.01)
+	km.position = Vector3(0, 0.05, -0.38)
+	km.rotation.x = -PI / 2.0
+	_gull.add_child(km)
+	for side in [-1.0, 1.0]:
+		var wing := Node3D.new()
+		wing.set_meta("wing", side)
+		_gull.add_child(wing)
+		var wb := BoxMesh.new()
+		wb.size = Vector3(0.55, 0.03, 0.22)
+		var wm := Toon.mesh(wb, white, 0.015)
+		wm.position = Vector3(side * 0.3, 0, 0)
+		wing.add_child(wm)
+		var tip := BoxMesh.new()
+		tip.size = Vector3(0.18, 0.031, 0.2)
+		var tm := Toon.mesh(tip, Color("5A6270"), 0.01)
+		tm.position = Vector3(side * 0.5, 0, 0)
+		wing.add_child(tm)
+
+
+## 貝がら: 白とうすいピンクの扇の形(遠くからは落とし物と見分けにくい大きさ)
+func _build_shell() -> Node3D:
+	var root := Node3D.new()
+	var sp := SphereMesh.new()
+	sp.radius = 0.2
+	sp.height = 0.4
+	var m := Toon.mesh(sp, Color("FBE3E0"), 0.015)
+	m.scale = Vector3(1.0, 0.28, 0.85)
+	m.position = Vector3(0, 0.05, 0)
+	root.add_child(m)
+	for i in 5:
+		var rb := BoxMesh.new()
+		rb.size = Vector3(0.025, 0.02, 0.3)
+		var rm := Toon.mesh(rb, Color("E8B4B0"), 0.0)
+		rm.position = Vector3(0, 0.1, 0.0)
+		rm.rotation.y = (float(i) - 2.0) * 0.32
+		root.add_child(rm)
+	return root
 
 
 # --- 試合の終わりの演出(TitleReveal から。見た目だけ) ---

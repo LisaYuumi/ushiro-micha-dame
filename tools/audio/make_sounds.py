@@ -477,6 +477,37 @@ def bgm_lobby():
     return norm(_render_song(bpm, bars, parts), 0.8)
 
 
+def shh():
+    # 先生の「しーっ!」: 高い音の多い息の音(だんだん大きく、すっと消える)
+    d = 1.1
+    t = t_of(d)
+    breath = bandpass(noise(d), 2500, 7000)
+    e = np.minimum(t / 0.15, 1.0) * np.clip((d - t) / 0.35, 0.0, 1.0)
+    return norm(breath * e, 0.7)
+
+
+def wind_gust():
+    # 突風: 「ビューッ」と強まって弱まる風(音の高さも少し動く)
+    d = 2.2
+    t = t_of(d)
+    w = mix(lowpass(noise(d), 900), bandpass(noise(d), 600, 1800) * 0.6)
+    e = np.sin(np.pi * np.clip(t / d, 0, 1)) ** 1.5
+    return norm(w * e, 0.8)
+
+
+def gull():
+    # カモメ: 「ミャーオ、ミャーオ」と高く鳴く(2回)
+    d = 1.3
+    out = np.zeros(int(d * SR))
+    for st in (0.0, 0.55):
+        ln = 0.42
+        f = glide(1900, 1300, ln) * (1.0 + 0.03 * np.sin(2 * np.pi * 30 * t_of(ln)))
+        call = mix(tone(f, ln, "saw") * 0.4, tone(f * 2, ln) * 0.2)
+        call = bandpass(call, 900, 4500) * env_ar(ln, 0.04, 0.2)
+        out = out + at(call, st, d)
+    return norm(out, 0.75)
+
+
 def bgm_ending():
     # 試合の終わり(試合終了 → 表彰台 → 称号発表): わくわくする行進曲(ト長調、112bpm、8小節)。小太鼓がだんだん大きく
     bpm, bars = 112, 8
@@ -1223,6 +1254,7 @@ SOUNDS = {
     "vote_don": vote_don, "drumroll": drumroll, "jajaan": jajaan, "vote_pon": vote_pon,
     "title_pon": title_pon,
     "bgm_ending": bgm_ending, "bgm_photo": bgm_photo,
+    "shh": shh, "wind_gust": wind_gust, "gull": gull,
 }
 
 

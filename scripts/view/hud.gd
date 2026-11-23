@@ -1110,6 +1110,45 @@ func show_banner(text: String, color: Color, seconds: float, font_size: int = 84
 	_banner_tween.tween_callback(func() -> void: _banner.visible = false)
 
 
+## 1試合に1回のイベントの名前を大きく出し、下にひとこと
+func show_event(title: String, sub: String, color: Color) -> void:
+	show_banner(title, color, 2.2, 80)
+	if sub != "":
+		show_message(sub, color.darkened(0.2), 2.6)
+
+
+## 突風: 砂が舞って画面が見えにくい(alpha = 0 で消す)。砂のすじが流れる
+var _gust: Control
+var _gust_alpha := 0.0
+
+
+func set_gust(alpha: float) -> void:
+	if alpha <= 0.0 and _gust == null:
+		return
+	if _gust == null:
+		_gust = Control.new()
+		_gust.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_gust.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_gust.draw.connect(_draw_gust)
+		add_child(_gust)
+		move_child(_gust, 0)
+	_gust_alpha = alpha
+	_gust.visible = alpha > 0.0
+	if _gust.visible:
+		_gust.queue_redraw()
+
+
+func _draw_gust() -> void:
+	var vp := _gust.get_viewport_rect().size
+	var a := _gust_alpha
+	_gust.draw_rect(Rect2(Vector2.ZERO, vp), Color(0.86, 0.74, 0.52, a))
+	var t := Time.get_ticks_msec() / 1000.0
+	for i in 40:
+		var y := fposmod(float(i) * 97.0 + sin(float(i)) * 40.0, vp.y)
+		var x := fposmod(float(i) * 173.0 + t * (500.0 + float(i % 7) * 60.0), vp.x + 300.0) - 150.0
+		_gust.draw_line(Vector2(x, y), Vector2(x - 120.0, y + 8.0), Color(0.95, 0.85, 0.65, a * 0.9), 4.0, true)
+
+
 ## 画面の上のまん中に、役を出す(空文字で消す)。color の地に白い文字
 func set_role_badge(text: String, color: Color) -> void:
 	_pill_text(_badge, text)

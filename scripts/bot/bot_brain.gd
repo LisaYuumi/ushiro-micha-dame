@@ -18,6 +18,8 @@ var _stamp_pending := {}
 var _dodge := {}
 ## ボットが投票するまでの残り時間(id -> 秒)
 var _vote_left := {}
+## カモメの貝がらに振り向くか、もう考えた人(id -> true)
+var _shell_checked := {}
 
 
 func reset(seed_value: int = -1) -> void:
@@ -28,6 +30,7 @@ func reset(seed_value: int = -1) -> void:
 	_stamp_pending.clear()
 	_dodge.clear()
 	_vote_left.clear()
+	_shell_checked.clear()
 	if seed_value >= 0:
 		rng.seed = seed_value
 	else:
@@ -35,6 +38,8 @@ func reset(seed_value: int = -1) -> void:
 
 
 func update(state: GameState, delta: float) -> void:
+	if state.shell_seat < 0 and not _shell_checked.is_empty():
+		_shell_checked.clear()
 	if state.voting_open:
 		_update_votes(state, delta)
 	for a in state.actors:
@@ -156,7 +161,12 @@ func _update_seated(state: GameState, a: GameState.Actor, delta: float) -> void:
 		_stamp_pending.erase(a.id)
 		if not state.active_stamps.get(a.id, []).is_empty():
 			_consider_stamps(state, a)
-	if not state.has_handkerchief_behind(a):
+	# カモメが自分のうしろに貝がらを置いた: 落とし物だと思って振り向いてしまうことがある(1回だけ考える)
+	if state.has_shell_behind(a) and not state.has_handkerchief_behind(a) and not _shell_checked.has(a.id):
+		_shell_checked[a.id] = true
+		if rng.randf() < GameConfig.GULL_BOT_LOOK_CHANCE:
+			_notice_left[a.id] = rng.randf_range(GameConfig.BOT_NOTICE_TIME_MIN, GameConfig.BOT_NOTICE_TIME_MAX)
+	if not state.has_handkerchief_behind(a) and not (state.has_shell_behind(a) and _notice_left.has(a.id)):
 		return
 	if not _notice_left.has(a.id):
 		# 重い落とし物ほど置く音が大きいので、早く気づく
@@ -191,6 +201,9 @@ func _update_stamp(state: GameState, a: GameState.Actor, delta: float) -> void:
 		return
 	# 停電中は、だれの後ろも見えないので、ボットはスタンプを送らない(電気がついたら、また送る)
 	if state.blackout:
+		return
+	# 突風で砂が舞っている間も、だれの後ろも見えにくいので送らない
+	if state.gust_left > 0.0:
 		return
 	var is_oni := a.role == GameState.Role.ONI
 	if not _stamp_left.has(a.id):
@@ -231,6 +244,9 @@ func _update_stamp(state: GameState, a: GameState.Actor, delta: float) -> void:
 	if sees:
 		var honest_chance := GameConfig.BOT_NORMAL_HONEST_CHANCE
 		var behind := state.has_handkerchief_behind(target)
+		# カモメの貝がら: 遠くからは落とし物と見分けにくいので、落とし物だと思ってしまうことがある
+		if not behind and state.has_shell_behind(target) and rng.randf() < GameConfig.GULL_BOT_FOOL_CHANCE:
+			behind = true
 		match state.stamp_role_of(a.id):
 			"minion":
 				# 手下: 何もない人にはだいたい本当(ふつうの人と見分けにくく)、落とされた人には「平気」とウソをつきやすい

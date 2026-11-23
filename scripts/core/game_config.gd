@@ -364,3 +364,21 @@ const OUTLINE_WIDTH := 0.025
 
 ## 試合の最後: 点数のカードを見せてから、称号の発表を始めるまで(秒)。称号の発表の長さは TitleReveal
 const TITLE_DELAY := 3.0
+
+# --- 1試合に1回のイベント(ラウンド2〜4のどこか。BLACKOUT_ROUND_MIN〜MAX。始まる時は停電と同じ BLACKOUT_START_LAPS_*) ---
+## ステージごとに起きるイベント(この中からランダム。同じイベントは2試合続けて起きにくい)
+const EVENTS_BY_STAGE := {
+	"classroom": ["blackout", "teacher", "chime"],
+	"night": ["lightning", "teacher"],
+	"beach": ["gust", "gull"],
+}
+## 先生の見回り: だれも言葉を送れない時間(秒)
+const TEACHER_TIME := 6.0
+## 突風: 砂でみんなの画面が見えにくい時間(秒)と、見えにくさ(0〜1)
+const GUST_TIME := 5.0
+const GUST_ALPHA := 0.82
+## チャイム: そのラウンドの鬼の歩く速さの倍率
+const CHIME_ONI_SPEED := 1.25
+## カモメ: ボットが、ほかの人のうしろの貝がらを落とし物だと思う確率/自分のうしろに置かれた貝がらに振り向いてしまう確率
+const GULL_BOT_FOOL_CHANCE := 0.5
+const GULL_BOT_LOOK_CHANCE := 0.3
