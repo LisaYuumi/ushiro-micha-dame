@@ -465,6 +465,7 @@ func _physics_process(delta: float) -> void:
 	var voting := showing_result and state.voting_open and not state.match_over
 	var revealing := showing_result and not state.voting_open and state.reveal_left >= 0.0 and not state.match_over
 	view.set_vote_view(voting or revealing)
+	_update_evidence(voting or revealing)
 	# 発表が終わったら、ルーム主が「次へ」を押すまで、手下が出た画面のまま待つ
 	var waiting_next := state.can_go_next()
 	if voting:
@@ -896,6 +897,42 @@ func _close_titles() -> void:
 	view.ceremony_end()
 
 
+# --- 投票の証拠: このラウンドで「だれが、大事な人に、何と言ったか」 ---
+var _evidence_on := false
+var _evidence_sig := ""
+
+
+## 投票と発表の間: 上に「このラウンドで起きたこと」、各キャラの頭の上に大事な人へ送った言葉、大事な人の足もとを光らせる。
+## 本当かウソかは出さない(プレイヤーが見比べて考える)
+func _update_evidence(on: bool) -> void:
+	var ov := view.get_overlay()
+	if not on:
+		if _evidence_on:
+			_evidence_on = false
+			_evidence_sig = ""
+			hud.set_evidence_summary("")
+			hud.hide_evidence_list()
+			view.set_key_people([])
+			if ov:
+				ov.set_evidence({})
+		return
+	var keys := state.evidence_key_ids()
+	var sig := "%s|%d" % [str(keys), state.stamp_log.size()]
+	if _evidence_on and sig == _evidence_sig:
+		return
+	_evidence_on = true
+	_evidence_sig = sig
+	hud.set_evidence_summary(HeadOverlay.evidence_summary(state))
+	view.set_key_people(keys)
+	if ov:
+		ov.set_evidence(HeadOverlay.evidence_bubbles(state))
+
+
+func _show_evidence_list(id: int) -> void:
+	AudioDirector.click()
+	hud.show_evidence_list(tr("%sが送った言葉") % HeadOverlay.evidence_name(state, id), HeadOverlay.evidence_sent_lines(state, id))
+
+
 ## 結果カードの1行。delta: このラウンドで増えた分も出すか
 func _score_row_for(id: int, scores: Dictionary, delta: bool) -> Dictionary:
 	var a := state.get_actor(id)
@@ -995,6 +1032,15 @@ func _on_tap(pos: Vector2) -> void:
 		return
 	# 手下を当てる投票: 人(か名札)をタップすると、その人に投票(全員がそろうまで入れ直せる)
 	if state.phase == GameState.Phase.RESULT:
+		# 証拠の一覧が開いていたら、閉じるだけ(うっかり投票にならないように)
+		if hud.is_evidence_list_open():
+			hud.hide_evidence_list()
+			return
+		# 証拠の吹き出しをタップ: そのキャラがこのラウンドで送った言葉の全部を一覧で見る
+		var ev_id := ov.evidence_hit(pos)
+		if ev_id >= 0 and _evidence_on:
+			_show_evidence_list(ev_id)
+			return
 		var me_id := state.local_player_id
 		if state.voting_open and state.can_vote(me_id):
 			var vid := ov.tag_hit(pos)

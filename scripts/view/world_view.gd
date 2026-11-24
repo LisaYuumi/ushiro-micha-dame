@@ -338,6 +338,7 @@ func sync(state: GameState, delta: float) -> void:
 	_update_vote_view(state, delta)
 	_update_ceremony(delta)
 	_update_events(state, delta)
+	_update_key_rings()
 	if _overlay:
 		_overlay.update(state, get_viewport().get_camera_3d())
 	if _blackout:
@@ -2662,6 +2663,14 @@ func _update_vote_view(state: GameState, delta: float) -> void:
 	if not _vote_view:
 		return
 	_vote_view_t += delta
+	var want := vote_camera_transform(state)
+	var k := clampf(_vote_view_t / 0.7, 0.0, 1.0)
+	k = k * k * (3.0 - 2.0 * k)
+	_top_cam.global_transform = _vote_from.interpolate_with(want, k)
+
+
+## 投票の画面のカメラ(自分の席の後ろの高いところから、輪の全体を見る。撮影モードでも使う)
+func vote_camera_transform(state: GameState) -> Transform3D:
 	var me := state.get_local_player()
 	var base := Vector3(0, 0, 1)
 	if me:
@@ -2672,12 +2681,57 @@ func _update_vote_view(state: GameState, delta: float) -> void:
 			p = state.seat_positions[me.seat_index]
 		if Vector2(p.x, p.z).length() > 0.3:
 			base = Vector3(p.x, 0.0, p.z).normalized()
-	# (上の「鬼の手下は誰?」の札の下に輪が入るように、少し遠く・奥をねらう)
-	var want := Transform3D.IDENTITY.translated(base * (GameConfig.RING_RADIUS + 3.6) + Vector3(0, 4.0, 0))
-	want = want.looking_at(Vector3(0, 1.0, 0) - base * 1.6, Vector3.UP)
-	var k := clampf(_vote_view_t / 0.7, 0.0, 1.0)
-	k = k * k * (3.0 - 2.0 * k)
-	_top_cam.global_transform = _vote_from.interpolate_with(want, k)
+	# (上の「鬼の手下は誰?」の札の下に輪が入り、頭の上に証拠の吹き出しを出す場所があるように、奥の高いところをねらう)
+	var want := Transform3D.IDENTITY.translated(base * (GameConfig.RING_RADIUS + 3.9) + Vector3(0, 4.2, 0))
+	return want.looking_at(Vector3(0, 1.9, 0) - base * 2.6, Vector3.UP)
+
+
+# --- 投票の証拠: 大事な人(落とされた人・お手つきになった人)の足もとを光らせる ---
+var _key_rings := {}
+
+
+func set_key_people(ids: Array) -> void:
+	for id in _key_rings.keys():
+		if not (id in ids):
+			if is_instance_valid(_key_rings[id]):
+				(_key_rings[id] as Node).queue_free()
+			_key_rings.erase(id)
+	for id in ids:
+		if _key_rings.has(id) and is_instance_valid(_key_rings[id]):
+			continue
+		var ring := MeshInstance3D.new()
+		var tm := TorusMesh.new()
+		tm.inner_radius = 0.42
+		tm.outer_radius = 0.56
+		tm.rings = 24
+		tm.ring_segments = 6
+		ring.mesh = tm
+		# (黄色い床・砂浜でも見えるように、白い輪のまわりにオレンジのふち)
+		ring.material_override = _glow_material(Color("FFFBE8"))
+		ring.scale = Vector3(1.0, 0.15, 1.0)
+		var edge := MeshInstance3D.new()
+		var em := TorusMesh.new()
+		em.inner_radius = 0.54
+		em.outer_radius = 0.64
+		em.rings = 24
+		em.ring_segments = 6
+		edge.mesh = em
+		edge.material_override = _glow_material(Color("FF7A1A"))
+		edge.position.y = -0.05
+		ring.add_child(edge)
+		add_child(ring)
+		_key_rings[id] = ring
+
+
+func _update_key_rings() -> void:
+	for id in _key_rings:
+		var ring := _key_rings[id] as MeshInstance3D
+		var node: Node3D = _actor_nodes.get(id)
+		if ring == null or not is_instance_valid(ring) or node == null:
+			continue
+		ring.position = Vector3(node.position.x, 0.04, node.position.z)
+		var k := 1.0 + 0.08 * sin(_clock * 5.0)
+		ring.scale = Vector3(k, 0.15, k)
 
 
 # --- 1試合に1回のイベントの見た目(先生の見回り・カモメの貝がら) ---

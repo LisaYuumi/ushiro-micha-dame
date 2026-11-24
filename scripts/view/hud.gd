@@ -1273,6 +1273,89 @@ func set_next_ui(show: bool, host: bool) -> void:
 
 ## 教室のままの投票の表示。show: 投票中か / voted・total: 投票した人数 / hint: 下の小さな案内 /
 ## skip: ルーム主の「発表へ」を出すか / skip_ready: 押せるか(始まって5秒たったか)
+## 投票の証拠: 画面のいちばん上に「このラウンドで起きたこと」を1行(空で消す)
+var _evidence_pill: PanelContainer
+
+
+func set_evidence_summary(text: String) -> void:
+	if text == "":
+		if _evidence_pill:
+			_evidence_pill.visible = false
+		if _vote_panel:
+			_vote_panel.offset_top = 56
+		return
+	if _evidence_pill == null:
+		_evidence_pill = PanelContainer.new()
+		_evidence_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var st := UiStyle.box(Color("FFF6D8"), true, 16, 3)
+		st.content_margin_left = 16
+		st.content_margin_right = 16
+		st.content_margin_top = 2
+		st.content_margin_bottom = 4
+		_evidence_pill.add_theme_stylebox_override("panel", st)
+		_evidence_pill.add_child(UiStyle.label("", 22, GameConfig.COLOR_INK))
+		_top.add_child(_evidence_pill)
+	var l := _evidence_pill.get_child(0) as Label
+	if l.text != text:
+		l.text = text
+		UiStyle.fit(l, 22, get_viewport().get_visible_rect().size.x - 160.0, 14)
+	_evidence_pill.visible = true
+	_evidence_pill.reset_size()
+	_evidence_pill.size = _evidence_pill.get_combined_minimum_size()
+	var vp := get_viewport().get_visible_rect().size
+	# (左上の札の下、画面のまん中。上の「鬼の手下は誰?」の札はその下にずらす)
+	_evidence_pill.position = Vector2((vp.x - _evidence_pill.size.x) / 2.0, 62.0)
+	if _vote_panel:
+		_vote_panel.offset_top = 104
+
+
+## 投票の証拠: タップしたキャラが、このラウンドで送った言葉の全部(小さな一覧)。どこかをタップすると閉じる
+var _evidence_list: PanelContainer
+
+
+func show_evidence_list(title: String, lines: Array) -> void:
+	hide_evidence_list()
+	_evidence_list = PanelContainer.new()
+	_evidence_list.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 18, 4)
+	st.set_content_margin_all(16)
+	_evidence_list.add_theme_stylebox_override("panel", st)
+	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_theme_constant_override("separation", 6)
+	_evidence_list.add_child(col)
+	var t := UiStyle.label(title, 24, GameConfig.COLOR_INK)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(t)
+	if lines.is_empty():
+		col.add_child(UiStyle.label(tr("このラウンドは何も送っていない"), 20, GameConfig.COLOR_INK.lightened(0.3)))
+	for line in lines:
+		var c: Color = line["color"]
+		var bst := UiStyle.box(c, false, 10, 2)
+		bst.content_margin_left = 10
+		bst.content_margin_right = 10
+		var b := PanelContainer.new()
+		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_theme_stylebox_override("panel", bst)
+		b.add_child(UiStyle.label(str(line["text"]), 20, text_color_on(c)))
+		col.add_child(b)
+	var hint := UiStyle.label(tr("タップで閉じる"), 16, GameConfig.COLOR_INK.lightened(0.4))
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(hint)
+	_top.add_child(_evidence_list)
+	UiStyle.center(_evidence_list)
+
+
+func hide_evidence_list() -> void:
+	if _evidence_list and is_instance_valid(_evidence_list):
+		_evidence_list.queue_free()
+	_evidence_list = null
+
+
+func is_evidence_list_open() -> bool:
+	return _evidence_list != null and is_instance_valid(_evidence_list)
+
+
 func set_vote_ui(show: bool, voted: int = 0, total: int = 0, hint: String = "", skip: bool = false, skip_ready: bool = false) -> void:
 	if _vote_box == null:
 		if not show:
@@ -1308,7 +1391,7 @@ func _build_vote_ui() -> void:
 	panel.anchor_left = 0.5
 	panel.anchor_right = 0.5
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	panel.offset_top = 56
+	panel.offset_top = 104 if (_evidence_pill and _evidence_pill.visible) else 56
 	_top.add_child(panel)
 	_vote_box = VBoxContainer.new()
 	_vote_box.mouse_filter = Control.MOUSE_FILTER_IGNORE

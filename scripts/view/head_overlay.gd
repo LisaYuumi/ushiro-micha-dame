@@ -28,6 +28,16 @@ var _tags_hidden := false
 ## 投票した人(名札にチェック)と、発表された手下(名札を紫に「手下」)
 var _voted := {}
 var _revealed := {}
+## 投票の「証拠」: id -> [{"text", "color"}](そのキャラが大事な人に送った言葉。2つまで)。名札の上に小さな吹き出しで出す
+var _evidence := {}
+var _ev_nodes := {}
+## 証拠の吹き出しの画面の範囲(タップで一覧を出すため)
+var _ev_rects := {}
+## 全員のキャラ(自分も。証拠の吹き出しは自分の頭の上にも出す)
+var _models := {}
+const EVIDENCE_FONT := 17
+## 証拠の吹き出しを置かない上の帯(上の「起きたこと」と「鬼の手下は誰?」の札の下から)
+const EVIDENCE_TOP := 96.0
 
 
 func build(state: GameState, models: Dictionary, show_personality: bool) -> void:
@@ -36,6 +46,10 @@ func build(state: GameState, models: Dictionary, show_personality: bool) -> void
 		c.queue_free()
 	_tags.clear()
 	_tag_rects.clear()
+	_models = models
+	_ev_nodes.clear()
+	_ev_rects.clear()
+	_evidence.clear()
 	for a in state.actors:
 		if a.id == state.local_player_id or not models.has(a.id):
 			continue
@@ -127,6 +141,45 @@ func _refresh_marks() -> void:
 
 func send_target() -> int:
 	return _target
+
+
+## 投票の証拠を出す(空で消す)。ev: id -> [{"text", "color"}]
+func set_evidence(ev: Dictionary) -> void:
+	if ev == _evidence:
+		return
+	_evidence = ev.duplicate(true)
+	for id in _ev_nodes:
+		for n in _ev_nodes[id]:
+			(n as Node).queue_free()
+	_ev_nodes.clear()
+	_ev_rects.clear()
+	for id in _evidence:
+		var list := []
+		for line in _evidence[id]:
+			var col: Color = line["color"]
+			var st := UiStyle.box(col, true, 10, 3)
+			st.shadow_offset = Vector2(2, 3)
+			st.content_margin_left = 7
+			st.content_margin_right = 7
+			st.content_margin_top = 1
+			st.content_margin_bottom = 3
+			var b := PanelContainer.new()
+			b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			b.add_theme_stylebox_override("panel", st)
+			var l := UiStyle.label(str(line["text"]), EVIDENCE_FONT, Hud.text_color_on(col))
+			b.add_child(l)
+			b.visible = false
+			add_child(b)
+			list.append(b)
+		_ev_nodes[id] = list
+
+
+## 画面のこの位置にある証拠の吹き出しの人(なければ -1)
+func evidence_hit(pos: Vector2) -> int:
+	for id in _ev_rects:
+		if (_ev_rects[id] as Rect2).grow(6.0).has_point(pos):
+			return id
+	return -1
 
 
 ## 牛乳で前が白い間は、名札を隠す(吹き出しは出したまま)
@@ -234,6 +287,7 @@ func update(state: GameState, cam: Camera3D) -> void:
 			y -= bs.y + 2.0
 			var x := clampf(r.get_center().x - bs.x / 2.0, 4.0, vp.x - bs.x - 4.0)
 			b.position = Vector2(x, y).floor()
+	_place_evidence(cam, vp, placed)
 	# 「送る相手」の印: 吹き出しのさらに上
 	_marker.visible = _target >= 0 and _tag_rects.has(_target)
 	if _marker.visible:
@@ -242,9 +296,66 @@ func update(state: GameState, cam: Camera3D) -> void:
 		var top := r.position.y - 4.0
 		for i in n:
 			top -= (_tags[_target]["bubbles"][i] as PanelContainer).get_combined_minimum_size().y + 2.0
+		if _ev_rects.has(_target):
+			top = minf(top, (_ev_rects[_target] as Rect2).position.y - 2.0)
 		var ms := _marker.get_combined_minimum_size()
 		var mx := clampf(r.get_center().x - ms.x / 2.0, 4.0, vp.x - ms.x - 4.0)
 		_marker.position = Vector2(mx, maxf(top - ms.y - 4.0, 4.0)).floor()
+
+
+## 証拠の吹き出し: 名札のすぐ上に縦に積む(名札のない自分は頭の上)。ほかの名札や吹き出しと重なったら上にずらす
+func _place_evidence(cam: Camera3D, vp: Vector2, placed: Array[Rect2]) -> void:
+	_ev_rects.clear()
+	for id in _ev_nodes:
+		var nodes: Array = _ev_nodes[id]
+		var base := Rect2()
+		if _tag_rects.has(id):
+			base = _tag_rects[id]
+		else:
+			var m: CharacterModel = _models.get(id)
+			if m == null or not is_instance_valid(m):
+				for n in nodes:
+					(n as Control).visible = false
+				continue
+			var anchor := m.tag_anchor()
+			if cam.is_position_behind(anchor):
+				for n in nodes:
+					(n as Control).visible = false
+				continue
+			var sp := cam.unproject_position(anchor)
+			base = Rect2(sp, Vector2.ZERO)
+		var y := base.position.y - 3.0
+		var union := Rect2()
+		for n in nodes:
+			var b := n as Control
+			var bs := b.get_combined_minimum_size()
+			b.size = bs
+			var cx := base.get_center().x if base.size.x > 0.0 else base.position.x
+			var rr := Rect2(Vector2(clampf(cx - bs.x / 2.0, 4.0, vp.x - bs.x - 4.0), y - bs.y), bs)
+			# 重なったら、まず左右にずらし、それでもだめなら少しだけ上へ(持ち主から離れすぎないように)
+			var start := rr.position
+			for k in 8:
+				var hit := Rect2()
+				for q in placed:
+					if q.grow(1.0).intersects(rr):
+						hit = q
+						break
+				if hit.size == Vector2.ZERO:
+					break
+				if k < 4:
+					var dx := (hit.end.x - rr.position.x + 3.0) if rr.get_center().x >= hit.get_center().x else -(rr.end.x - hit.position.x + 3.0)
+					rr.position.x = clampf(rr.position.x + dx, 4.0, vp.x - bs.x - 4.0)
+				else:
+					rr.position = Vector2(start.x, minf(rr.position.y, hit.position.y) - bs.y - 3.0)
+			if rr.position.y < start.y - bs.y * 2.5:
+				rr.position = start
+			rr.position.y = maxf(rr.position.y, EVIDENCE_TOP)
+			placed.append(rr)
+			b.position = rr.position.floor()
+			b.visible = true
+			y = rr.position.y - 2.0
+			union = rr if union.size == Vector2.ZERO else union.merge(rr)
+		_ev_rects[id] = union
 
 
 ## スタンプの文字: 言葉+絵文字。スタンプは種類とシャッフルの番号で届き、受け取った人の言語で出す。
@@ -260,6 +371,56 @@ static func stamp_text(state: GameState, sender: int, kind: String) -> String:
 		var pick: Dictionary = state.stamp_picks.get(sender, {})
 		word = Texts.stamp_word(kind, int(pick.get(kind, 0)))
 	return Texts.stamp(kind, word)
+
+
+## 証拠の名前(自分は「あなた」、鬼は「鬼」)
+static func evidence_name(state: GameState, id: int) -> String:
+	if id == state.local_player_id:
+		return TranslationServer.translate("あなた")
+	if id == state.oni_id:
+		return TranslationServer.translate("鬼")
+	var a := state.get_actor(id)
+	return Locale.actor_name(a.display_name) if a else "?"
+
+
+## 証拠の1行(「→cat 平気👍」)
+static func evidence_line(state: GameState, sender: int, x: Dictionary) -> Dictionary:
+	var a := state.get_actor(sender)
+	return {"text": "→%s %s" % [evidence_name(state, int(x["target"])), stamp_text(state, sender, str(x["kind"]))],
+			"color": a.color if a else Color.WHITE}
+
+
+## 頭の上に出す証拠の吹き出し(id -> 行の配列)。大事な人に送った言葉だけ
+static func evidence_bubbles(state: GameState) -> Dictionary:
+	var ev := {}
+	for a in state.actors:
+		var lines := []
+		for x in state.evidence_for(a.id):
+			lines.append(evidence_line(state, a.id, x))
+		if not lines.is_empty():
+			ev[a.id] = lines
+	return ev
+
+
+## その人がこのラウンドで送った言葉の全部(タップしたときの一覧)
+static func evidence_sent_lines(state: GameState, sender: int) -> Array:
+	var lines := []
+	for x in state.stamps_sent_by(sender):
+		lines.append(evidence_line(state, sender, x))
+	return lines
+
+
+## 「このラウンドで起きたこと」の1行
+static func evidence_summary(state: GameState) -> String:
+	var parts := []
+	if state.round_dropped_on >= 0:
+		parts.append(TranslationServer.translate("%sのうしろに %s が落ちていた") % [evidence_name(state, state.round_dropped_on), state.item_name()])
+	if not state.round_otetsuki.is_empty():
+		var names := []
+		for id in state.round_otetsuki:
+			names.append(evidence_name(state, int(id)))
+		parts.append(TranslationServer.translate("%sが振り向いたけど、何もなかった(お手つき)") % TranslationServer.translate("、").join(names))
+	return " / ".join(parts)
 
 
 ## 人数が少ないとき(6人まで)は、見える後ろが少ないので、スタンプの送り主は「だれか」にする(鬼と自分は別)

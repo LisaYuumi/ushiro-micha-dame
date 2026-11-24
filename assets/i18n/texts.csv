@@ -475,9 +475,18 @@ You can still send messages while sitting out"
 みんながだまされる中、手下を %d回見抜いた,みんながだまされる中、手下を %d回見抜いた,Saw through the minion while others were fooled: %d
 %s ・ %s,%s ・ %s,%s · %s
 記念写真,記念写真,Group Photo
+%sのうしろに %s が落ちていた,%sのうしろに %s が落ちていた,%s had the %s behind them
+%sが振り向いたけど、何もなかった(お手つき),%sが振り向いたけど、何もなかった(お手つき),"%s looked back, but nothing was there"
+、,、,", "
+%sが送った言葉,%sが送った言葉,Messages from %s
+このラウンドは何も送っていない,このラウンドは何も送っていない,Sent nothing this round
+タップで閉じる,タップで閉じる,Tap to close
 見えない!,見えない!,Can't see!
 バシャッ!,バシャッ!,Splash!
 水鉄砲:,水鉄砲:,Water gun:
+投票:,投票:,Vote:
+証拠,証拠,Evidence
+言葉を変える,言葉を変える,New words
 まわりから,まわりから,From outside
 本人の画面,本人の画面,Their view
 びしょびしょ…,びしょびしょ…,Soaking wet…

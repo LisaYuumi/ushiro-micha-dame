@@ -8,6 +8,7 @@ extends Node3D
 ##   表情(ふつう・驚く・勝ち・負け・ニヤニヤ・気まずい・お手つき・必死・困り眉・汗だく・放心)を変える
 ## - 落とし物: なし / 手に持つ / 背中の後ろに落ちている(選んだキャラ)。種類はラウンドごとの落とし物から
 ## - 背景: ふつう / キャラだけ(透明。保存すると背景が透明の PNG)
+## - 投票: 投票の画面の「証拠」(上の1行・頭の上の言葉・大事な人の足もとの光)を、それらしい中身で出す
 ## - 「4Kで保存」: 画面の大きさに関係なく 3840×2160 の PNG(Web 版はダウンロード、PC は「ピクチャ」に保存)
 ## - UI を消す: 操作パネルを隠す(PC は H キーでも)。消している間は、画面を軽くタップすると戻る
 
@@ -103,6 +104,7 @@ func _rebuild_scene() -> void:
 	var ov := _view.get_overlay()
 	if ov:
 		ov.visible = false
+	_apply_vote.call_deferred()
 	_poses.clear()
 	_faces.clear()
 	for a in _state.actors:
@@ -145,6 +147,11 @@ func _process(delta: float) -> void:
 			m.animate(delta, _poses[a.id] == "走る")
 	_apply_item()
 	_apply_wet()
+	if _vote_mode == "証拠":
+		_view._update_key_rings()
+		var ov := _view.get_overlay()
+		if ov and not _saving:
+			ov.update(_state, _cam)
 	# 夜の教室は、ゲームと同じ夜の明るさ(窓側は月の光)
 	_view.apply_night_light(_state)
 	_apply_camera()
@@ -260,6 +267,11 @@ func _apply_camera_pose() -> void:
 			_cam.fov = 60
 			_cam.look_at_from_position(eye, Vector3(0, 0.8, 0))
 			return
+	# 投票の画面: ゲームの投票と同じカメラ(自由カメラにすると、好きな向きで撮れる)
+	if _vote_mode == "証拠" and _cam_mode != "自由":
+		_cam.fov = 55
+		_cam.global_transform = _view.vote_camera_transform(_state)
+		return
 	match _cam_mode:
 		"輪の全体":
 			_cam.fov = 50
@@ -372,6 +384,15 @@ func _save_shot() -> void:
 		wr.texture = MilkArt.texture(get_viewport().get_visible_rect().size, 1.5, true)
 		wl.add_child(wr)
 		sv.add_child(wl)
+	var moved: Array[CanvasLayer] = []
+	if _vote_mode == "証拠":
+		# 投票の証拠(頭の上の言葉・上の1行)も入れる(2D は今の画面の大きさで作って、4K に引きのばす)
+		sv.size_2d_override = Vector2i(get_viewport().get_visible_rect().size)
+		sv.size_2d_override_stretch = true
+		for l in [_view.get_overlay(), _ev_layer]:
+			if l and is_instance_valid(l):
+				moved.append(l)
+				l.reparent(sv, false)
 	if _titles_node and is_instance_valid(_titles_node):
 		# 称号の画面も入れる(2D は今の画面の大きさで作って、4K に引きのばす)
 		sv.size_2d_override = Vector2i(get_viewport().get_visible_rect().size)
@@ -388,6 +409,8 @@ func _save_shot() -> void:
 	await RenderingServer.frame_post_draw
 	await RenderingServer.frame_post_draw
 	var img := sv.get_texture().get_image()
+	for l in moved:
+		l.reparent(_view if l == _view.get_overlay() else self, false)
 	sv.queue_free()
 	var stamp := Time.get_datetime_string_from_system().replace(":", "-").replace("T", "_")
 	var file := "ushiro_%s%s.png" % [stamp, "_alpha" if _transparent else ""]
@@ -471,6 +494,15 @@ func _build_ui() -> void:
 		else:
 			_titles_mode = v
 		_show_titles(_titles_mode == "演出"))
+	# 投票の画面の証拠(落とされた人=選んだキャラ。ほかにお手つきの人が1人。言葉はランダム。4Kで保存にも入る)
+	_row(col, "投票", ["なし", "証拠", "言葉を変える"], func(v: String) -> void:
+		if v == "言葉を変える":
+			_vote_seed += 1
+			if _vote_mode == "なし":
+				_vote_mode = "証拠"
+		else:
+			_vote_mode = v
+		_apply_vote())
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", 8)
 	col.add_child(bottom)
@@ -566,6 +598,7 @@ func _update_ui() -> void:
 		"動き:" + ("止める" if _frozen else "うごく"): true,
 		"称号:" + _titles_mode: true,
 		"水鉄砲:" + _water_mode: true,
+		"投票:" + _vote_mode: true,
 	}
 	for b in _buttons:
 		var key: String = b.get_meta("key", "")
@@ -777,3 +810,66 @@ func _on_drag(rel: Vector2) -> void:
 		return
 	_yaw -= rel.x * 0.006
 	_pitch = clampf(_pitch + rel.y * 0.005, -0.2, 1.45)
+
+
+## 投票の画面の証拠: "なし" / "証拠"
+var _vote_mode := "なし"
+var _vote_seed := 0
+var _ev_layer: CanvasLayer
+var _ev_pill: PanelContainer
+
+
+func _apply_vote() -> void:
+	if _view == null or not is_instance_valid(_view):
+		return
+	var ov := _view.get_overlay()
+	if _vote_mode != "証拠":
+		_view.set_key_people([])
+		if ov:
+			ov.set_evidence({})
+			ov.visible = false
+		if _ev_layer:
+			_ev_layer.visible = false
+		return
+	_make_evidence()
+	_view.set_key_people(_state.evidence_key_ids())
+	if ov:
+		ov.set_evidence(HeadOverlay.evidence_bubbles(_state))
+		ov.visible = true
+	if _ev_layer == null:
+		_ev_layer = CanvasLayer.new()
+		_ev_layer.layer = 2
+		add_child(_ev_layer)
+		_ev_pill = UiStyle.pill("", 22)
+		_ev_layer.add_child(_ev_pill)
+	_ev_layer.visible = true
+	var l := _ev_pill.get_child(0) as Label
+	l.text = HeadOverlay.evidence_summary(_state)
+	_ev_pill.reset_size()
+	var vp := get_viewport().get_visible_rect().size
+	_ev_pill.position = Vector2((vp.x - _ev_pill.get_combined_minimum_size().x) / 2.0, 20.0)
+
+
+## それらしい証拠: 選んだキャラ(座っている人)のうしろに落ちていて、ほかの1人がお手つき。みんながいくつか言葉を送った
+func _make_evidence() -> void:
+	var seated := []
+	for a in _state.actors:
+		if a.role == GameState.Role.SEATED:
+			seated.append(a.id)
+	if seated.size() < 2:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7919 * (_vote_seed + 1)
+	var dropped: int = _selected().id if _selected().id in seated else seated[0]
+	var others := seated.filter(func(id): return id != dropped)
+	var oops: int = others[rng.randi() % others.size()]
+	_state.round_dropped_on = dropped
+	_state.round_otetsuki = [oops]
+	_state.stamp_log.clear()
+	var kinds := ["dropped", "safe", "trust"]
+	for a in _state.actors:
+		for i in rng.randi_range(0, 3):
+			var target: int = [dropped, oops, seated[rng.randi() % seated.size()]][rng.randi() % 3]
+			if target == a.id:
+				continue
+			_state.stamp_log.append({"sender": a.id, "target": target, "kind": kinds[rng.randi() % kinds.size()], "truthful": true})
