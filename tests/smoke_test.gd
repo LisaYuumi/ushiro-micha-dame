@@ -98,6 +98,8 @@ func _process(delta: float) -> bool:
 	_frames += 1
 	if _frames == 5:
 		_check_carry()
+	if _frames == 6:
+		_check_heart()
 	_check_fall(delta)
 	if _frames == 60:
 		# ボタン操作と同じ命令を送ってみる
@@ -195,6 +197,41 @@ func _check_photo_mode() -> void:
 		160:
 			_main._studio._close()
 			_check(_main._studio == null and _main.view.visible, "撮影モードからもどれる")
+
+
+## 鬼がうしろに来たときのドキドキ: 心臓の音・足音・画面のふち。離れたら戻る
+func _check_heart() -> void:
+	var s := GameState.new()
+	s.start_round(1)
+	var v := WorldView.new()
+	root.add_child(v)
+	v.build(s)
+	var me := s.get_local_player()
+	var oni := s.get_actor(s.oni_id)
+	var back := Vector3(sin(me.yaw), 0.0, cos(me.yaw))
+	s.phase = GameState.Phase.WALKING
+	oni.position = me.position + back * 2.4
+	for i in 30:
+		v.sync(s, 0.05)
+	var far := v.oni_near_level()
+	oni.position = me.position + back * 0.6
+	for i in 30:
+		v.sync(s, 0.05)
+	var near := v.oni_near_level()
+	_check(far > 0.05 and near > far, "ドキドキ: 鬼がうしろに近いほど強い(%.2f → %.2f)" % [far, near])
+	_check(v._heart_player != null and v._heart_player.stream != null, "ドキドキ: 心臓の音がある")
+	_check(v._step_player.volume_db > GameConfig.FOOTSTEP_VOLUME_DB + 1.0, "ドキドキ: 鬼の足音が大きくなる")
+	var hud := Hud.new()
+	root.add_child(hud)
+	hud.set_danger(near)
+	_check(hud._danger != null and hud._danger.visible and hud._danger.modulate.a > 0.1, "ドキドキ: 画面のふちが暗くなる")
+	oni.position = me.position - back * 2.0
+	for i in 40:
+		v.sync(s, 0.05)
+	hud.set_danger(v.oni_near_level())
+	_check(v.oni_near_level() == 0.0 and not hud._danger.visible, "ドキドキ: 鬼が離れたら元に戻る")
+	v.queue_free()
+	hud.queue_free()
 
 
 ## チュートリアル: 最後まで進められる(プレイヤーの動きをまねる)。終わるとロビーにもどり、端末に覚える

@@ -51,6 +51,11 @@ var _obstacle_nodes := {}
 ## 鬼が自分の後ろに来たとき、自分の前の床に映る影
 var _oni_shadow: MeshInstance3D
 var _oni_shadow_mat: StandardMaterial3D
+## 鬼が自分のうしろにいる近さ(0〜1。影と同じ範囲)と、なめらかにしたドキドキの強さ、心臓の音
+var _oni_near := 0.0
+var _heart_level := 0.0
+var _heart_wait := 0.0
+var _heart_player: AudioStreamPlayer
 ## 頭の上の名札(2D で重ねる)
 var _overlay: HeadOverlay
 ## 停電イベントの暗い幕
@@ -369,6 +374,7 @@ func sync(state: GameState, delta: float) -> void:
 	apply_night_light(state)
 	_update_obstacles(state)
 	_update_oni_shadow(state)
+	_update_heart(state, delta)
 	_update_milk_ring(state, delta)
 	_clock += delta
 
@@ -1068,10 +1074,13 @@ func _update_footsteps(state: GameState) -> void:
 		return
 	var running := state.phase == GameState.Phase.CHASE
 	var stride := GameConfig.RUN_STRIDE if running else GameConfig.FOOTSTEP_STRIDE
-	var want_stream := Sfx.get_stream("run_step" if running else "step")
+	var sand := "_sand" if _beach else ""
+	var want_stream := Sfx.get_stream(("run_step" if running else "step") + sand)
 	if _step_player.stream != want_stream:
 		_step_player.stream = want_stream
-		_step_player.volume_db = GameConfig.RUN_STEP_VOLUME_DB if running else GameConfig.FOOTSTEP_VOLUME_DB
+	# 鬼がうしろに近いほど、歩く足音を少し大きく(ドキドキと同じ強さ)
+	_step_player.volume_db = GameConfig.RUN_STEP_VOLUME_DB if running \
+			else GameConfig.FOOTSTEP_VOLUME_DB + GameConfig.ONI_NEAR_STEP_BOOST_DB * _heart_level
 	_oni_walked += oni.position.distance_to(_oni_last_pos)
 	_oni_last_pos = oni.position
 	if _oni_walked >= stride:
@@ -1838,6 +1847,7 @@ func _shadow_texture() -> Texture2D:
 func _update_oni_shadow(state: GameState) -> void:
 	var me := state.get_local_player()
 	var oni := state.get_actor(state.oni_id)
+	_oni_near = 0.0
 	if me == null or oni == null or me.role != GameState.Role.SEATED or state.phase == GameState.Phase.RESULT:
 		_oni_shadow.visible = false
 		return
@@ -1851,6 +1861,7 @@ func _update_oni_shadow(state: GameState) -> void:
 		_oni_shadow.visible = false
 		return
 	var near := 1.0 - dist / GameConfig.ONI_SHADOW_RANGE
+	_oni_near = near
 	_oni_shadow.visible = true
 	# 鬼から自分の前へのびる向き(板の +Z が鬼の側、頭は前)
 	var toward := atan2(rel.x, rel.z)
@@ -1861,6 +1872,33 @@ func _update_oni_shadow(state: GameState) -> void:
 	# 自分の前(輪の内側)の床に、頭が前・足もとが自分の側になるように置く
 	_oni_shadow.position = me.position - back * (0.5 + 0.9 * length) + right * side * 0.35 + Vector3(0, 0.03, 0)
 	_oni_shadow_mat.albedo_color = Color(0, 0, 0, GameConfig.ONI_SHADOW_ALPHA * (0.4 + 0.6 * near))
+
+
+## 鬼がうしろに来たときのドキドキ(影がのびるのと同じとき): BGM の下に心臓の「ドクン、ドクン」。
+## 近いほど速く・大きく。離れたら少しずつ消える。鬼が歩いて回っている間だけ(追いかけっこ・結果では鳴らさない)
+func _update_heart(state: GameState, delta: float) -> void:
+	var walking := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
+	var target := _oni_near if walking else 0.0
+	var rate := GameConfig.HEART_RISE if target > _heart_level else GameConfig.HEART_FALL
+	_heart_level = move_toward(_heart_level, target, rate * delta)
+	if _heart_level <= 0.01:
+		_heart_wait = 0.0
+		return
+	if _heart_player == null:
+		_heart_player = Sfx.player_2d(self)
+		_heart_player.stream = Sfx.get_stream("heartbeat")
+	_heart_wait -= delta
+	if _heart_wait <= 0.0:
+		var k := _heart_level
+		_heart_wait = lerpf(GameConfig.HEART_INTERVAL_FAR, GameConfig.HEART_INTERVAL_NEAR, k)
+		_heart_player.volume_db = lerpf(GameConfig.HEART_DB_FAR, GameConfig.HEART_DB_NEAR, k)
+		_heart_player.pitch_scale = lerpf(1.0, 1.08, k)
+		_heart_player.play()
+
+
+## 鬼がうしろにいるドキドキの強さ(0〜1。画面のふちを暗くするのに使う)
+func oni_near_level() -> float:
+	return _heart_level
 
 
 ## 頭からかぶった牛乳: 白いかたまりと、顔の横にたれるしずく(輪郭線つき)

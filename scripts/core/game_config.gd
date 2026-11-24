@@ -260,6 +260,19 @@ const BOT_NOTICE_HEAVY := 0.45
 const ONI_SHADOW_RANGE := 3.0
 ## 影のいちばん濃いときの濃さ(0〜1)
 const ONI_SHADOW_ALPHA := 0.55
+## 鬼が自分のうしろ(影がのびる距離 ONI_SHADOW_RANGE の中)にいる間の「ドキドキ」:
+## 心臓の「ドクン」の間かくと大きさ(遠い=うしろに来たばかり → 近い=すぐうしろ)
+const HEART_INTERVAL_FAR := 0.95
+const HEART_INTERVAL_NEAR := 0.5
+const HEART_DB_FAR := -30.0
+const HEART_DB_NEAR := -13.0
+## ドキドキの強さが目標に追いつく速さ(1秒あたり。離れたら少しゆっくり戻る)
+const HEART_RISE := 3.0
+const HEART_FALL := 1.6
+## 鬼がうしろに近いとき、歩く足音を大きくする分(dB。いちばん近いとき)
+const ONI_NEAR_STEP_BOOST_DB := 6.0
+## 画面のふちを暗くする濃さ(いちばん近いとき)
+const DANGER_VIGNETTE_ALPHA := 0.75
 
 # --- 人の鬼の歩き方 ---
 ## スティックを歩く向きと反対に、この割合より倒したら止まる

@@ -535,6 +535,15 @@ def zazaa():
     return norm(mix(grains * e, lowpass(noise(d), 400) * e * 0.5), 0.8)
 
 
+def heartbeat():
+    # 心臓の「ドクン」: 低い2つの音(ドッ・クン)。BGM の下にうっすら重ねる
+    d = 0.55
+    lub = thud(70, 42, 0.22, 0.06)
+    dub = thud(62, 38, 0.22, 0.05) * 0.7
+    x = mix(at(lub, 0.0, d), at(dub, 0.17, d))
+    return norm(lowpass(x, 180), 0.9)
+
+
 def bgm_ending():
     # 試合の終わり(試合終了 → 表彰台 → 称号発表): わくわくする行進曲(ト長調、112bpm、8小節)。小太鼓がだんだん大きく
     bpm, bars = 112, 8
@@ -1283,6 +1292,7 @@ SOUNDS = {
     "bgm_ending": bgm_ending, "bgm_photo": bgm_photo,
     "shh": shh, "wind_gust": wind_gust, "gull": gull,
     "water_pyuu": water_pyuu, "zazaa": zazaa, "bashaa": bashaa,
+    "heartbeat": heartbeat,
 }
 
 

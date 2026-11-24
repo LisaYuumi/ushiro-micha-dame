@@ -450,6 +450,8 @@ func _physics_process(delta: float) -> void:
 	if state.gust_left > 0.0 and state.phase != GameState.Phase.RESULT:
 		g = GameConfig.GUST_ALPHA * clampf(minf(state.gust_left, GameConfig.GUST_TIME - state.gust_left) / 0.5, 0.0, 1.0)
 	hud.set_gust(g)
+	# 鬼がうしろに近いとき、画面のふちが少し暗くなる(心臓の音と同じ強さ)
+	hud.set_danger(view.oni_near_level())
 	touch.set_milk_state(state.milk_left, _milk_aiming)
 	var judged := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
 	touch.set_looks_left(me.looks_left if judged else -1)

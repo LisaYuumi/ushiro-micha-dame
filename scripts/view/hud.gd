@@ -1156,6 +1156,37 @@ func _draw_gust() -> void:
 		_gust.draw_line(Vector2(x, y), Vector2(x - 120.0, y + 8.0), Color(0.95, 0.85, 0.65, a * 0.9), 4.0, true)
 
 
+## 鬼がうしろに近いとき、画面のふちを少し暗くする(0 で消す)。まん中は透明・ふちが黒の丸いグラデーション
+var _danger: TextureRect
+
+
+func set_danger(level: float) -> void:
+	if level <= 0.01 and _danger == null:
+		return
+	if _danger == null:
+		var g := Gradient.new()
+		g.offsets = PackedFloat32Array([0.0, 0.34, 1.0])
+		g.colors = PackedColorArray([Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0.05, 0, 0.08, 1)])
+		var gt := GradientTexture2D.new()
+		gt.gradient = g
+		gt.fill = GradientTexture2D.FILL_RADIAL
+		gt.fill_from = Vector2(0.5, 0.5)
+		gt.fill_to = Vector2(1.0, 1.0)
+		gt.width = 128
+		gt.height = 128
+		_danger = TextureRect.new()
+		_danger.texture = gt
+		_danger.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_danger.stretch_mode = TextureRect.STRETCH_SCALE
+		_danger.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_danger)
+		move_child(_danger, 0)
+		# (画面に入れてから全面にする。先にすると、絵の大きさのままの四角になる)
+		_danger.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_danger.visible = level > 0.01
+	_danger.modulate.a = GameConfig.DANGER_VIGNETTE_ALPHA * clampf(level, 0.0, 1.0)
+
+
 ## 画面の上のまん中に、役を出す(空文字で消す)。color の地に白い文字
 func set_role_badge(text: String, color: Color) -> void:
 	_pill_text(_badge, text)
