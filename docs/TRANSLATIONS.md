@@ -200,7 +200,7 @@
 | 浮き輪 | Swim ring |
 | 砂の城 | Sandcastle |
 | バナナボート | Banana boat |
-| 水鉄砲 | Water gun |
+| 水鉄砲 | Squirt |
 | 水鉄砲でかけられた! | You got squirted! |
 | %s に水鉄砲! | Squirted %s! |
 | 舞台: %s ▶ | Stage: %s ▶ |

@@ -387,7 +387,6 @@ EN = {
     "記念写真": "Group Photo",
     "見えない!": "Can't see!",
     "バシャッ!": "Splash!",
-    "水鉄砲": "Water gun",
     "水鉄砲:": "Water gun:",
     "まわりから": "From outside",
     "本人の画面": "Their view",
