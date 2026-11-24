@@ -518,6 +518,14 @@ def water_pyuu():
     return norm(mix(at(whistle, 0.0, d), at(splash * 0.9, 0.36, d)), 0.8)
 
 
+def bashaa():
+    # 水がかかる「バシャッ」: 水しぶきのはじける音
+    d = 0.5
+    hit = bandpass(noise(d), 400, 6000) * env_exp(d, 0.08)
+    body = lowpass(noise(d), 700) * env_exp(d, 0.05) * 0.6
+    return norm(mix(hit, body), 0.8)
+
+
 def zazaa():
     # 砂のお城が崩れる「ザザーッ」: ざらざらした砂の音が流れ落ちる
     d = 1.0
@@ -1274,7 +1282,7 @@ SOUNDS = {
     "title_pon": title_pon,
     "bgm_ending": bgm_ending, "bgm_photo": bgm_photo,
     "shh": shh, "wind_gust": wind_gust, "gull": gull,
-    "water_pyuu": water_pyuu, "zazaa": zazaa,
+    "water_pyuu": water_pyuu, "zazaa": zazaa, "bashaa": bashaa,
 }
 
 

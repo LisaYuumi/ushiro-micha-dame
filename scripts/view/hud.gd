@@ -913,8 +913,6 @@ func set_water(v: bool) -> void:
 ## 鬼の技の見た目: "eraser"(黒板消しの煙)/ "water"(水鉄砲の水)/ "camera"(フラッシュ)
 func set_tool(tool: String) -> void:
 	_water = tool == "water"
-	if _water_fx:
-		_water_fx.visible = _water
 	_flash = tool == "camera"
 	if _milk_pill_icon:
 		_milk_pill_icon.kind = tool
@@ -929,8 +927,6 @@ func _draw_milk() -> void:
 	if not _water:
 		_draw_smoke()
 		return
-	_draw_water_film()
-	return
 	var sz := _milk.size
 	var t := Time.get_ticks_msec() / 1000.0
 	var ink := GameConfig.COLOR_INK
@@ -939,6 +935,13 @@ func _draw_milk() -> void:
 	var grow := clampf(_milk_t / 0.6, 0.0, 1.0)
 	grow = 1.0 - pow(1.0 - grow, 3.0)
 	var tex := MilkArt.texture(sz, 1.5, _water)
+	# 画面全体が、水でにじんで見えない(しずくの絵の下に、水色のにじみを全体に。ゆらゆら)
+	var haze := Color(MilkArt.WATER_WHITE)
+	haze.a = 0.9 * grow
+	_milk.draw_rect(Rect2(Vector2.ZERO, sz), haze)
+	for i in 6:
+		var y := fposmod(float(i) * sz.y / 6.0 + t * 40.0, sz.y)
+		_milk.draw_rect(Rect2(0, y, sz.x, sz.y * 0.05), Color(1, 1, 1, 0.12 * grow))
 	if tex:
 		var drop := -(1.0 - grow) * sz.y * 0.6 + sin(t * 1.3) * 3.0
 		# こすっている間は、こする手に合わせて少し左右にゆれる
@@ -957,69 +960,6 @@ func _draw_milk() -> void:
 		_milk.draw_circle(Vector2.ZERO, rr, white)
 		_milk.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_scrub(sz, t)
-
-
-## 水鉄砲: 画面に水の膜(ゆらゆら)。上の端から水のすじが流れ落ちる。下のまん中から、ワイパーで
-## ぬぐったように見える部分が少しずつ広がる(見えそうで見えない)。ワイパーの羽根が左右に動く
-const WATER_SHADER := """
-shader_type canvas_item;
-uniform vec2 size = vec2(1.0);
-uniform float t = 0.0;
-uniform float wiper_r = 0.0;
-uniform float wiper_a = 0.0;
-void fragment() {
-	vec2 px = UV * size;
-	vec2 c = vec2(size.x * 0.5, size.y * 1.02);
-	vec2 d = px - c;
-	float r = length(d);
-	float w = 0.5 + 0.5 * sin(px.x * 0.035 + t * 1.3 + sin(px.y * 0.02 + t)) * sin(px.y * 0.03 - t * 0.9);
-	vec3 col = mix(vec3(0.6, 0.8, 0.95), vec3(0.86, 0.95, 1.0), w);
-	float a = 0.88;
-	float colx = floor(px.x / 38.0);
-	float h = fract(sin(colx * 12.9898) * 43758.5453);
-	float y = mod(t * (60.0 + 120.0 * h) + h * 900.0, size.y * 1.4) - size.y * 0.2;
-	float xc = (colx + 0.5) * 38.0 + sin(h * 20.0) * 10.0;
-	float drip = (1.0 - smoothstep(1.5, 4.5, abs(px.x - xc))) * smoothstep(y - 160.0, y, px.y) * step(px.y, y);
-	col = mix(col, vec3(0.42, 0.68, 0.92), drip * 0.65);
-	float inside = 1.0 - smoothstep(wiper_r - 22.0, wiper_r, r);
-	a = mix(a, 0.1, inside);
-	float ang = atan(d.x, -d.y);
-	float blade = (1.0 - smoothstep(0.0, 0.025, abs(ang - wiper_a))) * step(r, wiper_r) * step(40.0, r);
-	col = mix(col, vec3(0.16, 0.16, 0.2), blade);
-	a = max(a, blade * 0.9);
-	COLOR = vec4(col, a);
-}
-"""
-var _water_fx: ColorRect
-
-
-func _draw_water_film() -> void:
-	if _water_fx == null:
-		_water_fx = ColorRect.new()
-		_water_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var sh := Shader.new()
-		sh.code = WATER_SHADER
-		var mat := ShaderMaterial.new()
-		mat.shader = sh
-		_water_fx.material = mat
-		_milk.add_child(_water_fx)
-	var sz := _milk.size
-	_water_fx.size = sz
-	var t := Time.get_ticks_msec() / 1000.0
-	var mat2 := _water_fx.material as ShaderMaterial
-	# ワイパーの部分: かかった直後は小さく、残りが減るほど広がる
-	var k := pow(1.0 - _milk_left, 0.9)
-	var r := lerpf(sz.y * 0.16, maxf(sz.x, sz.y) * 1.1, k)
-	mat2.set_shader_parameter("size", sz)
-	mat2.set_shader_parameter("t", t)
-	mat2.set_shader_parameter("wiper_r", r)
-	mat2.set_shader_parameter("wiper_a", sin(t * 2.6) * 1.2)
-	_draw_scrub(sz, t)
-
-
-func _hide_water_film() -> void:
-	if _water_fx:
-		_water_fx.visible = false
 
 
 ## カメラのフラッシュ: 画面がまぶしく真っ白(まん中に光の筋と星)。残りが少なくなると、だんだん晴れる

@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(550)
+## 一覧(555)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -200,7 +200,7 @@
 | 浮き輪 | Swim ring |
 | 砂の城 | Sandcastle |
 | バナナボート | Banana boat |
-| 水鉄砲 | Squirt |
+| 水鉄砲 | Water gun |
 | 水鉄砲でかけられた! | You got squirted! |
 | %s に水鉄砲! | Squirted %s! |
 | 舞台: %s ▶ | Stage: %s ▶ |
@@ -356,6 +356,11 @@
 | みんながだまされる中、手下を %d回見抜いた | Saw through the minion while others were fooled: %d |
 | %s ・ %s | %s · %s |
 | 記念写真 | Group Photo |
+| 見えない! | Can't see! |
+| バシャッ! | Splash! |
+| 水鉄砲: | Water gun: |
+| まわりから | From outside |
+| 本人の画面 | Their view |
 | びしょびしょ… | Soaking wet… |
 | カモメにだまされた人 | Fooled by a Seagull |
 | カモメの貝がらに振り向いて、お手つき | Looked back at a seagull's shell. Wrong! |

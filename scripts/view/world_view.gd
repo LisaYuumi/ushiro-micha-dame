@@ -1030,9 +1030,12 @@ func on_event(e: Dictionary) -> void:
 		"milk":
 			_surprise_until[e["target"]] = _clock + 1.2
 			if _beach:
-				# 水鉄砲: 「ピューッ!」→ びしょびしょ…(ぶるぶる体をふるう)
-				_pop(e["target"], tr("びしょびしょ…"), Color("BFE6FF"))
-				_play_actor(e["target"], "water_pyuu", -2.0, -5.0)
+				# 水鉄砲: かけた瞬間に「ピューッ!」、かけられた人に「バシャッ」。頭の上には「見えない!」のマーク(_build_milk_splash)
+				_play_actor(e.get("sender", -1), "water_pyuu", -2.0, -5.0)
+				var victim: int = e["target"]
+				get_tree().create_timer(0.35).timeout.connect(func() -> void:
+					_play_actor(victim, "bashaa", -2.0, -5.0)
+					_pop(victim, tr("バシャッ!"), Color("BFE6FF")))
 				var wet := _actor_nodes.get(e["target"]) as CharacterModel
 				if wet:
 					wet.shiver(0.9)
@@ -1902,6 +1905,19 @@ func _build_milk_splash() -> Node3D:
 			var ang := TAU * (float(k) + 0.25) / 4.0
 			d.position = Vector3(sin(ang) * 0.21, 0.24 - 0.05 * float(k % 2), cos(ang) * 0.21)
 			root.add_child(d)
+		# 頭の上に「見えない!」のマーク(まわりの人は、その人がいま見えていないと分かる)
+		var mark := Label3D.new()
+		mark.text = tr("見えない!")
+		mark.font = HudFont.get_font()
+		mark.font_size = 64
+		mark.pixel_size = 0.0055
+		mark.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		mark.modulate = Color("2F7FD0")
+		mark.outline_size = 12
+		mark.outline_modulate = Color.WHITE
+		mark.no_depth_test = true
+		mark.position = Vector3(0, 0.66, 0)
+		root.add_child(mark)
 		# びしょぬれ: 頭と体から、しずくがぽたぽた落ち続ける
 		var drip := CPUParticles3D.new()
 		drip.amount = 14
@@ -2029,6 +2045,9 @@ func _update_milk(state: GameState, a: GameState.Actor, model: CharacterModel) -
 	if milk == null:
 		return
 	milk.visible = model != null and state.is_milked(a) and state.phase != GameState.Phase.RESULT
+	# 海辺: びしょぬれの間は、体が少し濡れた色
+	if _beach and model:
+		model.set_wet(milk.visible)
 	if milk.visible:
 		var head := model.bone_world("DEF-head")
 		var basis := model.global_transform.basis.orthonormalized()

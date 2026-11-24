@@ -1073,6 +1073,29 @@ func set_kneel(v: bool) -> void:
 
 
 ## 毎フレームの動き。running: 走っている(大げさに揺れる)
+## びしょぬれ: 体の色を少し濃い水色寄りにする(水鉄砲をかけられている間)
+var _wet := false
+var _dry_mat: Material
+var _wet_mat: ShaderMaterial
+
+
+func set_wet(v: bool) -> void:
+	if v == _wet or _skel == null:
+		return
+	_wet = v
+	var body := _skel.get_node_or_null("Body") as MeshInstance3D
+	if body == null:
+		return
+	if _dry_mat == null:
+		_dry_mat = body.material_override
+		var m := _dry_mat as ShaderMaterial
+		if m == null:
+			return
+		_wet_mat = m.duplicate(true) as ShaderMaterial
+		_wet_mat.set_shader_parameter("albedo", _body_color.lerp(Color(0.22, 0.42, 0.62), 0.32).darkened(0.12))
+	body.material_override = _wet_mat if v and _wet_mat else _dry_mat
+
+
 ## ぶるぶると体をふるう(seconds 秒)
 var _shiver_left := 0.0
 

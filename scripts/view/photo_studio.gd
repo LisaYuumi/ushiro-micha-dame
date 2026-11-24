@@ -144,6 +144,7 @@ func _process(delta: float) -> void:
 		if not _frozen:
 			m.animate(delta, _poses[a.id] == "走る")
 	_apply_item()
+	_apply_wet()
 	# 夜の教室は、ゲームと同じ夜の明るさ(窓側は月の光)
 	_view.apply_night_light(_state)
 	_apply_camera()
@@ -251,6 +252,14 @@ func _apply_camera() -> void:
 
 
 func _apply_camera_pose() -> void:
+	# 水鉄砲の「本人の画面」: 選んだキャラの目の高さから、輪のまん中を見る
+	if _water_mode == "本人の画面":
+		var me := _model(_selected().id)
+		if me:
+			var eye := me.bone_world("DEF-head").origin + Vector3(0, 0.05, 0)
+			_cam.fov = 60
+			_cam.look_at_from_position(eye, Vector3(0, 0.8, 0))
+			return
 	match _cam_mode:
 		"輪の全体":
 			_cam.fov = 50
@@ -351,6 +360,18 @@ func _save_shot() -> void:
 	c.environment = env
 	add_child(sv)
 	sv.add_child(c)
+	if _water_mode == "本人の画面":
+		# 水鉄砲の本人の画面: 水しぶきの絵も入れる
+		sv.size_2d_override = Vector2i(get_viewport().get_visible_rect().size)
+		sv.size_2d_override_stretch = true
+		var wl := CanvasLayer.new()
+		wl.add_child(_water_haze())
+		var wr := TextureRect.new()
+		wr.set_anchors_preset(Control.PRESET_FULL_RECT)
+		wr.stretch_mode = TextureRect.STRETCH_SCALE
+		wr.texture = MilkArt.texture(get_viewport().get_visible_rect().size, 1.5, true)
+		wl.add_child(wr)
+		sv.add_child(wl)
 	if _titles_node and is_instance_valid(_titles_node):
 		# 称号の画面も入れる(2D は今の画面の大きさで作って、4K に引きのばす)
 		sv.size_2d_override = Vector2i(get_viewport().get_visible_rect().size)
@@ -437,6 +458,10 @@ func _build_ui() -> void:
 		_transparent = v == "キャラだけ"
 		_apply_background())
 	_row(col, "動き", ["うごく", "止める"], func(v: String) -> void: _frozen = v == "止める")
+	# 水鉄砲(海辺): 選んだキャラがびしょぬれ。「まわりから」はまわりから見た姿、「本人の画面」はその人の目から見た水しぶきの画面
+	_row(col, "水鉄砲", ["なし", "まわりから", "本人の画面"], func(v: String) -> void:
+		_water_mode = v
+		_apply_water())
 	# 試合の最後の称号の画面(称号はそれらしいものをランダムに。「演出」は1人ずつ出す流れ。4Kで保存にも入る)
 	_row(col, "称号", ["なし", "表示", "演出", "選び直す"], func(v: String) -> void:
 		if v == "選び直す":
@@ -540,12 +565,64 @@ func _update_ui() -> void:
 		"背景:" + ("キャラだけ" if _transparent else "ふつう"): true,
 		"動き:" + ("止める" if _frozen else "うごく"): true,
 		"称号:" + _titles_mode: true,
+		"水鉄砲:" + _water_mode: true,
 	}
 	for b in _buttons:
 		var key: String = b.get_meta("key", "")
 		if key == "":
 			continue
 		UiStyle.button(b, chosen.get(key, false), 17)
+
+
+## 水鉄砲(海辺): "なし" / "まわりから" / "本人の画面"
+var _water_mode := "なし"
+var _water_layer: CanvasLayer
+var _water_rect: TextureRect
+
+
+func _apply_water() -> void:
+	if _water_mode == "本人の画面":
+		if _water_layer == null:
+			_water_layer = CanvasLayer.new()
+			_water_layer.layer = 1
+			add_child(_water_layer)
+			_water_layer.add_child(_water_haze())
+			_water_rect = TextureRect.new()
+			_water_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+			_water_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_water_rect.stretch_mode = TextureRect.STRETCH_SCALE
+			_water_layer.add_child(_water_rect)
+		_water_rect.texture = MilkArt.texture(get_viewport().get_visible_rect().size, 1.5, true)
+		_water_layer.visible = true
+	elif _water_layer:
+		_water_layer.visible = false
+
+
+## 画面全体の水のにじみ(ゲームの画面と同じ)
+func _water_haze() -> ColorRect:
+	var c := ColorRect.new()
+	c.set_anchors_preset(Control.PRESET_FULL_RECT)
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var col := Color(MilkArt.WATER_WHITE)
+	col.a = 0.9
+	c.color = col
+	return c
+
+
+## 選んだキャラのびしょぬれの見た目(頭の水・しずく・「見えない!」のマーク・濡れた色)。本人の画面のときは、その人の体は映さない
+func _apply_wet() -> void:
+	var a := _selected()
+	for b in _state.actors:
+		var m := _model(b.id)
+		var milk: Node3D = _view._milk_nodes.get(b.id)
+		var wet: bool = _water_mode != "なし" and b.id == a.id
+		if m:
+			m.set_wet(wet and _view._beach)
+			m.visible = not (_water_mode == "本人の画面" and b.id == a.id)
+		if milk:
+			milk.visible = wet and _water_mode == "まわりから"
+			if milk.visible and m:
+				milk.global_transform = Transform3D(m.global_transform.basis.orthonormalized(), m.bone_world("DEF-head").origin)
 
 
 ## 称号の画面
