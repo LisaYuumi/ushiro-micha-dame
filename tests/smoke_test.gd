@@ -234,8 +234,46 @@ func _check_vote_scene() -> void:
 	_check(absf(v._handkerchief.transform.basis.get_scale().x - WorldView.VOTE_ITEM_SCALE) < 0.01 and v.vote_item_top() != Vector3.INF,
 			"投票の場面: 落とし物は少し大きく、▼を出す位置がわかる")
 	_check((v._actor_nodes[oops] as CharacterModel)._expression == CharacterModel.SHOCK, "投票の場面: お手つきの人はガーン顔のまま")
+	# 振り返りの演出: 6〜8秒くらい。はじめは言葉を隠し、早送りすると全部出る
+	var hud := Hud.new()
+	root.add_child(hud)
+	s.round_otetsuki_seen = {oops: [{"sender": int(s.round_lineup[0]), "kind": "safe"}]}
+	v.get_overlay().set_vote_evidence(true, HeadOverlay.evidence_bubbles(s), Vector3.INF, s.round_otetsuki)
+	var rc := VoteRecap.new()
+	root.add_child(rc)
+	rc.setup(s, v, hud)
+	_check(rc.total_time() >= 4.0 and rc.total_time() <= 9.0, "振り返り: 長さは6〜8秒くらい(%.1f秒)" % rc.total_time())
+	_check(not v.get_overlay()._reveal_all and v.get_overlay()._reveal_counts.is_empty(), "振り返り: はじめは言葉を隠しておく")
+	rc.skip()
+	_check(not rc.is_running() and v.get_overlay()._reveal_all and v._vote_focus == -1, "振り返り: タップで早送りすると、言葉が全部出てカメラがもどる")
+	rc.queue_free()
+	hud.queue_free()
+	# 全員が投票しても、振り返りの間は発表に進まない
+	s.voting_open = true
+	s.vote_elapsed = 0.0
+	s.vote_recap_hold = 7.0
+	for a in s.actors:
+		if not s.is_minion(a.id):
+			var cands := s.vote_candidates(a.id)
+			if not cands.is_empty():
+				s.cast_vote(a.id, int(cands[0]))
+	_check(s.voting_open, "振り返り: 全員が投票しても、演出の間は発表に進まない")
+	s.vote_elapsed = 7.1
+	s.tick(0.05)
+	_check(not s.voting_open, "振り返り: 演出が終わったら発表へ")
 	v.set_vote_view(false)
 	_check(v._vote_scene.is_empty(), "投票の場面: 投票が終わったら元にもどす")
+	# カメラの中に入った人は隠す(黒い輪郭線が画面いっぱいに映らないように)
+	s.phase = GameState.Phase.WALKING
+	var cam := v.get_viewport().get_camera_3d()
+	var other := s.get_actor(int(s.round_lineup[3]))
+	var keep := other.position
+	other.position = cam.global_position - Vector3(0, 0.8, 0)
+	v.sync(s, 0.016)
+	var hid := not (v._actor_nodes[other.id] as Node3D).visible
+	other.position = keep
+	v.sync(s, 0.016)
+	_check(hid and (v._actor_nodes[other.id] as Node3D).visible, "カメラのすぐ前の人は隠し、離れたら元にもどす")
 	v.queue_free()
 
 

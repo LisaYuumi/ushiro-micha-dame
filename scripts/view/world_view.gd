@@ -312,6 +312,16 @@ func sync(state: GameState, delta: float) -> void:
 				blob.position = Vector3(node.position.x, 0.03, node.position.z)
 			_update_dust(a, delta)
 			var model := node as CharacterModel
+			# (投票の場面を再現している人は、姿勢・表情を _apply_vote_scene_actors が決める。ここで毎フレーム別の姿勢にすると、
+			# 座る動きが毎回やり直しになって、変な姿勢のまま止まってしまう)
+			var in_scene := _vote_scene.has(a.id)
+			if model and in_scene:
+				if not _vote_scene[a.id]["look"]:
+					_update_expression(state, a, model, delta)
+				else:
+					model.animate(delta, false)
+				_update_milk(state, a, model)
+				continue
 			if model:
 				# 振り向いた姿は全員に見える(頭→上半身の順に後ろを向く)
 				# (見逃しの人は体ごと振り向くので、頭はひねらない)
@@ -336,9 +346,7 @@ func sync(state: GameState, delta: float) -> void:
 				var hug: bool = _beach and _item_index == 3 and a.id == state.chaser_id and state.phase == GameState.Phase.CHASE \
 						and a.slip_left <= 0.0
 				model.set_gesture(str(_cer_gestures.get(a.id, "")) if _cer_mode != "" else ("hug" if hug else ""))
-			# (投票の場面のお手つきの人は、ガーン顔のまま。_apply_vote_scene_actors が決める)
-			if not (_vote_scene.has(a.id) and _vote_scene[a.id]["look"]):
-				_update_expression(state, a, model, delta)
+			_update_expression(state, a, model, delta)
 			_update_milk(state, a, model)
 	# (投票の場面の再現は、名札・足もとの光・カメラより先に)
 	_apply_vote_scene_actors()
@@ -347,6 +355,7 @@ func sync(state: GameState, delta: float) -> void:
 	_update_vote_view(state, delta)
 	_update_ceremony(delta)
 	_update_events(state, delta)
+	_hide_near_camera(state)
 	if _overlay:
 		_overlay.update(state, get_viewport().get_camera_3d())
 	if _blackout:
@@ -2686,6 +2695,7 @@ func set_vote_view(on: bool, state: GameState = null) -> void:
 	_vote_view = on
 	_vote_view_t = 0.0
 	_vote_cam_at = -100000
+	_vote_focus = -1
 	_set_vote_scene(state if on else null)
 	if on:
 		var cam := get_viewport().get_camera_3d()
@@ -2699,6 +2709,31 @@ func set_vote_view(on: bool, state: GameState = null) -> void:
 			_seat_cam.make_current()
 
 
+## 振り返りの演出: カメラをその人に寄せる(-1 で全員が見える位置にもどす)
+var _vote_focus := -1
+
+
+func set_vote_focus(id: int) -> void:
+	_vote_focus = id
+
+
+## その人の頭と、頭の上の言葉がよく見える、少し上からのカメラ(全体のカメラと同じ向きから寄る)
+func _vote_focus_transform(id: int, wide: Transform3D) -> Transform3D:
+	var m := _actor_nodes.get(id) as CharacterModel
+	if m == null:
+		return wide
+	var foot: Vector3 = (_vote_scene[id]["pos"] as Vector3) if _vote_scene.has(id) else m.global_position
+	var look := foot + Vector3(0, 1.7, 0)
+	var dir := wide.origin - look
+	# (お手つきの人は振り返っているので、輪の外側から寄って顔を見せる)
+	if _vote_scene.has(id) and _vote_scene[id]["look"]:
+		dir = foot
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.01 else Vector3(0, 0, 1)
+	var pos := look + dir * 3.3 + Vector3(0, 1.5, 0)
+	return Transform3D.IDENTITY.translated(pos).looking_at(look, Vector3.UP)
+
+
 func is_vote_view() -> bool:
 	return _vote_view
 
@@ -2708,9 +2743,11 @@ func _update_vote_view(state: GameState, delta: float) -> void:
 		return
 	_vote_view_t += delta
 	var want := vote_camera_transform(state)
-	var k := clampf(_vote_view_t / 0.7, 0.0, 1.0)
-	k = k * k * (3.0 - 2.0 * k)
-	_top_cam.global_transform = _vote_from.interpolate_with(want, k)
+	if _vote_focus >= 0:
+		want = _vote_focus_transform(_vote_focus, want)
+	# (なめらかに近づく。振り返りの演出で、寄ったり引いたりする)
+	var k := 1.0 - exp(-delta * 3.2)
+	_top_cam.global_transform = _top_cam.global_transform.interpolate_with(want, k)
 
 
 ## 投票の画面は、ラウンドの場面を再現する(見た目だけ): 全員を自分の席(ラウンドの始めの並び)に戻して座らせ、
@@ -2794,7 +2831,8 @@ func _apply_vote_scene_item() -> void:
 ## 投票の画面になったときに1回だけ計算する(撮影モードは、証拠を作り直したとき)
 ## 見下ろす角度の候補(ラジアン)。いちばんキャラが大きく(近く)映る角度を選ぶ
 ## (低すぎると、手前の人のラベルが奥の人の顔にかぶるので、ある程度は見下ろす)
-const VOTE_CAM_PITCHES := [0.62, 0.75, 0.88, 1.0]
+## (手前の人も背中だけにならないよう、少し上から見下ろす)
+const VOTE_CAM_PITCHES := [0.82, 0.92, 1.02, 1.12]
 ## 画面の上の枠の分、頭を置かない上の帯(px)と、左右のよゆう(px)
 const VOTE_CAM_TOP_PX := 150.0
 ## 大事な人の頭の上に、吹き出しを1つ積むための高さ(m)
@@ -2961,6 +2999,36 @@ func _vote_cam_fits(t: Transform3D, heads: Array[Vector3], chests: Array[Vector3
 		if absf(nx) > 0.95 or ny < -0.88:
 			return false
 	return true
+
+
+# --- カメラが人や障害物の中に入ったときに、黒い輪郭線(裏返した外側の面)が画面いっぱいに映らないように ---
+## (追いかけっこで逃げる側のとき、うしろから迫る人の体の中にカメラが入ると、画面いっぱいに黒い斜めの線が出ていた)
+const CAM_CLEAR_RADIUS := 0.95
+
+
+func _hide_near_camera(state: GameState) -> void:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var eye := cam.global_position
+	for id in _actor_nodes:
+		if id == state.local_player_id:
+			continue
+		_cam_clear(_actor_nodes[id] as Node3D, eye, Vector3(0, 0.8, 0), CAM_CLEAR_RADIUS)
+	for id in _obstacle_nodes:
+		_cam_clear(_obstacle_nodes[id] as Node3D, eye, Vector3(0, 0.35, 0), CAM_CLEAR_RADIUS * 0.8)
+
+
+func _cam_clear(n: Node3D, eye: Vector3, center: Vector3, radius: float) -> void:
+	if n == null or not is_instance_valid(n):
+		return
+	var near := (n.global_position + center).distance_to(eye) < radius
+	if near and n.visible:
+		n.visible = false
+		n.set_meta("cam_hid", true)
+	elif not near and n.get_meta("cam_hid", false):
+		n.visible = true
+		n.set_meta("cam_hid", false)
 
 
 # --- 投票の証拠: 落とし物のてっぺんの位置(2D の「▼」の矢印を出すため) ---

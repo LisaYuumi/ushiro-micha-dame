@@ -1829,6 +1829,9 @@ func _tick_vote(delta: float) -> void:
 		vote_elapsed += delta
 		if vote_elapsed >= GameConfig.VOTE_TIMEOUT:
 			close_vote()
+		elif vote_recap_hold > 0.0 and vote_elapsed >= vote_recap_hold and _all_voted():
+			# 振り返りの演出の間に全員が投票していたら、演出が終わってから発表
+			close_vote()
 	elif reveal_left > 0.0:
 		# 発表の演出が終わったら、ルーム主が「次へ」を押すまで待つ(自動では進まない)
 		reveal_left = maxf(reveal_left - delta, 0.0)
@@ -1850,6 +1853,18 @@ func can_vote(actor_id: int) -> bool:
 	return voting_open and get_actor(actor_id) != null and not is_minion(actor_id)
 
 
+## 投票の前の「振り返り」の演出の間は、全員が投票しても発表に進まない秒数(main がふつうの試合で VOTE_RECAP_TIME にする。
+## テストやチュートリアルでは 0 = すぐ発表)
+var vote_recap_hold := 0.0
+
+
+func _all_voted() -> bool:
+	for a in actors:
+		if not is_minion(a.id) and not votes.has(a.id):
+			return false
+	return true
+
+
 ## 投票する人の数(手下以外の全員)。参加者は手下がだれか知らないので、ホストから届いた数
 var _snap_voter_count := -1
 
@@ -1866,7 +1881,7 @@ func voter_count() -> int:
 
 ## ルーム主の「発表へ」: 投票が始まって VOTE_SKIP_DELAY 秒たっていれば、投票していない人がいても発表へ
 func can_skip_vote() -> bool:
-	return voting_open and vote_elapsed >= GameConfig.VOTE_SKIP_DELAY
+	return voting_open and vote_elapsed >= maxf(GameConfig.VOTE_SKIP_DELAY, vote_recap_hold)
 
 
 func skip_vote() -> bool:
@@ -1891,11 +1906,7 @@ func cast_vote(voter_id: int, target_id: int) -> bool:
 		return false
 	votes[voter_id] = target_id
 	events.append({"type": "voted", "voter": voter_id})
-	var waiting := false
-	for a in actors:
-		if not is_minion(a.id) and not votes.has(a.id):
-			waiting = true
-	if not waiting:
+	if _all_voted() and vote_elapsed >= vote_recap_hold:
 		close_vote()
 	return true
 

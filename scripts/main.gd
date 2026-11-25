@@ -468,9 +468,13 @@ func _physics_process(delta: float) -> void:
 	var revealing := showing_result and not state.voting_open and state.reveal_left >= 0.0 and not state.match_over
 	view.set_vote_view(voting or revealing, state)
 	_update_evidence(voting, revealing)
+	_update_recap(voting)
 	# 発表が終わったら、ルーム主が「次へ」を押すまで、手下が出た画面のまま待つ
 	var waiting_next := state.can_go_next()
-	if voting:
+	if voting and _recap_running():
+		# 振り返りの演出の間は、上の枠と「発表へ」を出さない
+		hud.set_vote_ui(false)
+	elif voting:
 		# (上は「鬼の手下は誰?」と「3/8人 投票済み」だけ。手下だけには、投票しない理由のひとこと)
 		var hint := tr("あなたは手下。バレないように!") if state.is_minion(me.id) else ""
 		hud.set_vote_ui(true, state.votes.size(), state.voter_count(), hint, mode != Mode.GUEST, state.can_skip_vote())
@@ -490,6 +494,12 @@ func _physics_process(delta: float) -> void:
 		if showing_result:
 			ov.set_voted(state.votes.keys() if voting else [])
 			ov.set_send_target(_my_vote if voting else -1, tr("あなたの票"))
+		# 「発表へ」「次へ」のボタンに、名札や吹き出しが隠れないように
+		var br := hud.vote_button_rect()
+		var blocked: Array[Rect2] = []
+		if showing_result and br.has_area():
+			blocked.append(br)
+		ov.set_blocked(blocked)
 	# 左上の札(鬼の周回・自分の点数)を毎回更新する(参加者の点数は状態といっしょに届く)
 	_update_help()
 	# 重かったときは、何をしていたかをコンソールに出す(調べる用)
@@ -896,6 +906,32 @@ func _close_titles() -> void:
 	view.ceremony_end()
 
 
+# --- 投票の前の「振り返り」(VoteRecap)。ラウンドごとに1回。チュートリアルでは出さない ---
+var _recap: VoteRecap
+var _recap_round := -1
+
+
+func _recap_running() -> bool:
+	return _recap != null and is_instance_valid(_recap) and _recap.is_running()
+
+
+func _update_recap(voting: bool) -> void:
+	if not voting:
+		if _recap and is_instance_valid(_recap):
+			_recap.queue_free()
+		_recap = null
+		return
+	if _recap != null or _recap_round == state.round_serial or _tutorial != null:
+		return
+	_recap_round = state.round_serial
+	_recap = VoteRecap.new()
+	add_child(_recap)
+	_recap.setup(state, view, hud)
+	# (ルールを動かす人: 振り返りの間は、全員が投票しても発表に進まない)
+	if mode != Mode.GUEST:
+		state.vote_recap_hold = _recap.total_time()
+
+
 # --- 投票の証拠: このラウンドで「だれが、大事な人に、何と言ったか」 ---
 var _evidence_on := false
 var _evidence_sig := ""
@@ -1026,6 +1062,13 @@ func _on_tap(pos: Vector2) -> void:
 		return
 	# 手下を当てる投票: 人(か名札)をタップすると、その人に投票(全員がそろうまで入れ直せる)
 	if state.phase == GameState.Phase.RESULT:
+		# 振り返りの演出の間のタップは、早送りだけ(投票にはしない)
+		if _recap_running():
+			_recap.skip()
+			# (早送りしたら、全員が投票していればすぐ発表に進めるように)
+			if mode != Mode.GUEST:
+				state.vote_recap_hold = minf(state.vote_recap_hold, state.vote_elapsed)
+			return
 		var me_id := state.local_player_id
 		if state.voting_open and state.can_vote(me_id):
 			var vid := ov.tag_hit(pos)

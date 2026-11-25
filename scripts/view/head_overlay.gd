@@ -49,6 +49,14 @@ var _ev_nodes := {}
 var _item_mark: Label
 var _item_mark_pos := Vector3.INF
 var _oops_marks := {}
+## 投票の前の「振り返り」の間は、言葉と目印を少しずつ出す(VoteRecap)。all = true なら全部
+var _reveal_all := true
+var _reveal_counts := {}
+var _reveal_item := true
+var _reveal_marks: Array = []
+const MARK_SIZE := 58.0
+## 頭の上に出す目印などを置かない、画面の下の場所(「発表へ」ボタンなど。main が決める)
+var _blocked: Array[Rect2] = []
 ## 吹き出しを置かない上の帯の高さ(投票の間は、上の「鬼の手下は誰?」の枠の下。main が決める)
 var _label_top := TOP_LIMIT
 
@@ -240,14 +248,80 @@ func _set_vote_marks(item_top: Vector3, oops: Array, on: bool) -> void:
 	for id in oops:
 		if _oops_marks.has(int(id)):
 			continue
-		var p := PanelContainer.new()
+		# お手つきの目印: ガーン顔の丸いアイコン(言葉の吹き出しとはちがう形)
+		var p := Control.new()
 		p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		p.add_theme_stylebox_override("panel", _bubble_style(Color("3B5BDB")))
-		var l := UiStyle.label(Locale.t("ガーン!"), 26, Color.WHITE)
-		p.add_child(l)
+		p.custom_minimum_size = Vector2(MARK_SIZE, MARK_SIZE)
+		p.size = p.custom_minimum_size
+		p.pivot_offset = p.size / 2.0
+		p.draw.connect(_draw_gaan.bind(p))
 		p.visible = false
 		add_child(p)
 		_oops_marks[int(id)] = p
+
+
+## ガーン顔: 水色の丸い顔に、小さな黒目の白目・縦に開いた口・おでこの青い縦線・横に汗
+func _draw_gaan(c: Control) -> void:
+	var r := MARK_SIZE * 0.42
+	var o := Vector2(MARK_SIZE / 2.0, MARK_SIZE / 2.0 + 2.0)
+	var ink := GameConfig.COLOR_INK
+	c.draw_circle(o, r + 3.0, ink)
+	c.draw_circle(o, r, Color("CFE0FF"))
+	# おでこの縦線
+	for k in 3:
+		var x := o.x - r * 0.3 + float(k) * r * 0.3
+		c.draw_line(Vector2(x, o.y - r * 0.8), Vector2(x, o.y - r * 0.4), Color("3B5BDB"), 3.0, true)
+	# 白目と小さな黒目
+	for side in [-1.0, 1.0]:
+		var e := o + Vector2(side * r * 0.36, -r * 0.08)
+		c.draw_circle(e, r * 0.2, ink)
+		c.draw_circle(e, r * 0.15, Color.WHITE)
+		c.draw_circle(e, r * 0.05, ink)
+	# 縦に開いた口
+	var mouth := PackedVector2Array()
+	for k in 16:
+		var a := TAU * float(k) / 16.0
+		mouth.append(o + Vector2(cos(a) * r * 0.16, r * 0.42 + sin(a) * r * 0.3))
+	c.draw_colored_polygon(mouth, ink)
+	# 汗(右上のしずく)
+	var d := o + Vector2(r * 1.0, -r * 0.55)
+	var drop := PackedVector2Array([d + Vector2(0, -r * 0.42), d + Vector2(r * 0.2, -r * 0.02), d + Vector2(0, r * 0.18), d + Vector2(-r * 0.2, -r * 0.02)])
+	c.draw_colored_polygon(drop, Color("7EC8FF"))
+	c.draw_polyline(PackedVector2Array([drop[0], drop[1], drop[2], drop[3], drop[0]]), ink, 2.0, true)
+
+
+## 振り返りの演出: 言葉と目印を少しずつ出す。all = true なら全部出す(投票中はずっと全部)
+## counts: id -> 見せる言葉の数 / item: 落とし物の▼を出すか / marks: ガーン顔を出すお手つきの人
+func set_evidence_reveal(all: bool, counts: Dictionary = {}, item: bool = true, marks: Array = []) -> void:
+	# 新しく見せたものは、ポンと飛び出す
+	for id in _ev_nodes:
+		var nodes: Array = _ev_nodes[id]
+		var before: int = nodes.size() if _reveal_all else int(_reveal_counts.get(id, 0))
+		var after: int = nodes.size() if all else int(counts.get(id, 0))
+		for i in range(before, mini(after, nodes.size())):
+			_pop_in(nodes[i] as Control)
+	for id in _oops_marks:
+		var was: bool = _reveal_all or id in _reveal_marks
+		if not was and (all or id in marks):
+			_pop_in(_oops_marks[id] as Control)
+	_reveal_all = all
+	_reveal_counts = counts.duplicate()
+	_reveal_item = item
+	_reveal_marks = marks.duplicate()
+
+
+func _pop_in(c: Control) -> void:
+	if c == null or not is_instance_valid(c):
+		return
+	c.pivot_offset = c.size / 2.0
+	c.scale = Vector2(0.3, 0.3)
+	var tw := c.create_tween()
+	tw.tween_property(c, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## 頭の上の物や名札を置かない場所(画面の下の「発表へ」ボタンなど)
+func set_blocked(rects: Array[Rect2]) -> void:
+	_blocked = rects
 
 
 ## 消すときは、ふっと消える(keep = true なら、すぐ消す)
@@ -310,6 +384,7 @@ func update(state: GameState, cam: Camera3D) -> void:
 	order.sort_custom(func(x, y): return _dist(x, cam) < _dist(y, cam))
 	# ⚙ボタンのあたりには置かない
 	var placed: Array[Rect2] = [Rect2(Vector2(vp.x - GEAR_SIZE.x, 0), GEAR_SIZE)]
+	placed.append_array(_blocked)
 	# 1) 名札: 足もとのすぐ下
 	for id in order:
 		if not _tags.has(id):
@@ -338,6 +413,7 @@ func update(state: GameState, cam: Camera3D) -> void:
 	# 2) 頭の上: 届いている言葉(プレイ中)または証拠(投票中)を、頭のすぐ上に下から積む
 	# (投票の証拠は、名札はよけない。頭の真上から離さないように、ほかの証拠と⚙だけよける)
 	var ev_placed: Array[Rect2] = [Rect2(Vector2(vp.x - GEAR_SIZE.x, 0), GEAR_SIZE)]
+	ev_placed.append_array(_blocked)
 	for id in order:
 		var nodes: Array = []
 		if _vote_on:
@@ -380,15 +456,16 @@ func update(state: GameState, cam: Camera3D) -> void:
 		placed.append(r)
 		_head_rects[id] = r
 		var y := r.end.y
-		for n in nodes:
-			var c := n as Control
+		var count: int = nodes.size() if (not _vote_on or _reveal_all) else int(_reveal_counts.get(id, 0))
+		for i in nodes.size():
+			var c := nodes[i] as Control
 			var bs := c.size
 			y -= bs.y + 2.0
 			c.position = Vector2(r.get_center().x - bs.x / 2.0, y).floor()
-			c.visible = not _bubbles_hidden or _vote_on
+			c.visible = (not _bubbles_hidden or _vote_on) and i < count
 	# 投票の目印: 落とし物の上の「▼」(上下にぴょこぴょこ)と、お手つきの人の頭の上(吹き出しの上)の「ガーン!」
 	if _item_mark:
-		var show := _item_mark_pos != Vector3.INF and not cam.is_position_behind(_item_mark_pos)
+		var show := _item_mark_pos != Vector3.INF and not cam.is_position_behind(_item_mark_pos) and (_reveal_all or _reveal_item)
 		_item_mark.visible = show
 		if show:
 			var ip := cam.unproject_position(_item_mark_pos)
@@ -396,8 +473,8 @@ func update(state: GameState, cam: Camera3D) -> void:
 			var bob := absf(sin(Time.get_ticks_msec() / 1000.0 * 5.0)) * 12.0
 			_item_mark.position = Vector2(ip.x - ms.x / 2.0, ip.y - ms.y - 2.0 - bob).floor()
 	for id in _oops_marks:
-		var mk: PanelContainer = _oops_marks[id]
-		if not _head_rects.has(id):
+		var mk: Control = _oops_marks[id]
+		if not _head_rects.has(id) or not (_reveal_all or id in _reveal_marks):
 			mk.visible = false
 			continue
 		var hr: Rect2 = _head_rects[id]

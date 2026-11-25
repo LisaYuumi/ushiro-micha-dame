@@ -1303,6 +1303,52 @@ func set_next_ui(show: bool, host: bool) -> void:
 
 ## 教室のままの投票の表示。show: 投票中か / voted・total: 投票した人数 / hint: 下の小さな案内 /
 ## skip: ルーム主の「発表へ」を出すか / skip_ready: 押せるか(始まって5秒たったか)
+## 「発表へ」「次へ」のボタンの画面の範囲(出ていなければ空)。名札や吹き出しをそこに置かないため
+func vote_button_rect() -> Rect2:
+	if _skip_button and _skip_button.visible:
+		return _skip_button.get_global_rect().grow(6.0)
+	return Rect2()
+
+
+## 投票の前の「振り返り」の字幕(画面の下のまん中に大きく。"" で消す。seconds > 0 ならその秒数で消える)
+var _caption: PanelContainer
+var _caption_tween: Tween
+
+
+func set_caption(text: String, seconds: float = 0.0) -> void:
+	if _caption_tween and _caption_tween.is_valid():
+		_caption_tween.kill()
+	if text == "":
+		if _caption:
+			_caption.visible = false
+		return
+	if _caption == null:
+		_caption = PanelContainer.new()
+		_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var st := UiStyle.box(Color(1, 1, 1, 0.95), true, 22, 4)
+		st.content_margin_left = 28
+		st.content_margin_right = 28
+		st.content_margin_top = 6
+		st.content_margin_bottom = 10
+		_caption.add_theme_stylebox_override("panel", st)
+		_caption.add_child(UiStyle.label("", 34, GameConfig.COLOR_INK))
+		_top.add_child(_caption)
+	var l := _caption.get_child(0) as Label
+	l.text = text
+	UiStyle.fit(l, 34, get_viewport().get_visible_rect().size.x - 120.0, 20)
+	_caption.visible = true
+	_caption.modulate.a = 1.0
+	_caption.reset_size()
+	var vp := get_viewport().get_visible_rect().size
+	var sz := _caption.get_combined_minimum_size()
+	_caption.position = Vector2((vp.x - sz.x) / 2.0, vp.y - sz.y - 40.0)
+	if seconds > 0.0:
+		_caption_tween = create_tween()
+		_caption_tween.tween_interval(seconds)
+		_caption_tween.tween_property(_caption, "modulate:a", 0.0, 0.3)
+		_caption_tween.tween_callback(func() -> void: _caption.visible = false)
+
+
 ## 投票の画面: ラウンド・落とし物・点数・役のいつもの札を隠す(上は「鬼の手下は誰?」の枠だけ)
 var _vote_screen := false
 
@@ -1390,12 +1436,13 @@ func _build_vote_ui() -> void:
 	_skip_button.custom_minimum_size = Vector2(240, 66)
 	UiStyle.button(_skip_button, true, 28)
 	_skip_button.pressed.connect(func() -> void: skip_vote_pressed.emit())
-	_skip_button.anchor_left = 0.5
-	_skip_button.anchor_right = 0.5
+	# (画面の右下。まん中だと、手前の人の名札や吹き出しが隠れるので)
+	_skip_button.anchor_left = 1.0
+	_skip_button.anchor_right = 1.0
 	_skip_button.anchor_top = 1.0
 	_skip_button.anchor_bottom = 1.0
-	_skip_button.offset_left = -120
-	_skip_button.offset_right = 120
+	_skip_button.offset_left = -240 - UiStyle.SAFE
+	_skip_button.offset_right = -UiStyle.SAFE
 	_skip_button.offset_top = -66 - UiStyle.SAFE
 	_skip_button.offset_bottom = -UiStyle.SAFE
 	_skip_button.visible = false

@@ -217,6 +217,8 @@ const SCORE_MINION_FOOLED := 1
 const VOTE_INTRO_TIME := 2.2
 ## ルーム主の「発表へ」は、投票が始まってこの秒数たってから押せる(押し間違いを防ぐ)
 const VOTE_SKIP_DELAY := 5.0
+## 投票の前の「振り返り」の演出の長さ(秒)。この間は、全員が投票しても発表に進まない(GameState.vote_recap_hold)
+const VOTE_RECAP_TIME := 7.5
 ## 画面には出さないが、投票が始まってこの秒数たったら自動で発表へ(ルーム主がいなくなったときの安全策)
 const VOTE_TIMEOUT := 120.0
 ## 発表の演出の秒数: 票が飛ぶ / ため(ドラムロール) / 手下の発表 / 点数 / ルーム主の「次へ」が出るまでの余韻
