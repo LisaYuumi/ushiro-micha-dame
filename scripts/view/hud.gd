@@ -744,60 +744,75 @@ static func text_color_on(bg: Color) -> Color:
 	return GameConfig.COLOR_INK if bg.get_luminance() > 0.55 else GameConfig.COLOR_PAPER
 
 
-## 下のまん中の「◯◯に送る」と、3つの言葉のボタン(子どもの指でも押しやすい大きさ)
+## 言葉を送るバー: 画面の下に横長の細いバーで「catに送る: [落ちてる😨] [平気👍] [信じて🥺]  ×」。
+## 右下のボタン(振り向く・落とす)やスティックにかからない場所に出す(main がよける場所を渡す)
+var _send_close: Button
+const SEND_BAR_FONT := 24
+const SEND_BAR_HEIGHT := 62.0
+
+
 func _build_send_panel() -> void:
 	_send_panel = PanelContainer.new()
 	_send_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 22, 4)
-	st.content_margin_left = 16
-	st.content_margin_right = 16
-	st.content_margin_top = 8
-	st.content_margin_bottom = 14
+	var st := UiStyle.box(Color(1, 1, 1, 0.93), true, 18, 3)
+	st.content_margin_left = 14
+	st.content_margin_right = 8
+	st.content_margin_top = 6
+	st.content_margin_bottom = 8
 	_send_panel.add_theme_stylebox_override("panel", st)
-	var col := VBoxContainer.new()
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_theme_constant_override("separation", 8)
-	_send_panel.add_child(col)
-	_send_title = UiStyle.label("", 26, GameConfig.COLOR_INK)
-	_send_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(_send_title)
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_theme_constant_override("separation", 14)
-	col.add_child(row)
+	row.add_theme_constant_override("separation", 10)
+	_send_panel.add_child(row)
+	_send_title = UiStyle.label("", SEND_BAR_FONT, GameConfig.COLOR_INK)
+	row.add_child(_send_title)
 	for kind in Stamps.ALL:
 		var b := Button.new()
 		b.text = Texts.stamp(kind)
 		# 押した判定は main がする(指の操作をまとめて扱うため)。ここでは見た目だけ
 		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		# 3つとも白い地に黒い文字(絵文字で区別する)
-		UiStyle.button(b, false, 32, GameConfig.COLOR_INK)
-		b.custom_minimum_size = Vector2(210, 104)
+		# 言葉の意味の色のふち(見ろ系=赤、見るな系=青)。地は白
+		UiStyle.button(b, false, SEND_BAR_FONT, GameConfig.COLOR_INK)
+		var bst := (b.get_theme_stylebox("normal") as StyleBoxFlat).duplicate() as StyleBoxFlat
+		bst.border_color = HeadOverlay.kind_color(kind)
+		bst.set_border_width_all(4)
+		bst.content_margin_left = 12
+		bst.content_margin_right = 12
+		b.add_theme_stylebox_override("normal", bst)
+		b.custom_minimum_size = Vector2(0, SEND_BAR_HEIGHT - 14.0)
 		row.add_child(b)
 		_send_buttons.append(b)
-		# 英語など言葉が長くても、ボタンからはみ出さないように
-		UiStyle.fit(b, 32, 186.0)
+	_send_close = Button.new()
+	_send_close.text = "×"
+	_send_close.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UiStyle.button(_send_close, false, 30, GameConfig.COLOR_INK)
+	_send_close.custom_minimum_size = Vector2(SEND_BAR_HEIGHT - 14.0, SEND_BAR_HEIGHT - 14.0)
+	row.add_child(_send_close)
 	add_child(_send_panel)
-	_send_panel.anchor_left = 0.5
-	_send_panel.anchor_right = 0.5
-	_send_panel.anchor_top = 1.0
-	_send_panel.anchor_bottom = 1.0
-	_send_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_send_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_send_panel.visible = false
 
 
-## 「◯◯に送る」を出す。above_buttons = true なら、鬼のボタンの上に出す(重ならないように)
-func open_send_panel(target_name: String, above_buttons: bool) -> void:
-	_send_title.text = Locale.t("%sに送る") % target_name
+## 言葉を送るバーを出す。left・right: よける場所の、画面の左の端からの右のふち・右のふち(バーはその間の下に出す)
+func open_send_panel(target_name: String, left := 0.0, right := -1.0) -> void:
+	_send_title.text = Locale.t("%sに送る:") % target_name
 	_send_panel.visible = true
-	var bottom := -280.0 if above_buttons else -24.0
-	# 鬼のボタン(右下)と重ならないよう、鬼のときは少し左に寄せる
-	var shift := -160.0 if above_buttons else -60.0
-	_send_panel.offset_left = shift
-	_send_panel.offset_right = shift
-	_send_panel.offset_top = bottom
-	_send_panel.offset_bottom = bottom
+	var vp := get_viewport().get_visible_rect().size
+	if right < 0.0:
+		right = vp.x
+	var lo := maxf(left + 10.0, UiStyle.SAFE * 0.5)
+	var hi := minf(right - 10.0, vp.x - UiStyle.SAFE * 0.5)
+	# 入りきらないときは文字を少し小さく
+	for fs in [SEND_BAR_FONT, 21, 18]:
+		_send_title.add_theme_font_size_override("font_size", fs)
+		for b in _send_buttons:
+			b.add_theme_font_size_override("font_size", fs)
+		_send_panel.reset_size()
+		if _send_panel.get_combined_minimum_size().x <= hi - lo:
+			break
+	var sz := _send_panel.get_combined_minimum_size()
+	_send_panel.size = sz
+	var x := clampf((lo + hi - sz.x) / 2.0, lo, maxf(hi - sz.x, lo))
+	_send_panel.position = Vector2(x, vp.y - sz.y - 14.0).floor()
 
 
 ## 言葉のボタンに、自分で決めた言葉を出す(絵文字はそのまま)
@@ -812,14 +827,21 @@ func close_send_panel() -> void:
 	_send_panel.visible = false
 
 
-## 画面のこの位置にある、言葉のボタンの種類(なければ "")
+## 画面のこの位置にある、言葉のボタンの種類(なければ ""。×は "close")
 func send_panel_hit(pos: Vector2) -> String:
 	if not _send_panel.visible:
 		return ""
 	for i in _send_buttons.size():
-		if _send_buttons[i].get_global_rect().grow(6.0).has_point(pos):
+		if _send_buttons[i].get_global_rect().grow(5.0).has_point(pos):
 			return Stamps.ALL[i]
+	if _send_close and _send_close.get_global_rect().grow(8.0).has_point(pos):
+		return "close"
 	return ""
+
+
+## 言葉を送るバーの画面の範囲(出ていなければ空)。吹き出しをそこに置かないため
+func send_panel_rect() -> Rect2:
+	return _send_panel.get_global_rect().grow(6.0) if _send_panel and _send_panel.visible else Rect2()
 
 
 ## 「◯◯に送る」の上(ボタンのすき間など)をタップしたか(閉じないようにするため)
@@ -1303,6 +1325,17 @@ func set_next_ui(show: bool, host: bool) -> void:
 
 ## 教室のままの投票の表示。show: 投票中か / voted・total: 投票した人数 / hint: 下の小さな案内 /
 ## skip: ルーム主の「発表へ」を出すか / skip_ready: 押せるか(始まって5秒たったか)
+## 画面の上の「UI 専用の帯」の下のふち(ラウンド・落とし物・点数・「あなたは鬼の手下」などの札が出ている範囲)。
+## 名札や言葉の吹き出しは、この帯に入らないように下に押し下げる。投票の間は「鬼の手下は誰?」の枠も帯に入れる
+func top_band_bottom() -> float:
+	var bottom := 0.0
+	for c in [_round_pill.get_parent() if _round_pill else null, _badge, _milk_pill, _vote_panel]:
+		var ctl := c as Control
+		if ctl and ctl.is_visible_in_tree():
+			bottom = maxf(bottom, ctl.get_global_rect().end.y)
+	return bottom
+
+
 ## 「発表へ」「次へ」のボタンの画面の範囲(出ていなければ空)。名札や吹き出しをそこに置かないため
 func vote_button_rect() -> Rect2:
 	if _skip_button and _skip_button.visible:

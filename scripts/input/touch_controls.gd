@@ -174,19 +174,25 @@ func _draw_turn_arrow(c: Control) -> void:
 
 ## 「振り向く」ボタンの残りの回数(-1 = 数えない場面: 追いかけっこ中・勝敗のあと)。
 ## 右上のバッジに数字で出し、0 回になったらボタン全体を灰色にして押せなくする
-func set_looks_left(n: int) -> void:
+func set_looks_left(n: int, looking := false) -> void:
 	if _look_arrow:
 		_look_arrow.queue_redraw()
-	if n == _looks_shown:
+	if n == _looks_shown and looking == _look_busy:
 		return
 	_looks_shown = n
+	_look_busy = looking
 	# 右上の数字のバッジは出さない(試遊の結果。回数は0回で灰色になることだけで伝える)
 	_look_badge.visible = false
 	_look_badge_label.text = str(maxi(n, 0))
-	var empty := n == 0
+	# 押せないとき(回数が0・振り向いている間)は、灰色で薄く
+	var empty := n == 0 or looking
 	_look_button.disabled = empty
-	if empty:
+	_look_button.modulate.a = 0.55 if empty else 1.0
+	if n == 0:
 		_release_action("look_back")
+
+
+var _look_busy := false
 
 
 ## 牛乳ボタンの見た目: 使える(白地に青の内枠・牛乳びん)/相手を選んでいる(青く光る・かたむけたパック・「えいっ」)/
@@ -241,6 +247,9 @@ func set_milk_state(n: int, aiming: bool) -> void:
 		_milk_label.text = {"water": "水鉄砲", "camera": "カメラ"}.get(_tool, "黒板消し")
 		_milk_label.add_theme_color_override("font_color", GameConfig.COLOR_INK)
 	_milk_inner.visible = not empty and not aiming
+	# (右下の角のボタンは、少し半透明。使えないときは薄く)
+	normal.bg_color.a = CORNER_ALPHA
+	_milk_button.modulate.a = 0.55 if empty else 1.0
 	UiStyle.refit_all()
 	for st in ["normal", "hover", "disabled"]:
 		_milk_button.add_theme_stylebox_override(st, normal)
@@ -485,6 +494,18 @@ func _tap_action(action: String) -> void:
 	_send(action, false)
 
 
+## 右下の角のボタン(振り向く・落とす・牛乳・フェイク): 元の大きさの CORNER_SCALE 倍にして、画面の右下の角に寄せる。
+## 地は少し半透明(うしろのキャラが透けて見える)
+const CORNER_ACTIONS := ["look_back", "oni_drop", "oni_milk", "oni_feint"]
+const CORNER_SCALE := 0.7
+## 元の並びの右下の角(右から SAFE、下から 30)と、新しい右下の角(右から・下から CORNER_MARGIN)
+const CORNER_OLD := Vector2(-UiStyle.SAFE, -30)
+const CORNER_MARGIN := 16.0
+const CORNER_ALPHA := 0.82
+## 指で「振り向く」をタップしたとき、振り向いたままでいる秒数(キーボードのスペースは押している間)
+const LOOK_TAP_HOLD := 1.0
+
+
 func _add_button(text: String, action: String, anchor: Vector2, rect: Rect2, font_size: int, on_press: Callable = Callable()) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -497,16 +518,25 @@ func _add_button(text: String, action: String, anchor: Vector2, rect: Rect2, fon
 	b.anchor_right = anchor.x
 	b.anchor_top = anchor.y
 	b.anchor_bottom = anchor.y
-	b.offset_left = rect.position.x
-	b.offset_top = rect.position.y
-	b.offset_right = rect.position.x + rect.size.x
-	b.offset_bottom = rect.position.y + rect.size.y
-	# PC のマウス用
+	var r := rect
+	if action in CORNER_ACTIONS:
+		# 中身はそのままの大きさで作って、全体を小さくする(右下の角を基準に、並びもそのまま縮める)
+		var corner_new := Vector2(-CORNER_MARGIN, -CORNER_MARGIN)
+		r.position = corner_new + (rect.position - CORNER_OLD) * CORNER_SCALE
+		b.scale = Vector2.ONE * CORNER_SCALE
+		for sn in ["normal", "hover", "pressed", "hover_pressed"]:
+			var sb := (b.get_theme_stylebox(sn) as StyleBoxFlat).duplicate() as StyleBoxFlat
+			sb.bg_color.a = CORNER_ALPHA
+			b.add_theme_stylebox_override(sn, sb)
+	b.offset_left = r.position.x
+	b.offset_top = r.position.y
+	b.offset_right = r.position.x + rect.size.x
+	b.offset_bottom = r.position.y + rect.size.y
+	# PC のマウス用(ボタンの上で離したときだけ。外にずらして離したら何もしない)
 	if on_press.is_valid():
 		b.pressed.connect(on_press)
 	else:
-		b.button_down.connect(_send.bind(action, true))
-		b.button_up.connect(_send.bind(action, false))
+		b.pressed.connect(_tap_hold.bind(action))
 	_buttons.append({"button": b, "action": action, "call": on_press})
 	# 長い言葉(英語など)でもはみ出さないように
 	if text != "":
@@ -519,6 +549,9 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("menu"):
 		toggle_menu()
 		return
+	if event is InputEventScreenDrag:
+		_drag_feedback(event as InputEventScreenDrag)
+		return
 	if not event is InputEventScreenTouch:
 		return
 	var t := event as InputEventScreenTouch
@@ -527,7 +560,7 @@ func _input(event: InputEvent) -> void:
 		for k in range(_buttons.size() - 1, -1, -1):
 			var entry: Dictionary = _buttons[k]
 			var b: Button = entry["button"]
-			if not b.is_visible_in_tree() or b.disabled or not b.get_global_rect().has_point(t.position):
+			if not b.is_visible_in_tree() or b.disabled or not button_rect(b).has_point(t.position):
 				continue
 			if is_menu_open() and not (_menu.is_ancestor_of(b) or _help_panel.is_ancestor_of(b) or _volume_panel.is_ancestor_of(b)):
 				continue
@@ -537,9 +570,9 @@ func _input(event: InputEvent) -> void:
 				call.call()
 				get_viewport().set_input_as_handled()
 				return
+			# (押した瞬間には動かさない。ボタンの上で指を離したときだけ動く。外にずらして離したら何もしない)
 			_touch_action[t.index] = entry
 			UiStyle.show_pressed(b, true)
-			_send(entry["action"], true)
 			get_viewport().set_input_as_handled()
 			return
 		if is_menu_open():
@@ -548,8 +581,45 @@ func _input(event: InputEvent) -> void:
 	elif _touch_action.has(t.index):
 		var entry: Dictionary = _touch_action[t.index]
 		_touch_action.erase(t.index)
-		UiStyle.show_pressed(entry["button"], false)
-		_send(entry["action"], false)
+		var b2: Button = entry["button"]
+		UiStyle.show_pressed(b2, false)
+		if b2.is_visible_in_tree() and not b2.disabled and button_rect(b2).grow(10.0).has_point(t.position):
+			_tap_hold(entry["action"])
+		get_viewport().set_input_as_handled()
+
+
+## 指をずらしている間: ボタンの外に出たら押した見た目をやめ、戻ったらまた押した見た目にする
+func _drag_feedback(event: InputEventScreenDrag) -> void:
+	if not _touch_action.has(event.index):
+		return
+	var b: Button = _touch_action[event.index]["button"]
+	UiStyle.show_pressed(b, button_rect(b).grow(10.0).has_point(event.position))
+
+
+## ボタンの画面の範囲(小さくしたボタンも、見えている大きさで)
+static func button_rect(b: Control) -> Rect2:
+	return b.get_global_transform() * Rect2(Vector2.ZERO, b.size)
+
+
+## ボタンを押した(タップした)ことにする: 振り向くは LOOK_TAP_HOLD 秒そのまま、ほかは一瞬だけ押す
+func _tap_hold(action: String) -> void:
+	if action == "":
+		return
+	_send(action, true)
+	var hold := LOOK_TAP_HOLD if action == "look_back" else 0.12
+	get_tree().create_timer(hold).timeout.connect(_send.bind(action, false))
+
+
+## 右下のボタンなど、いま出ているボタンの画面の範囲(言葉の吹き出し・送るバーをそこに置かないため)
+func visible_button_rects() -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	for entry in _buttons:
+		var b: Button = entry["button"]
+		if b.is_visible_in_tree() and str(entry["action"]) != "":
+			out.append(button_rect(b).grow(6.0))
+	if _stick and _stick.is_visible_in_tree():
+		out.append(_stick.get_global_rect())
+	return out
 
 
 ## その操作を押している指を離したことにする(ボタンが押せなくなったときなど)

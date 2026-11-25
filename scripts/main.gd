@@ -423,6 +423,8 @@ func _physics_process(delta: float) -> void:
 	if _stamp_target >= 0 and (state.get_actor(_stamp_target) == null or state.get_actor(_stamp_target).role != GameState.Role.SEATED
 			or (state.phase != GameState.Phase.WALKING and state.phase != GameState.Phase.DROPPED)):
 		_close_picker()
+	if _stamp_target >= 0 and Time.get_ticks_msec() - _picker_opened > int(PICKER_TIMEOUT * 1000.0):
+		_close_picker()
 	view.set_stamp_target(state, _stamp_target)
 	var me := state.get_local_player()
 	if me == null:
@@ -454,7 +456,7 @@ func _physics_process(delta: float) -> void:
 	hud.set_danger(view.oni_near_level())
 	touch.set_milk_state(state.milk_left, _milk_aiming)
 	var judged := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
-	touch.set_looks_left(me.looks_left if judged else -1)
+	touch.set_looks_left(me.looks_left if judged else -1, judged and me.looking_back)
 	# 勝敗が出ている間は、名札とゲーム用のボタンを隠して結果カードだけにする(⚙は残す)
 	var showing_result := state.phase == GameState.Phase.RESULT
 	touch.set_result_mode(showing_result)
@@ -494,11 +496,13 @@ func _physics_process(delta: float) -> void:
 		if showing_result:
 			ov.set_voted(state.votes.keys() if voting else [])
 			ov.set_send_target(_my_vote if voting else -1, tr("あなたの票"))
-		# 「発表へ」「次へ」のボタンに、名札や吹き出しが隠れないように
-		var br := hud.vote_button_rect()
-		var blocked: Array[Rect2] = []
-		if showing_result and br.has_area():
-			blocked.append(br)
+		# 画面の上の「UI 専用の帯」(ラウンド・落とし物・点数・役の札・投票の枠)には、名札や吹き出しを入れない。
+		# 右下のボタン(振り向く・落とす)・スティック・言葉を送るバー・「発表へ」「次へ」のボタンにも重ねない
+		ov.set_label_top(maxf(hud.top_band_bottom(), 0.0) + 6.0)
+		var blocked: Array[Rect2] = touch.visible_button_rects()
+		for r in [hud.send_panel_rect(), hud.vote_button_rect()]:
+			if (r as Rect2).has_area():
+				blocked.append(r)
 		ov.set_blocked(blocked)
 	# 左上の札(鬼の周回・自分の点数)を毎回更新する(参加者の点数は状態といっしょに届く)
 	_update_help()
@@ -791,7 +795,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_tree().quit()
 	else:
 		for i in Stamps.ALL.size():
-			if not _i_am_oni() and event.is_action_pressed("stamp_%d" % i):
+			# (1・2・3キーは、鬼のときも。鬼は Z・X・C でも)
+			if event.is_action_pressed("stamp_%d" % i):
 				_send_stamp(Stamps.ALL[i])
 				return
 			if _i_am_oni() and event.is_action_pressed("oni_stamp_%d" % i):
@@ -944,7 +949,6 @@ func _update_evidence(voting: bool, revealing: bool) -> void:
 	var ov := view.get_overlay()
 	hud.set_vote_screen(voting or revealing)
 	if ov and voting:
-		ov.set_label_top(hud.vote_panel_bottom() + 6.0)
 		ov.set_item_mark(view.vote_item_top())
 	if not voting:
 		if _evidence_on:
@@ -1081,6 +1085,10 @@ func _on_tap(pos: Vector2) -> void:
 		return
 	# 下のまん中の言葉のボタン
 	var kind := hud.send_panel_hit(pos)
+	if kind == "close":
+		AudioDirector.click()
+		_close_picker()
+		return
 	if kind != "":
 		_send_stamp(kind)
 		return
@@ -1114,8 +1122,9 @@ func _on_tap(pos: Vector2) -> void:
 		return
 	# 足もとが光り、頭の上に「送る相手」の印。下のまん中に「◯◯に送る」と3つの言葉
 	_stamp_target = id
+	_picker_opened = Time.get_ticks_msec()
 	ov.set_send_target(id)
-	hud.open_send_panel(_short_name(id), _i_am_oni())
+	_open_send_bar(id)
 
 
 ## 言語を切りかえる(ロビーの言語ボタン・⚙メニューから)。端末に保存し、画面の文字を作り直す
@@ -1181,6 +1190,26 @@ func _update_milk() -> void:
 			_close_picker()
 			hud.show_message(tr("かける人をタップ!"), Color(0.3, 0.45, 0.7), 1.0)
 	view.set_milk_aim(_milk_aiming)
+
+
+## 言葉を送るバーを出す: 画面の下の、右下のボタン(振り向く・落とす)とスティックにかからない場所
+func _open_send_bar(id: int) -> void:
+	var vp := get_viewport().get_visible_rect().size
+	var left := 0.0
+	var right := vp.x
+	for r in touch.visible_button_rects():
+		if r.end.y < vp.y - 160.0:
+			continue
+		if r.get_center().x > vp.x * 0.5:
+			right = minf(right, r.position.x)
+		else:
+			left = maxf(left, r.end.x)
+	hud.open_send_panel(_short_name(id), left, right)
+
+
+## 言葉を送るバーを開いてから(ミリ秒)。何もしないまま PICKER_TIMEOUT 秒たったら閉じる
+var _picker_opened := 0
+const PICKER_TIMEOUT := 3.0
 
 
 func _close_picker() -> void:

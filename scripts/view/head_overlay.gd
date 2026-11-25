@@ -376,7 +376,7 @@ func update(state: GameState, cam: Camera3D) -> void:
 	var me := state.get_local_player()
 	var can_stamp := me != null and (me.role == GameState.Role.SEATED or me.role == GameState.Role.ONI or me.role == GameState.Role.OUT) \
 			and (state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED)
-	var top := _label_top if _vote_on else TOP_LIMIT
+	var top := _label_top
 	_tag_rects.clear()
 	_head_rects.clear()
 	# 手前(カメラに近い)人から置く

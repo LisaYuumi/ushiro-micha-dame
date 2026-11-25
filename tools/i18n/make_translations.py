@@ -65,7 +65,7 @@ EN = {
     "平気": "You're safe",
     "信じて": "Trust me",
     "送る相手": "Send to",
-    "%sに送る": "Send to %s",
+    "%sに送る:": "Send to %s:",
     "スタンプの言葉を変える  😨 👍 🥺": "Change stamp words  😨 👍 🥺",
     "スタンプの言葉(%d文字まで。絵文字は変わりません)": "Stamp words (up to %d characters. Emoji stay the same)",
     "初期の言葉に戻す": "Reset to default",
