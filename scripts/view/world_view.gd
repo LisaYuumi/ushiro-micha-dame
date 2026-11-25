@@ -213,6 +213,11 @@ func build(state: GameState) -> void:
 	_reveal_faces.clear()
 	if _vote_view:
 		_vote_view = false
+	# (投票の場面の再現も消す。残すと、次のラウンドでも前のラウンドの席にみんなを置いてしまう)
+	_vote_scene.clear()
+	_vote_item_pos = Vector3.INF
+	_vote_item_top = Vector3.INF
+	_vote_focus = -1
 	_shake_left = 0.0
 	_obstacle_nodes.clear()
 	_milk_nodes.clear()

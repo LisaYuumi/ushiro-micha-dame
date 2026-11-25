@@ -234,6 +234,14 @@ func _check_vote_scene() -> void:
 	_check(absf(v._handkerchief.transform.basis.get_scale().x - WorldView.VOTE_ITEM_SCALE) < 0.01 and v.vote_item_top() != Vector3.INF,
 			"投票の場面: 落とし物は少し大きく、▼を出す位置がわかる")
 	_check((v._actor_nodes[oops] as CharacterModel)._expression == CharacterModel.SHOCK, "投票の場面: お手つきの人はガーン顔のまま")
+	# 次のラウンドで教室を作り直したら、場面の再現は残らない(前のラウンドの席にみんなを置かない)
+	var v2 := WorldView.new()
+	root.add_child(v2)
+	v2.build(s)
+	v2.set_vote_view(true, s)
+	v2.build(s)
+	_check(v2._vote_scene.is_empty() and not v2._vote_view, "投票の場面: 次のラウンドで作り直したら、前の席の再現は残らない")
+	v2.queue_free()
 	# 振り返りの演出: 6〜8秒くらい。はじめは言葉を隠し、早送りすると全部出る
 	var hud := Hud.new()
 	root.add_child(hud)
