@@ -207,6 +207,8 @@ func build(state: GameState) -> void:
 	_last_pos.clear()
 	_still_time.clear()
 	_out_anim.clear()
+	# (見逃しの顔のアップの途中でラウンドが終わっても、隠していた鬼・気づかなかった人の体を元にもどす)
+	_set_viewer_hidden(false, false)
 	_ms.clear()
 	_item_head_id = -1
 	_missed_sit.clear()
@@ -249,6 +251,10 @@ func build(state: GameState) -> void:
 			node = _model_cache[key]
 			_model_cache.erase(key)
 			(node as CharacterModel).stop_ragdoll()
+			# (前のラウンドで一時的に隠したまま(見逃しの顔のアップ・カメラのすぐ前)にならないように、必ず見えるようにもどす。
+			# 前は、隠したまま次のラウンドになると、鬼が足音だけして見えなかった)
+			node.visible = true
+			node.set_meta("cam_hid", false)
 		else:
 			node = _build_character(a, is_self)
 			node.set_meta("model_key", key)
@@ -3013,7 +3019,9 @@ const CAM_CLEAR_RADIUS := 0.95
 
 func _hide_near_camera(state: GameState) -> void:
 	var cam := get_viewport().get_camera_3d()
-	if cam == null:
+	# (追いかけっこの間だけ。見逃しの顔のアップなど、わざと近くから映す場面では隠さない)
+	if cam == null or state.phase != GameState.Phase.CHASE:
+		_restore_cam_hidden()
 		return
 	var eye := cam.global_position
 	for id in _actor_nodes:
@@ -3024,10 +3032,17 @@ func _hide_near_camera(state: GameState) -> void:
 		_cam_clear(_obstacle_nodes[id] as Node3D, eye, Vector3(0, 0.35, 0), CAM_CLEAR_RADIUS * 0.8)
 
 
+func _restore_cam_hidden() -> void:
+	for id in _actor_nodes:
+		_cam_clear(_actor_nodes[id] as Node3D, Vector3.INF, Vector3.ZERO, 0.0)
+	for id in _obstacle_nodes:
+		_cam_clear(_obstacle_nodes[id] as Node3D, Vector3.INF, Vector3.ZERO, 0.0)
+
+
 func _cam_clear(n: Node3D, eye: Vector3, center: Vector3, radius: float) -> void:
 	if n == null or not is_instance_valid(n):
 		return
-	var near := (n.global_position + center).distance_to(eye) < radius
+	var near := eye != Vector3.INF and (n.global_position + center).distance_to(eye) < radius
 	if near and n.visible:
 		n.visible = false
 		n.set_meta("cam_hid", true)

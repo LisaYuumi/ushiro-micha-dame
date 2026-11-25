@@ -272,7 +272,7 @@ func _check_vote_scene() -> void:
 	v.set_vote_view(false)
 	_check(v._vote_scene.is_empty(), "投票の場面: 投票が終わったら元にもどす")
 	# カメラの中に入った人は隠す(黒い輪郭線が画面いっぱいに映らないように)
-	s.phase = GameState.Phase.WALKING
+	s.phase = GameState.Phase.CHASE
 	var cam := v.get_viewport().get_camera_3d()
 	var other := s.get_actor(int(s.round_lineup[3]))
 	var keep := other.position
@@ -282,6 +282,10 @@ func _check_vote_scene() -> void:
 	other.position = keep
 	v.sync(s, 0.016)
 	_check(hid and (v._actor_nodes[other.id] as Node3D).visible, "カメラのすぐ前の人は隠し、離れたら元にもどす")
+	# 次のラウンドで体を使い回しても、隠したままにならない(鬼が足音だけして見えない、にならない)
+	(v._actor_nodes[s.oni_id] as Node3D).visible = false
+	v.build(s)
+	_check((v._actor_nodes[s.oni_id] as Node3D).visible, "次のラウンドで、隠していた体も見えるようにもどす")
 	v.queue_free()
 
 
