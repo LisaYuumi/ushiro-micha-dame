@@ -536,12 +536,26 @@ def zazaa():
 
 
 def heartbeat():
-    # 心臓の「ドクン」: 低い2つの音(ドッ・クン)。BGM の下にうっすら重ねる
-    d = 0.55
-    lub = thud(70, 42, 0.22, 0.06)
-    dub = thud(62, 38, 0.22, 0.05) * 0.7
-    x = mix(at(lub, 0.0, d), at(dub, 0.17, d))
-    return norm(lowpass(x, 180), 0.9)
+    # 心臓の「ドク・ドクン」(1拍): 1回目は短く軽く、2回目は少し強く。
+    # 低い「ドン」(60〜100Hz)に、スマホの小さいスピーカーでも聞こえるよう「トッ」(150〜250Hz)を重ねる。
+    # 音のはじまりはくっきり(2ミリ秒で立ち上がる)。最後に軽く歪ませて、小さい音量でも聞こえやすくする
+    d = 0.5
+
+    def beat(f0, f1, length, tau, tick_f, tick_amp, amp):
+        t = t_of(length)
+        att = np.minimum(t / 0.002, 1.0)
+        body = tone(glide(f0, f1, length, 0.6), length) * att * np.exp(-t / tau)
+        tick = tone(glide(tick_f * 1.2, tick_f, length, 0.5), length) * att * np.exp(-t / 0.03) * tick_amp
+        # (スマホの小さいスピーカー用に、もう少し高い倍音も少し)
+        tick += tone(glide(tick_f * 2.2, tick_f * 1.8, length, 0.5), length) * att * np.exp(-t / 0.016) * tick_amp * 0.35
+        click = bandpass(noise(length), 300, 1200) * att * np.exp(-t / 0.004) * 0.12
+        return (body + tick + click) * amp
+
+    lub = beat(95, 62, 0.14, 0.04, 180, 0.9, 0.62)
+    dub = beat(100, 58, 0.22, 0.065, 210, 1.0, 1.0)
+    x = mix(at(lub, 0.0, d), at(dub, 0.19, d))
+    x = np.tanh(x * 2.2) / np.tanh(2.2)
+    return norm(x, 0.97)
 
 
 def bgm_ending():

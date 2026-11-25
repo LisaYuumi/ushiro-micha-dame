@@ -54,8 +54,6 @@ var _oni_shadow_mat: StandardMaterial3D
 ## 鬼が自分のうしろにいる近さ(0〜1。影と同じ範囲)と、なめらかにしたドキドキの強さ、心臓の音
 var _oni_near := 0.0
 var _heart_level := 0.0
-var _heart_wait := 0.0
-var _heart_player: AudioStreamPlayer
 ## 頭の上の名札(2D で重ねる)
 var _overlay: HeadOverlay
 ## 停電イベントの暗い幕
@@ -1901,23 +1899,14 @@ func _update_oni_shadow(state: GameState) -> void:
 ## 鬼がうしろに来たときのドキドキ(影がのびるのと同じとき): BGM の下に心臓の「ドクン、ドクン」。
 ## 近いほど速く・大きく。離れたら少しずつ消える。鬼が歩いて回っている間だけ(追いかけっこ・結果では鳴らさない)
 func _update_heart(state: GameState, delta: float) -> void:
+	# (座っている本人の画面だけ。鬼のとき・追いかけっこ中・お手つきで真ん中にいるときは 0。_oni_near は座っている人だけ)
 	var walking := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
 	var target := _oni_near if walking else 0.0
 	var rate := GameConfig.HEART_RISE if target > _heart_level else GameConfig.HEART_FALL
 	_heart_level = move_toward(_heart_level, target, rate * delta)
-	if _heart_level <= 0.01:
-		_heart_wait = 0.0
-		return
-	if _heart_player == null:
-		_heart_player = Sfx.player_2d(self)
-		_heart_player.stream = Sfx.get_stream("heartbeat")
-	_heart_wait -= delta
-	if _heart_wait <= 0.0:
-		var k := _heart_level
-		_heart_wait = lerpf(GameConfig.HEART_INTERVAL_FAR, GameConfig.HEART_INTERVAL_NEAR, k)
-		_heart_player.volume_db = lerpf(GameConfig.HEART_DB_FAR, GameConfig.HEART_DB_NEAR, k)
-		_heart_player.pitch_scale = lerpf(1.0, 1.08, k)
-		_heart_player.play()
+	# 心臓の音そのもの(速さ・大きさ・BGM を下げる)は AudioDirector が鳴らす
+	if AudioDirector.instance:
+		AudioDirector.instance.set_heart(_heart_level)
 
 
 ## 鬼がうしろにいるドキドキの強さ(0〜1。画面のふちを暗くするのに使う)

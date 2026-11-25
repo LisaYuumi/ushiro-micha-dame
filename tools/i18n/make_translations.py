@@ -388,6 +388,7 @@ EN = {
     "  ・  ": "  ・  ",
     "、": ", ",
     "だれも教えてくれなかった…": "Nobody told me...",
+    "心臓の音を試しに鳴らす": "Test the heartbeat sound",
     "さっきの場面を思い出してみよう…": "Let's remember what just happened...",
     "%sのうしろに %s が落ちていた!": "Behind %s: the %s!",
     "%sが振り向いたけど、何もなかった…": "%s looked back, but nothing was there...",

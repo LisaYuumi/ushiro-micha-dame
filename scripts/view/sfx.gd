@@ -41,7 +41,21 @@ static func setup_buses() -> void:
 			var i := AudioServer.bus_count - 1
 			AudioServer.set_bus_name(i, bus)
 			AudioServer.set_bus_send(i, "Master")
+	# BGM のバスに「小さくする」効果をつけておく(心臓の音が鳴っている間、BGM を下げるため。音量の設定とは別)
+	var bi := AudioServer.get_bus_index(BUS_BGM)
+	if bi >= 0 and AudioServer.get_bus_effect_count(bi) == 0:
+		AudioServer.add_bus_effect(bi, AudioEffectAmplify.new())
 	apply_volumes()
+
+
+## BGM を下げる(dB。0 で元どおり)。心臓の音が鳴っている間に使う
+static func set_bgm_duck(db: float) -> void:
+	var bi := AudioServer.get_bus_index(BUS_BGM)
+	if bi < 0 or AudioServer.get_bus_effect_count(bi) == 0:
+		return
+	var amp := AudioServer.get_bus_effect(bi, 0) as AudioEffectAmplify
+	if amp:
+		amp.volume_db = db
 
 
 ## Profile の音量(0〜1)を、バスの大きさにする

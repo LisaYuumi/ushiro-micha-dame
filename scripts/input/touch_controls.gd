@@ -368,6 +368,10 @@ func _build_menu() -> void:
 	var vcol: VBoxContainer = _volume_panel.get_child(0)
 	_volume_sliders = VolumePanel.new()
 	vcol.add_child(_volume_sliders)
+	# (心臓の音の大きさを確かめるため。効果音の音量に従う。BGM も下がる)
+	_menu_button(vcol, "心臓の音を試しに鳴らす", func() -> void:
+		if AudioDirector.instance:
+			AudioDirector.instance.test_heart())
 	_menu_button(vcol, "とじる", close_menu, true)
 
 	_help_panel = _panel(Vector2(760, 0))

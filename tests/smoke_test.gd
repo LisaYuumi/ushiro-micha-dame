@@ -309,14 +309,26 @@ func _check_heart() -> void:
 		v.sync(s, 0.05)
 	var near := v.oni_near_level()
 	_check(far > 0.05 and near > far, "ドキドキ: 鬼がうしろに近いほど強い(%.2f → %.2f)" % [far, near])
-	_check(v._heart_player != null and v._heart_player.stream != null, "ドキドキ: 心臓の音がある")
+	var ad := AudioDirector.instance
+	_check(Sfx.get_stream("heartbeat") != null and ad != null and ad._heart_level > 0.3, "ドキドキ: 心臓の音を鳴らす(%.2f)" % (ad._heart_level if ad else -1.0))
+	if ad:
+		ad._process(0.5)
+		var bi := AudioServer.get_bus_index(Sfx.BUS_BGM)
+		var amp := AudioServer.get_bus_effect(bi, 0) as AudioEffectAmplify
+		_check(amp != null and amp.volume_db < -2.0, "ドキドキ: 鳴っている間は BGM を下げる(%.1f dB)" % (amp.volume_db if amp else 0.0))
+		# 速さ: 近いほど速い(1分に70回 → 140回)
+		_check(GameConfig.HEART_BPM_FAR == 70.0 and GameConfig.HEART_BPM_NEAR == 140.0, "ドキドキ: 3mで1分に70回、すぐうしろで140回")
 	_check(v._step_player.volume_db > GameConfig.FOOTSTEP_VOLUME_DB + 1.0, "ドキドキ: 鬼の足音が大きくなる")
 	var hud := Hud.new()
 	root.add_child(hud)
 	hud.set_danger(near)
 	_check(hud._danger != null and hud._danger.visible and hud._danger.modulate.a > 0.1, "ドキドキ: 画面のふちが暗くなる")
 	oni.position = me.position - back * 2.0
-	for i in 40:
+	# (鬼が離れたら、1〜2秒かけて小さくなって止まる)
+	for i in 10:
+		v.sync(s, 0.05)
+	_check(v.oni_near_level() > 0.0, "ドキドキ: 鬼が離れても、すぐには止まらない(少しずつ小さく)")
+	for i in 50:
 		v.sync(s, 0.05)
 	hud.set_danger(v.oni_near_level())
 	_check(v.oni_near_level() == 0.0 and not hud._danger.visible, "ドキドキ: 鬼が離れたら元に戻る")

@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(564)
+## 一覧(565)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -359,6 +359,7 @@
 |   ・   |   ・   |
 | 、 | ,  |
 | だれも教えてくれなかった… | Nobody told me... |
+| 心臓の音を試しに鳴らす | Test the heartbeat sound |
 | さっきの場面を思い出してみよう… | Let's remember what just happened... |
 | %sのうしろに %s が落ちていた! | Behind %s: the %s! |
 | %sが振り向いたけど、何もなかった… | %s looked back, but nothing was there... |
