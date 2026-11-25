@@ -477,6 +477,9 @@ func _physics_process(delta: float) -> void:
 		elif _my_vote >= 0:
 			hint = tr("%s に投票した(入れ直せる)") % _short_name(_my_vote)
 		hud.set_vote_ui(true, state.votes.size(), state.voter_count(), hint, mode != Mode.GUEST, state.can_skip_vote())
+	elif revealing and not waiting_next:
+		# 票が飛ぶ発表の間も、上の枠(見出しと起きたこと)とラベルは出したまま
+		hud.set_vote_ui(true, 0, 0, "", false, false, false)
 	elif waiting_next and _tutorial == null:
 		hud.set_next_ui(true, mode != Mode.GUEST)
 	else:
@@ -677,7 +680,7 @@ func _update_my_stamps() -> void:
 			"kind": st["kind"],
 			"text": HeadOverlay.stamp_text(state, st["sender"], st["kind"]),
 			"sender": HeadOverlay.sender_name(state, st["sender"]),
-			"sender_color": HeadOverlay.sender_color(state, st["sender"]),
+			"color": HeadOverlay.kind_color(str(st["kind"])),
 		})
 	hud.show_my_stamps(list)
 
@@ -904,19 +907,22 @@ var _evidence_on := false
 var _evidence_sig := ""
 
 
-## 投票と発表の間: 上に「このラウンドで起きたこと」、各キャラの頭の上に大事な人へ送った言葉、大事な人の足もとを光らせる。
-## 本当かウソかは出さない(プレイヤーが見比べて考える)
+## 投票と発表の間: 上の枠に「このラウンドで起きたこと」、全員の頭のすぐ上に「名前+大事な人へ送った言葉」のラベル、
+## 大事な人の足もとを光らせてラベルを黄色に。いつもの左上の札は隠す。本当かウソかは出さない(プレイヤーが見比べて考える)
 func _update_evidence(on: bool) -> void:
 	var ov := view.get_overlay()
+	hud.set_vote_screen(on)
+	if ov and on:
+		ov.set_label_top(hud.vote_panel_bottom() + 6.0)
 	if not on:
 		if _evidence_on:
 			_evidence_on = false
 			_evidence_sig = ""
-			hud.set_evidence_summary("")
+			hud.set_evidence_badges([])
 			hud.hide_evidence_list()
 			view.set_key_people([])
 			if ov:
-				ov.set_evidence({})
+				ov.set_vote_evidence(false)
 		return
 	var keys := state.evidence_key_ids()
 	var sig := "%s|%d" % [str(keys), state.stamp_log.size()]
@@ -924,10 +930,10 @@ func _update_evidence(on: bool) -> void:
 		return
 	_evidence_on = true
 	_evidence_sig = sig
-	hud.set_evidence_summary(HeadOverlay.evidence_summary(state))
+	hud.set_evidence_badges(HeadOverlay.evidence_badges(state))
 	view.set_key_people(keys)
 	if ov:
-		ov.set_evidence(HeadOverlay.evidence_bubbles(state))
+		ov.set_vote_evidence(true, HeadOverlay.evidence_bubbles(state))
 
 
 func _show_evidence_list(id: int) -> void:

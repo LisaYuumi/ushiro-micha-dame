@@ -120,11 +120,11 @@ const COLOR_FLOWER := Color("F09AB0")
 const COLOR_STEEL := Color("A9B2BA")
 const COLOR_PAPER_SOFT := Color("FBF8EF")
 
-## スタンプの色: 落ちてる!(赤)・まだへいき!(緑)・信じて!(紫)
+## スタンプの色は言葉の意味でそろえる: 見ろ系(落ちてる・信じて)は赤、見るな系(平気)は青
 const STAMP_COLORS := {
-	Stamps.DROPPED: Color("E5483B"),
-	Stamps.SAFE: Color("3AAE5C"),
-	Stamps.TRUST: Color("9B5DE5"),
+	Stamps.DROPPED: HeadOverlay.COLOR_LOOK,
+	Stamps.SAFE: HeadOverlay.COLOR_DONT,
+	Stamps.TRUST: HeadOverlay.COLOR_LOOK,
 }
 ## 足音用: 鬼の前回の位置と、前の足音から歩いた距離
 var _oni_last_pos := Vector3.ZERO
@@ -2681,6 +2681,7 @@ func set_vote_view(on: bool) -> void:
 		return
 	_vote_view = on
 	_vote_view_t = 0.0
+	_vote_cam_at = -100000
 	if on:
 		var cam := get_viewport().get_camera_3d()
 		_vote_from = cam.global_transform if cam else _seat_cam.global_transform
@@ -2707,8 +2708,29 @@ func _update_vote_view(state: GameState, delta: float) -> void:
 	_top_cam.global_transform = _vote_from.interpolate_with(want, k)
 
 
-## 投票の画面のカメラ(自分の席の後ろの高いところから、輪の全体を見る。撮影モードでも使う)
+## 投票の画面のカメラ(自分の席の後ろの高いところから、輪を見る。撮影モードでも使う)。
+## 全員の頭(とその上のラベル)と胸が画面に入る範囲で、できるだけ近づく(キャラが画面いっぱいに大きく映るように)。
+## 重いので、投票の画面になったときと、そのあと2秒ごとに計算しなおす
+## 見下ろす角度の候補(ラジアン)。いちばんキャラが大きく(近く)映る角度を選ぶ
+## (低すぎると、手前の人のラベルが奥の人の顔にかぶるので、ある程度は見下ろす)
+const VOTE_CAM_PITCHES := [0.62, 0.75, 0.88, 1.0]
+## 画面の上の枠とラベルの分、頭を置かない上の帯(px)と、左右のよゆう(px)
+const VOTE_CAM_TOP_PX := 215.0
+const VOTE_CAM_SIDE_PX := 110.0
+var _vote_cam_cache := Transform3D.IDENTITY
+var _vote_cam_at := -100000
+
+
 func vote_camera_transform(state: GameState) -> Transform3D:
+	var now := Time.get_ticks_msec()
+	if now - _vote_cam_at < 2000:
+		return _vote_cam_cache
+	_vote_cam_at = now
+	_vote_cam_cache = _fit_vote_camera(state)
+	return _vote_cam_cache
+
+
+func _fit_vote_camera(state: GameState) -> Transform3D:
 	var me := state.get_local_player()
 	var base := Vector3(0, 0, 1)
 	if me:
@@ -2719,9 +2741,116 @@ func vote_camera_transform(state: GameState) -> Transform3D:
 			p = state.seat_positions[me.seat_index]
 		if Vector2(p.x, p.z).length() > 0.3:
 			base = Vector3(p.x, 0.0, p.z).normalized()
-	# (上の「鬼の手下は誰?」の札の下に輪が入り、頭の上に証拠の吹き出しを出す場所があるように、奥の高いところをねらう)
-	var want := Transform3D.IDENTITY.translated(base * (GameConfig.RING_RADIUS + 3.9) + Vector3(0, 4.2, 0))
-	return want.looking_at(Vector3(0, 1.9, 0) - base * 2.6, Vector3.UP)
+	# 映したい点: 全員の頭の上(吹き出しの下のふち)と足もと(名札)
+	var heads: Array[Vector3] = []
+	var chests: Array[Vector3] = []
+	for id in _actor_nodes:
+		var m := _actor_nodes[id] as CharacterModel
+		if m == null or not is_instance_valid(m):
+			continue
+		# (自分と、自分よりカメラ側(輪の外のうしろ)に立っている人は数えない。その人の札は画面の下のふちに寄せて出る)
+		if id == state.local_player_id or m.global_position.dot(base) > GameConfig.RING_RADIUS * 0.9:
+			continue
+		heads.append(m.tag_anchor())
+		# (足もとの名札も入るように、足もと)
+		chests.append(m.global_position)
+	var vp := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(1280, 720)
+	var aspect := vp.x / maxf(vp.y, 1.0)
+	var tan_v := tan(deg_to_rad(55.0) / 2.0)
+	var y_top := 1.0 - 2.0 * VOTE_CAM_TOP_PX / vp.y
+	var x_lim := 1.0 - 2.0 * VOTE_CAM_SIDE_PX / vp.x
+	var fallback := Transform3D.IDENTITY.translated(base * (GameConfig.RING_RADIUS + 3.9) + Vector3(0, 4.2, 0)) \
+			.looking_at(Vector3(0, 1.9, 0) - base * 2.6, Vector3.UP)
+	if heads.is_empty():
+		return fallback
+	var best := fallback
+	var best_depth := INF
+	# (全員が入る角度がなければ、教室の中でいちばん遠く・いちばん上から見る)
+	var partial := Transform3D.IDENTITY
+	for pitch in VOTE_CAM_PITCHES:
+		var dir := (base * cos(pitch) + Vector3.UP * sin(pitch)).normalized()
+		var t := _fit_vote_distance(dir, base, heads, chests, tan_v, aspect, y_top, x_lim)
+		if t == Transform3D.IDENTITY:
+			partial = _vote_cam_at_dist(Vector3(0, 0.6, 0), dir, _vote_cam_max_dist(Vector3(0, 0.6, 0), dir))
+			continue
+		# キャラの大きさ = 胸までの近さの平均(近いほど大きく映る)
+		var inv := t.affine_inverse()
+		var depth := 0.0
+		for p in chests:
+			depth += -(inv * p).z
+		depth /= maxf(float(chests.size()), 1.0)
+		if depth < best_depth:
+			best_depth = depth
+			best = t
+	if best_depth == INF and partial != Transform3D.IDENTITY:
+		return partial
+	return best
+
+
+## カメラが教室の壁の外に出ない、いちばん遠い距離(海辺は壁がないので、少しゆるく)
+func _vote_cam_max_dist(target: Vector3, dir: Vector3) -> float:
+	var lim := (ROOM_HALF - 0.4) if not _beach else 14.0
+	var d := 20.0
+	for axis in [0, 2]:
+		var v: float = dir[axis]
+		if absf(v) > 0.001:
+			d = minf(d, (lim * signf(v) - target[axis]) / v)
+	if not _beach:
+		d = minf(d, (ROOM_HEIGHT * 2.2 - target.y) / maxf(dir.y, 0.05))
+	return maxf(d, 2.5)
+
+
+## その向きで、全員が入るいちばん近いカメラ(入らなければ IDENTITY)
+func _fit_vote_distance(dir: Vector3, base: Vector3, heads: Array[Vector3], chests: Array[Vector3], tan_v: float,
+		aspect: float, y_top: float, x_lim: float) -> Transform3D:
+	# ねらう場所を前後にずらしながら、入るいちばん近い距離を二分探索でさがす(遠いほど入りやすい)
+	var best := Transform3D.IDENTITY
+	var best_d := INF
+	for shift in [0.0, -0.6, 0.6, -1.2, 1.2]:
+		var target: Vector3 = Vector3(0, 0.6, 0) + base * float(shift)
+		var lo := 2.5
+		var hi := _vote_cam_max_dist(target, dir)
+		if not _vote_cam_fits(_vote_cam_at_dist(target, dir, hi), heads, chests, tan_v, aspect, y_top, x_lim):
+			continue
+		for k in 9:
+			var mid := (lo + hi) * 0.5
+			if _vote_cam_fits(_vote_cam_at_dist(target, dir, mid), heads, chests, tan_v, aspect, y_top, x_lim):
+				hi = mid
+			else:
+				lo = mid
+		if hi < best_d:
+			best_d = hi
+			best = _vote_cam_at_dist(target, dir, hi)
+	return best
+
+
+func _vote_cam_at_dist(target: Vector3, dir: Vector3, d: float) -> Transform3D:
+	return Transform3D.IDENTITY.translated(target + dir * d).looking_at(target, Vector3.UP)
+
+
+func _vote_cam_fits(t: Transform3D, heads: Array[Vector3], chests: Array[Vector3], tan_v: float, aspect: float,
+		y_top: float, x_lim: float) -> bool:
+	var inv := t.affine_inverse()
+	for p in heads:
+		var l := inv * p
+		if l.z >= -0.3:
+			return false
+		var depth := -l.z
+		var nx := l.x / (depth * tan_v * aspect)
+		var ny := l.y / (depth * tan_v)
+		if absf(nx) > x_lim or ny > y_top or ny < -0.95:
+			return false
+	for p in chests:
+		var l := inv * p
+		if l.z >= -0.3:
+			return false
+		var depth := -l.z
+		var nx := l.x / (depth * tan_v * aspect)
+		var ny := l.y / (depth * tan_v)
+		# (足もとの下に名札が入るだけのよゆう)
+		if absf(nx) > 0.95 or ny < -0.88:
+			return false
+	return true
 
 
 # --- 投票の証拠: 大事な人(落とされた人・お手つきになった人)の足もとを光らせる ---

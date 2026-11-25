@@ -2019,7 +2019,12 @@ func _test_vote_evidence() -> void:
 	_check(s.stamps_sent_by(sender).size() == 4, "証拠: タップの一覧はそのラウンドに送った全部")
 	var bubbles := HeadOverlay.evidence_bubbles(s)
 	_check(bubbles.has(sender) and bubbles.has(s.oni_id) and (bubbles[sender] as Array).size() == 2, "証拠: 頭の上の吹き出し(2つまで)")
-	_check(HeadOverlay.evidence_summary(s) != "", "証拠: 上の1行が出る")
+	_check(HeadOverlay.evidence_badges(s).size() == 2, "証拠: 上のバッジ(落ちた先・お手つき)")
+	var line: Dictionary = (bubbles[sender] as Array)[0]
+	_check(str(line["text"]).ends_with(Texts.STAMP_EMOJI["safe"]) and line["color"] == HeadOverlay.COLOR_DONT,
+			"証拠: 吹き出しは宛先と絵文字だけ・平気は青(%s)" % line["text"])
+	_check(HeadOverlay.kind_color("dropped") == HeadOverlay.COLOR_LOOK and HeadOverlay.kind_color("trust") == HeadOverlay.COLOR_LOOK,
+			"吹き出しの色: 見ろ系(落ちてる・信じて)は赤")
 	# 結果の場面だけ、ゲストに届く。本当かウソかは届かない
 	var guest := GameState.new()
 	guest.apply_snapshot(s.snapshot())

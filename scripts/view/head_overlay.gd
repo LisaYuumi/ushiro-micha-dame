@@ -1,43 +1,53 @@
 class_name HeadOverlay
 extends CanvasLayer
-## 頭の上の名札を、3D の上に重ねた 2D で出す(A案: 白地・黒枠の丸い札)。
-## - 距離に関係なく、画面の上で同じ大きさ
-## - 画面の端で切れないように内側に寄せる
-## - 名札どうしが重ならないように、重なる札は上へずらす
-## - 届いているスタンプは、名札の上に、送った人の色の吹き出しで「名前:言葉」と積む
-## - スタンプを送る相手を選んでいるときは、その人の名札の上に「送る相手」の印を出す
+## キャラの名札と言葉の吹き出しを、3D の上に重ねた 2D で出す。
+## - 名札は足もと(半透明の黒に白い文字。ひかえめ)。頭の上は言葉の吹き出し専用
+## - 吹き出しの色は言葉の意味でそろえる: 見ろ系(落ちてる😨・信じて🥺)は赤、見るな系(平気👍)は青。送った人の色は使わない
+## - 距離に関係なく、画面の上で同じ大きさ。画面の端(⚙ボタンの裏など)からはみ出さないように内側に寄せる
+## - 重なりそうな札・吹き出しは少しずらす
+## - スタンプを送る相手を選んでいるときは、その人の頭の上に「送る相手」の印
+## - 投票の間は、頭の上に「証拠」(落とされた人・お手つきの人に送った言葉。「→dog 👍」と宛先と絵文字だけ)
 ## - 牛乳で前が白いときは名札を隠す(吹き出しは牛乳の上に出したまま)
 ## 見た目だけ。状態は読むだけで変えない(押されたスタンプは main が命令にする)。
 
-const FONT_SIZE := 20
+const FONT_SIZE := 18
 const BUBBLE_FONT := 20
-## 名札を置かない上の帯(左上の札の下から)
+const EVIDENCE_FONT := 26
+## 吹き出し・名札を置かない上の帯(左上の札の下から)
 const TOP_LIMIT := 70.0
 ## 送れない相手(8人のときの両どなり・このラウンド送った人)の名札の濃さ
 const BLOCKED_ALPHA := 0.4
+## 吹き出しの色(見ろ系 = 赤、見るな系 = 青)
+const COLOR_LOOK := Color("E5483B")
+const COLOR_DONT := Color("2F7FE0")
+## 名札の地(半透明の黒)
+const TAG_BG := Color(0, 0, 0, 0.55)
+## 右上の⚙ボタンのあたり(吹き出しを置かない)
+const GEAR_SIZE := Vector2(120, 100)
 
-## id -> {"panel", "model", "bubbles": Array[PanelContainer], "styles": Array[StyleBoxFlat], "labels": Array[Label]}
+## id -> {"panel", "label", "model", "bubbles": Array[PanelContainer], "styles": Array[StyleBoxFlat], "labels": Array[Label], "name", "style"}
 var _tags := {}
 ## スタンプを送る相手(-1 = 選んでいない)と、その頭の上の「送る相手」の印
 var _target := -1
 var _marker: PanelContainer
-## 名札の画面の位置(吹き出しと印を出す場所に使う。画面に出せる人だけ)
+## 名札の画面の位置(タップで相手を選ぶ。画面に出せる人だけ)と、頭の上の吹き出しのかたまりの位置
 var _tag_rects := {}
+var _head_rects := {}
 ## 牛乳で前が白い: 名札を隠す
 var _tags_hidden := false
 ## 投票した人(名札にチェック)と、発表された手下(名札を紫に「手下」)
 var _voted := {}
 var _revealed := {}
-## 投票の「証拠」: id -> [{"text", "color"}](そのキャラが大事な人に送った言葉。2つまで)。名札の上に小さな吹き出しで出す
+## 全員のキャラ(自分も)
+var _models := {}
+var _self_id := -1
+## 投票の証拠: id -> 吹き出しの配列(送っていない人はなし)と、その画面の範囲(タップで一覧)
+var _vote_on := false
 var _evidence := {}
 var _ev_nodes := {}
-## 証拠の吹き出しの画面の範囲(タップで一覧を出すため)
 var _ev_rects := {}
-## 全員のキャラ(自分も。証拠の吹き出しは自分の頭の上にも出す)
-var _models := {}
-const EVIDENCE_FONT := 17
-## 証拠の吹き出しを置かない上の帯(上の「起きたこと」と「鬼の手下は誰?」の札の下から)
-const EVIDENCE_TOP := 96.0
+## 吹き出しを置かない上の帯の高さ(投票の間は、上の「鬼の手下は誰?」の枠の下。main が決める)
+var _label_top := TOP_LIMIT
 
 
 func build(state: GameState, models: Dictionary, show_personality: bool) -> void:
@@ -46,39 +56,42 @@ func build(state: GameState, models: Dictionary, show_personality: bool) -> void
 		c.queue_free()
 	_tags.clear()
 	_tag_rects.clear()
+	_head_rects.clear()
 	_models = models
+	_self_id = state.local_player_id
+	_vote_on = false
+	_evidence.clear()
 	_ev_nodes.clear()
 	_ev_rects.clear()
-	_evidence.clear()
 	for a in state.actors:
 		if a.id == state.local_player_id or not models.has(a.id):
 			continue
 		var tag_name: String = Locale.actor_name(a.display_name, show_personality)
-		var p := UiStyle.pill(tag_name, FONT_SIZE)
+		var p := PanelContainer.new()
+		p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var tst := _tag_style(TAG_BG)
+		p.add_theme_stylebox_override("panel", tst)
+		var tl := UiStyle.label(tag_name, FONT_SIZE, Color.WHITE)
+		p.add_child(tl)
 		p.visible = false
 		add_child(p)
 		var bubbles: Array[PanelContainer] = []
 		var styles: Array[StyleBoxFlat] = []
 		var labels: Array[Label] = []
 		for i in GameConfig.STAMP_SLOTS:
-			var st := UiStyle.box(Color.WHITE, true, 12, 3)
-			st.shadow_offset = Vector2(2, 3)
-			st.content_margin_left = 9
-			st.content_margin_right = 9
-			st.content_margin_top = 2
-			st.content_margin_bottom = 4
+			var st := _bubble_style(COLOR_LOOK)
 			var b := PanelContainer.new()
 			b.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			b.add_theme_stylebox_override("panel", st)
-			var l := UiStyle.label("", BUBBLE_FONT, GameConfig.COLOR_INK)
+			var l := UiStyle.label("", BUBBLE_FONT, Color.WHITE)
 			b.add_child(l)
 			b.visible = false
 			add_child(b)
 			bubbles.append(b)
 			styles.append(st)
 			labels.append(l)
-		_tags[a.id] = {"panel": p, "model": models[a.id], "bubbles": bubbles, "styles": styles, "labels": labels,
-				"name": tag_name, "style": p.get_theme_stylebox("panel"), "mark": ""}
+		_tags[a.id] = {"panel": p, "label": tl, "model": models[a.id], "bubbles": bubbles, "styles": styles, "labels": labels,
+				"name": tag_name, "style": tst}
 	_voted.clear()
 	_revealed.clear()
 	_marker = UiStyle.pill(Locale.t("送る相手") + " ▼", 20, true)
@@ -88,7 +101,33 @@ func build(state: GameState, models: Dictionary, show_personality: bool) -> void
 	_target = -1
 
 
-## スタンプを送る相手を選ぶ(-1 でやめる)。その人の名札の上に「送る相手」の印が出る。
+static func _tag_style(bg: Color) -> StyleBoxFlat:
+	var st := StyleBoxFlat.new()
+	st.bg_color = bg
+	st.set_corner_radius_all(10)
+	st.content_margin_left = 8
+	st.content_margin_right = 8
+	st.content_margin_top = 0
+	st.content_margin_bottom = 2
+	return st
+
+
+static func _bubble_style(bg: Color) -> StyleBoxFlat:
+	var st := UiStyle.box(bg, true, 12, 3)
+	st.shadow_offset = Vector2(2, 3)
+	st.content_margin_left = 9
+	st.content_margin_right = 9
+	st.content_margin_top = 1
+	st.content_margin_bottom = 3
+	return st
+
+
+## 言葉の意味の色: 見ろ系(落ちてる・信じて)は赤、見るな系(平気)は青
+static func kind_color(kind: String) -> Color:
+	return COLOR_DONT if kind == Stamps.SAFE else COLOR_LOOK
+
+
+## スタンプを送る相手を選ぶ(-1 でやめる)。その人の頭の上に「送る相手」の印が出る。
 ## text: 印の文字(投票では「あなたの票」)
 func set_send_target(id: int, text: String = "") -> void:
 	_target = id
@@ -121,32 +160,33 @@ func set_revealed(ids: Array) -> void:
 func _refresh_marks() -> void:
 	for id in _tags:
 		var t: Dictionary = _tags[id]
-		var l := (t["panel"] as PanelContainer).get_child(0) as Label
+		var l: Label = t["label"]
 		var text: String = t["name"]
-		var purple := _revealed.has(id)
-		if purple:
+		var st: StyleBoxFlat = t["style"]
+		if _revealed.has(id):
 			text = Locale.t("手下") + " " + text
-		elif _voted.has(id):
-			text = "✓ " + text
-		if l.text != text:
-			l.text = text
-		if purple:
-			var st := UiStyle.box(Color(0.55, 0.2, 0.7), true, 14, 3)
-			(t["panel"] as PanelContainer).add_theme_stylebox_override("panel", st)
+			st.bg_color = Color(0.55, 0.2, 0.7, 0.95)
 			UiStyle.set_font_color(l, Color.WHITE)
 		else:
-			(t["panel"] as PanelContainer).add_theme_stylebox_override("panel", t["style"])
-			UiStyle.set_font_color(l, Color("2E9E5B") if _voted.has(id) else GameConfig.COLOR_INK)
+			if _voted.has(id):
+				text = "✓ " + text
+			st.bg_color = TAG_BG
+			UiStyle.set_font_color(l, Color("8EF0B0") if _voted.has(id) else Color.WHITE)
+		if l.text != text:
+			l.text = text
 
 
 func send_target() -> int:
 	return _target
 
 
-## 投票の証拠を出す(空で消す)。ev: id -> [{"text", "color"}]
-func set_evidence(ev: Dictionary) -> void:
-	if ev == _evidence:
+## 投票の証拠を出す(on = false で消す)。ev: id -> [{"text", "kind"}](落とされた人・お手つきの人に送った言葉。2つまで)
+func set_vote_evidence(on: bool, ev: Dictionary = {}) -> void:
+	if not on:
+		ev = {}
+	if _vote_on == on and ev == _evidence:
 		return
+	_vote_on = on
 	_evidence = ev.duplicate(true)
 	for id in _ev_nodes:
 		for n in _ev_nodes[id]:
@@ -156,28 +196,27 @@ func set_evidence(ev: Dictionary) -> void:
 	for id in _evidence:
 		var list := []
 		for line in _evidence[id]:
-			var col: Color = line["color"]
-			var st := UiStyle.box(col, true, 10, 3)
-			st.shadow_offset = Vector2(2, 3)
-			st.content_margin_left = 7
-			st.content_margin_right = 7
-			st.content_margin_top = 1
-			st.content_margin_bottom = 3
 			var b := PanelContainer.new()
 			b.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			b.add_theme_stylebox_override("panel", st)
-			var l := UiStyle.label(str(line["text"]), EVIDENCE_FONT, Hud.text_color_on(col))
-			b.add_child(l)
+			b.add_theme_stylebox_override("panel", _bubble_style(kind_color(str(line["kind"]))))
+			b.add_child(UiStyle.label(str(line["text"]), EVIDENCE_FONT, Color.WHITE))
 			b.visible = false
 			add_child(b)
 			list.append(b)
 		_ev_nodes[id] = list
+	if _marker:
+		move_child(_marker, get_child_count() - 1)
+
+
+## 吹き出しを置かない上の帯の高さ(画面の上の枠の下)
+func set_label_top(y: float) -> void:
+	_label_top = maxf(y, 8.0)
 
 
 ## 画面のこの位置にある証拠の吹き出しの人(なければ -1)
 func evidence_hit(pos: Vector2) -> int:
 	for id in _ev_rects:
-		if (_ev_rects[id] as Rect2).grow(6.0).has_point(pos):
+		if (_ev_rects[id] as Rect2).grow(8.0).has_point(pos):
 			return id
 	return -1
 
@@ -199,7 +238,7 @@ func set_bubbles_hidden(v: bool) -> void:
 func tag_hit(pos: Vector2) -> int:
 	for id in _tags:
 		var p: PanelContainer = _tags[id]["panel"]
-		if p.visible and p.get_global_rect().grow(6.0).has_point(pos):
+		if p.visible and p.get_global_rect().grow(8.0).has_point(pos):
 			return id
 	return -1
 
@@ -211,151 +250,135 @@ func update(state: GameState, cam: Camera3D) -> void:
 	var me := state.get_local_player()
 	var can_stamp := me != null and (me.role == GameState.Role.SEATED or me.role == GameState.Role.ONI or me.role == GameState.Role.OUT) \
 			and (state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED)
-	var placed: Array[Rect2] = []
+	var top := _label_top if _vote_on else TOP_LIMIT
 	_tag_rects.clear()
-	# 手前(カメラに近い)人から置く。重なったら奥の人の札を上へずらす
-	var order := _tags.keys()
+	_head_rects.clear()
+	_ev_rects.clear()
+	# 手前(カメラに近い)人から置く
+	var order := _models.keys()
 	order.sort_custom(func(x, y): return _dist(x, cam) < _dist(y, cam))
+	# ⚙ボタンのあたりには置かない
+	var placed: Array[Rect2] = [Rect2(Vector2(vp.x - GEAR_SIZE.x, 0), GEAR_SIZE)]
+	# 1) 名札: 足もとのすぐ下
 	for id in order:
+		if not _tags.has(id):
+			continue
 		var t: Dictionary = _tags[id]
 		var p: PanelContainer = t["panel"]
 		var m: CharacterModel = t["model"]
-		var anchor := m.tag_anchor()
-		if cam.is_position_behind(anchor):
+		var foot := m.global_position
+		if cam.is_position_behind(foot) or not m.visible:
 			p.visible = false
 			continue
-		var sp := cam.unproject_position(anchor)
+		var sp := cam.unproject_position(foot)
 		var sz := p.get_combined_minimum_size()
-		# 画面の外にいる人の名札は出さない(端にかかっている人だけ、内側に寄せて出す)
-		var out := sz.x * 0.6
-		# (頭が画面の上にはみ出しているだけの人は、上の端に寄せて出す)
-		if sp.x < -out or sp.x > vp.x + out or sp.y > vp.y + sz.y or sp.y < -vp.y * 0.5:
+		p.size = sz
+		if sp.x < -sz.x or sp.x > vp.x + sz.x or sp.y > vp.y + sz.y * 2.0 or sp.y < 0.0:
 			p.visible = false
 			continue
-		var r := Rect2(sp - Vector2(sz.x / 2.0, sz.y), sz)
-		if r.position.y < TOP_LIMIT:
-			# 頭の上に名札の場所がない(近くて頭が画面の上のほうに大きく映っている): 顔にかぶらないように、頭の横に出す
-			var head := anchor - Vector3(0, CharacterModel.HEAD_RADIUS + 0.22, 0)
-			if not cam.is_position_behind(head):
-				var hc := cam.unproject_position(head)
-				var edge := cam.unproject_position(head + cam.global_transform.basis.x * CharacterModel.HEAD_RADIUS * 1.15)
-				var rad := absf(edge.x - hc.x)
-				var right_x := hc.x + rad + 6.0
-				var left_x := hc.x - rad - 6.0 - sz.x
-				var x := right_x if right_x + sz.x <= vp.x - UiStyle.SAFE or left_x < UiStyle.SAFE else left_x
-				r.position = Vector2(x, hc.y - sz.y / 2.0)
-		r.position.x = clampf(r.position.x, UiStyle.SAFE, vp.x - UiStyle.SAFE - sz.x)
-		r.position.y = clampf(r.position.y, TOP_LIMIT, vp.y - sz.y - 8.0)
-		# 重なったら上へずらす。上の端に当たるときは下へずらす
-		for k in 8:
-			var hit := false
-			for q in placed:
-				if q.grow(2.0).intersects(r):
-					var up := q.position.y - sz.y - 4.0
-					r.position.y = up if up >= TOP_LIMIT else q.end.y + 4.0
-					hit = true
-			if not hit:
-				break
+		var r := Rect2(Vector2(sp.x - sz.x / 2.0, sp.y + 2.0), sz)
+		r = _fit(r, vp, top, placed, sz.y * 0.6, 9)
 		placed.append(r)
 		p.visible = not _tags_hidden
 		p.position = r.position.floor()
 		var blocked := can_stamp and state.stamp_block_reason(me.id, id) in ["neighbor", "already"]
 		p.modulate.a = BLOCKED_ALPHA if blocked else 1.0
 		_tag_rects[id] = r
-	# 届いているスタンプ: 名札の上に、届いた順に下から積む(送った人の色の吹き出しに「名前:言葉」)
-	for id in _tags:
-		var t: Dictionary = _tags[id]
-		var bubbles: Array = t["bubbles"]
-		var list: Array = state.active_stamps.get(id, [])
-		var y := 0.0
-		if _tag_rects.has(id):
-			y = (_tag_rects[id] as Rect2).position.y - 4.0
-		for i in bubbles.size():
-			var b: PanelContainer = bubbles[i]
-			b.visible = _tag_rects.has(id) and i < list.size() and not _bubbles_hidden
-			if not b.visible:
-				continue
-			var st: Dictionary = list[i]
-			var sender := state.get_actor(st["sender"])
-			var col: Color = sender_color(state, st["sender"])
-			UiStyle.set_bg(t["styles"][i] as StyleBoxFlat, col)
-			var l: Label = t["labels"][i]
-			l.text = "%s:%s" % [sender_name(state, st["sender"]), stamp_text(state, st["sender"], st["kind"])]
-			UiStyle.set_font_color(l, Hud.text_color_on(col))
-			var bs := b.get_combined_minimum_size()
-			var r: Rect2 = _tag_rects[id]
-			y -= bs.y + 2.0
-			var x := clampf(r.get_center().x - bs.x / 2.0, 4.0, vp.x - bs.x - 4.0)
-			b.position = Vector2(x, y).floor()
-	_place_evidence(cam, vp, placed)
-	# 「送る相手」の印: 吹き出しのさらに上
-	_marker.visible = _target >= 0 and _tag_rects.has(_target)
-	if _marker.visible:
-		var r: Rect2 = _tag_rects[_target]
-		var n: int = mini(state.active_stamps.get(_target, []).size(), GameConfig.STAMP_SLOTS)
-		var top := r.position.y - 4.0
-		for i in n:
-			top -= (_tags[_target]["bubbles"][i] as PanelContainer).get_combined_minimum_size().y + 2.0
-		if _ev_rects.has(_target):
-			top = minf(top, (_ev_rects[_target] as Rect2).position.y - 2.0)
-		var ms := _marker.get_combined_minimum_size()
-		var mx := clampf(r.get_center().x - ms.x / 2.0, 4.0, vp.x - ms.x - 4.0)
-		_marker.position = Vector2(mx, maxf(top - ms.y - 4.0, 4.0)).floor()
-
-
-## 証拠の吹き出し: 名札のすぐ上に縦に積む(名札のない自分は頭の上)。ほかの名札や吹き出しと重なったら上にずらす
-func _place_evidence(cam: Camera3D, vp: Vector2, placed: Array[Rect2]) -> void:
-	_ev_rects.clear()
-	for id in _ev_nodes:
-		var nodes: Array = _ev_nodes[id]
-		var base := Rect2()
-		if _tag_rects.has(id):
-			base = _tag_rects[id]
-		else:
-			var m: CharacterModel = _models.get(id)
-			if m == null or not is_instance_valid(m):
-				for n in nodes:
-					(n as Control).visible = false
-				continue
-			var anchor := m.tag_anchor()
-			if cam.is_position_behind(anchor):
-				for n in nodes:
-					(n as Control).visible = false
-				continue
-			var sp := cam.unproject_position(anchor)
-			base = Rect2(sp, Vector2.ZERO)
-		var y := base.position.y - 3.0
-		var union := Rect2()
+	# 2) 頭の上: 届いている言葉(プレイ中)または証拠(投票中)を、頭のすぐ上に下から積む
+	for id in order:
+		var nodes: Array = []
+		if _vote_on:
+			nodes = _ev_nodes.get(id, [])
+		elif _tags.has(id):
+			nodes = _play_bubbles(state, id)
+		if _tags.has(id) and _vote_on:
+			for b in _tags[id]["bubbles"]:
+				(b as Control).visible = false
+		var m: CharacterModel = _models.get(id)
+		var alive: bool = m != null and is_instance_valid(m) and m.visible
+		var anchor: Vector3 = (m.tag_anchor() - Vector3(0, 0.15, 0)) if alive else Vector3.ZERO
+		if nodes.is_empty() or not alive or cam.is_position_behind(anchor):
+			for n in nodes:
+				(n as Control).visible = false
+			if alive and not cam.is_position_behind(anchor):
+				var hp := cam.unproject_position(anchor)
+				_head_rects[id] = Rect2(hp, Vector2.ZERO)
+			continue
+		var sp := cam.unproject_position(anchor)
+		var w := 0.0
+		var h := 0.0
 		for n in nodes:
-			var b := n as Control
-			var bs := b.get_combined_minimum_size()
-			b.size = bs
-			var cx := base.get_center().x if base.size.x > 0.0 else base.position.x
-			var rr := Rect2(Vector2(clampf(cx - bs.x / 2.0, 4.0, vp.x - bs.x - 4.0), y - bs.y), bs)
-			# 重なったら、まず左右にずらし、それでもだめなら少しだけ上へ(持ち主から離れすぎないように)
-			var start := rr.position
-			for k in 8:
-				var hit := Rect2()
-				for q in placed:
-					if q.grow(1.0).intersects(rr):
-						hit = q
-						break
-				if hit.size == Vector2.ZERO:
-					break
-				if k < 4:
-					var dx := (hit.end.x - rr.position.x + 3.0) if rr.get_center().x >= hit.get_center().x else -(rr.end.x - hit.position.x + 3.0)
-					rr.position.x = clampf(rr.position.x + dx, 4.0, vp.x - bs.x - 4.0)
-				else:
-					rr.position = Vector2(start.x, minf(rr.position.y, hit.position.y) - bs.y - 3.0)
-			if rr.position.y < start.y - bs.y * 2.5:
-				rr.position = start
-			rr.position.y = maxf(rr.position.y, EVIDENCE_TOP)
-			placed.append(rr)
-			b.position = rr.position.floor()
-			b.visible = true
-			y = rr.position.y - 2.0
-			union = rr if union.size == Vector2.ZERO else union.merge(rr)
-		_ev_rects[id] = union
+			var bs := (n as Control).get_combined_minimum_size()
+			(n as Control).size = bs
+			w = maxf(w, bs.x)
+			h += bs.y + 2.0
+		var r := Rect2(Vector2(sp.x - w / 2.0, sp.y - h), Vector2(w, h))
+		r = _fit(r, vp, top, placed, h * 0.3 + 6.0, 13)
+		placed.append(r)
+		_head_rects[id] = r
+		if _vote_on:
+			_ev_rects[id] = r
+		var y := r.end.y
+		for n in nodes:
+			var c := n as Control
+			var bs := c.size
+			y -= bs.y + 2.0
+			c.position = Vector2(r.get_center().x - bs.x / 2.0, y).floor()
+			c.visible = not _bubbles_hidden or _vote_on
+	# 「送る相手」「あなたの票」の印: 頭の上の吹き出しのさらに上
+	_marker.visible = _target >= 0 and _head_rects.has(_target)
+	if _marker.visible:
+		var r: Rect2 = _head_rects[_target]
+		var ms := _marker.get_combined_minimum_size()
+		var mx := clampf(r.get_center().x - ms.x / 2.0, 4.0, vp.x - ms.x - GEAR_SIZE.x * 0.5)
+		_marker.position = Vector2(mx, maxf(r.position.y - ms.y - 4.0, 4.0)).floor()
+
+
+## プレイ中に頭の上に出す、届いている言葉の吹き出し(色は言葉の意味。「送った人:言葉」)
+func _play_bubbles(state: GameState, id: int) -> Array:
+	var t: Dictionary = _tags[id]
+	var bubbles: Array = t["bubbles"]
+	var list: Array = state.active_stamps.get(id, [])
+	var out := []
+	for i in bubbles.size():
+		var b: PanelContainer = bubbles[i]
+		if i >= list.size() or _bubbles_hidden:
+			b.visible = false
+			continue
+		var st: Dictionary = list[i]
+		var col := kind_color(str(st["kind"]))
+		(t["styles"][i] as StyleBoxFlat).bg_color = col
+		var l: Label = t["labels"][i]
+		var text := "%s:%s" % [sender_name(state, st["sender"]), stamp_text(state, st["sender"], st["kind"])]
+		if l.text != text:
+			l.text = text
+		out.append(b)
+	return out
+
+
+## 札を画面の内側に収め、ほかの札と重ならない近くの場所をさがす(上下に少しずつ、少しだけ左右にも)
+func _fit(base: Rect2, vp: Vector2, top: float, placed: Array[Rect2], step: float, tries: int) -> Rect2:
+	var sz := base.size
+	var best := base
+	var best_cost := INF
+	for k in tries:
+		var dy := step * float((k + 1) / 2) * (-1.0 if k % 2 == 1 else 1.0)
+		for dx in [0.0, -sz.x * 0.35, sz.x * 0.35, -sz.x * 0.7, sz.x * 0.7]:
+			var r := base
+			r.position += Vector2(dx, dy)
+			r.position.x = clampf(r.position.x, UiStyle.SAFE, vp.x - UiStyle.SAFE - sz.x)
+			r.position.y = clampf(r.position.y, top, vp.y - sz.y - 6.0)
+			var cost := 0.0
+			for q in placed:
+				var inter := q.grow(2.0).intersection(r)
+				if inter.has_area():
+					cost += inter.get_area()
+			if cost <= 0.0:
+				return r
+			if cost < best_cost:
+				best_cost = cost
+				best = r
+	return best
 
 
 ## スタンプの文字: 言葉+絵文字。スタンプは種類とシャッフルの番号で届き、受け取った人の言語で出す。
@@ -383,57 +406,9 @@ static func evidence_name(state: GameState, id: int) -> String:
 	return Locale.actor_name(a.display_name) if a else "?"
 
 
-## 証拠の1行(「→cat 平気👍」)
-static func evidence_line(state: GameState, sender: int, x: Dictionary) -> Dictionary:
-	var a := state.get_actor(sender)
-	return {"text": "→%s %s" % [evidence_name(state, int(x["target"])), stamp_text(state, sender, str(x["kind"]))],
-			"color": a.color if a else Color.WHITE}
-
-
-## 頭の上に出す証拠の吹き出し(id -> 行の配列)。大事な人に送った言葉だけ
-static func evidence_bubbles(state: GameState) -> Dictionary:
-	var ev := {}
-	for a in state.actors:
-		var lines := []
-		for x in state.evidence_for(a.id):
-			lines.append(evidence_line(state, a.id, x))
-		if not lines.is_empty():
-			ev[a.id] = lines
-	return ev
-
-
-## その人がこのラウンドで送った言葉の全部(タップしたときの一覧)
-static func evidence_sent_lines(state: GameState, sender: int) -> Array:
-	var lines := []
-	for x in state.stamps_sent_by(sender):
-		lines.append(evidence_line(state, sender, x))
-	return lines
-
-
-## 「このラウンドで起きたこと」の1行
-static func evidence_summary(state: GameState) -> String:
-	var parts := []
-	if state.round_dropped_on >= 0:
-		parts.append(TranslationServer.translate("%sのうしろに %s が落ちていた") % [evidence_name(state, state.round_dropped_on), state.item_name()])
-	if not state.round_otetsuki.is_empty():
-		var names := []
-		for id in state.round_otetsuki:
-			names.append(evidence_name(state, int(id)))
-		parts.append(TranslationServer.translate("%sが振り向いたけど、何もなかった(お手つき)") % TranslationServer.translate("、").join(names))
-	return " / ".join(parts)
-
-
 ## 人数が少ないとき(6人まで)は、見える後ろが少ないので、スタンプの送り主は「だれか」にする(鬼と自分は別)
 static func is_anonymous(state: GameState, id: int) -> bool:
 	return state.seat_count <= GameConfig.STAMP_ANON_MAX_SEATS and id != state.oni_id and id != state.local_player_id
-
-
-## 吹き出しの色: 送った人の体の色(送り主を出さないときは灰色)
-static func sender_color(state: GameState, id: int) -> Color:
-	if is_anonymous(state, id):
-		return Color("B7B1A7")
-	var a := state.get_actor(id)
-	return a.color if a else Color.WHITE
 
 
 ## 吹き出しに出す、送った人の名前(自分は「あなた」、鬼は「鬼」、ボットの性格は出さない)
@@ -451,5 +426,45 @@ static func sender_name(state: GameState, id: int) -> String:
 
 
 func _dist(id: int, cam: Camera3D) -> float:
-	var m: CharacterModel = _tags[id]["model"]
-	return cam.global_position.distance_to(m.tag_anchor())
+	var m: Node3D = _models.get(id)
+	return cam.global_position.distance_to(m.global_position) if m and is_instance_valid(m) else 999.0
+
+
+## 証拠の1行(投票の画面。宛先と絵文字だけ: 「→dog 👍」)
+static func evidence_line(state: GameState, _sender: int, x: Dictionary) -> Dictionary:
+	var kind := str(x["kind"])
+	return {"text": "→%s %s" % [evidence_name(state, int(x["target"])), Texts.STAMP_EMOJI.get(kind, "")],
+			"kind": kind, "color": kind_color(kind)}
+
+
+## 頭の上に出す証拠の吹き出し(id -> 行の配列)。落とされた人・お手つきの人に送った言葉だけ。送っていない人はなし
+static func evidence_bubbles(state: GameState) -> Dictionary:
+	var ev := {}
+	for a in state.actors:
+		var lines := []
+		for x in state.evidence_for(a.id):
+			lines.append(evidence_line(state, a.id, x))
+		if not lines.is_empty():
+			ev[a.id] = lines
+	return ev
+
+
+## その人がこのラウンドで送った言葉の全部(タップしたときの一覧。これも宛先と絵文字だけ)
+static func evidence_sent_lines(state: GameState, sender: int) -> Array:
+	var lines := []
+	for x in state.stamps_sent_by(sender):
+		lines.append(evidence_line(state, sender, x))
+	return lines
+
+
+## 上の枠に並べる短いバッジ(「👇 落ちた先:dog」「💦 お手つき:cat」)
+static func evidence_badges(state: GameState) -> Array:
+	var out := []
+	if state.round_dropped_on >= 0:
+		out.append("👇 " + TranslationServer.translate("落ちた先:%s") % evidence_name(state, state.round_dropped_on))
+	if not state.round_otetsuki.is_empty():
+		var names := []
+		for id in state.round_otetsuki:
+			names.append(evidence_name(state, int(id)))
+		out.append("💦 " + TranslationServer.translate("お手つき:%s") % TranslationServer.translate("、").join(names))
+	return out

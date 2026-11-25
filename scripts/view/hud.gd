@@ -50,8 +50,7 @@ var _vote_box: VBoxContainer
 var _vote_panel: PanelContainer
 var _next_wait: PanelContainer
 var _vote_title: Label
-var _vote_count: PanelContainer
-var _vote_hint: Label
+var _vote_count: Label
 var _skip_button: Button
 var _chips := {}
 var _vote_open := false
@@ -706,7 +705,7 @@ func hide_message() -> void:
 	hide_result_card()
 
 
-## 自分に届いているスタンプを並べる。list: [{"kind", "sender", "sender_color"}](届いた順)。
+## 自分に届いているスタンプを並べる。list: [{"kind", "sender", "color"}](届いた順。色は言葉の意味: 見ろ系=赤・見るな系=青)。
 ## 送った人の色の吹き出しに「名前:言葉」
 func show_my_stamps(list: Array) -> void:
 	var keys := []
@@ -718,7 +717,7 @@ func show_my_stamps(list: Array) -> void:
 		var st: Dictionary = list[i]
 		var key := "%s|%s" % [st["sender"], st["kind"]]
 		keys.append(key)
-		var col: Color = st["sender_color"]
+		var col: Color = st["color"]
 		UiStyle.set_bg(_slot_styles[i], col)
 		_slot_labels[i].text = "%s:%s" % [st["sender"], st.get("text", Texts.stamp(st["kind"]))]
 		UiStyle.set_font_color(_slot_labels[i], text_color_on(col))
@@ -1190,7 +1189,7 @@ func set_danger(level: float) -> void:
 ## 画面の上のまん中に、役を出す(空文字で消す)。color の地に白い文字
 func set_role_badge(text: String, color: Color) -> void:
 	_pill_text(_badge, text)
-	_badge.visible = text != ""
+	_badge.visible = text != "" and not _vote_screen
 	UiStyle.set_bg(_badge.get_theme_stylebox("panel") as StyleBoxFlat, color)
 
 
@@ -1304,40 +1303,60 @@ func set_next_ui(show: bool, host: bool) -> void:
 
 ## 教室のままの投票の表示。show: 投票中か / voted・total: 投票した人数 / hint: 下の小さな案内 /
 ## skip: ルーム主の「発表へ」を出すか / skip_ready: 押せるか(始まって5秒たったか)
-## 投票の証拠: 画面のいちばん上に「このラウンドで起きたこと」を1行(空で消す)
-var _evidence_pill: PanelContainer
+## 投票の証拠: 「鬼の手下は誰?」のすぐ下に、短いバッジを並べる(「👇 落ちた先:dog」「💦 お手つき:cat」。空で消す)
+var _vote_badges: HBoxContainer
+var _badge_texts: Array = []
 
 
-func set_evidence_summary(text: String) -> void:
-	if text == "":
-		if _evidence_pill:
-			_evidence_pill.visible = false
-		if _vote_panel:
-			_vote_panel.offset_top = 56
+func set_evidence_badges(texts: Array) -> void:
+	_badge_texts = texts.duplicate()
+	if _vote_badges == null:
 		return
-	if _evidence_pill == null:
-		_evidence_pill = PanelContainer.new()
-		_evidence_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var st := UiStyle.box(Color("FFF6D8"), true, 16, 3)
-		st.content_margin_left = 16
-		st.content_margin_right = 16
-		st.content_margin_top = 2
-		st.content_margin_bottom = 4
-		_evidence_pill.add_theme_stylebox_override("panel", st)
-		_evidence_pill.add_child(UiStyle.label("", 22, GameConfig.COLOR_INK))
-		_top.add_child(_evidence_pill)
-	var l := _evidence_pill.get_child(0) as Label
-	if l.text != text:
-		l.text = text
-		UiStyle.fit(l, 22, get_viewport().get_visible_rect().size.x - 160.0, 14)
-	_evidence_pill.visible = true
-	_evidence_pill.reset_size()
-	_evidence_pill.size = _evidence_pill.get_combined_minimum_size()
-	var vp := get_viewport().get_visible_rect().size
-	# (左上の札の下、画面のまん中。上の「鬼の手下は誰?」の札はその下にずらす)
-	_evidence_pill.position = Vector2((vp.x - _evidence_pill.size.x) / 2.0, 62.0)
-	if _vote_panel:
-		_vote_panel.offset_top = 104
+	fill_badges(_vote_badges, texts)
+
+
+## バッジの列を作り直す(撮影モードでも使う)
+static func fill_badges(row: HBoxContainer, texts: Array) -> void:
+	var now := []
+	for c in row.get_children():
+		now.append(((c as PanelContainer).get_child(0) as Label).text)
+	if now == texts:
+		return
+	for c in row.get_children():
+		c.queue_free()
+		row.remove_child(c)
+	for t in texts:
+		var b := PanelContainer.new()
+		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var st := UiStyle.box(Color("FFF1C9"), true, 14, 3)
+		st.shadow_offset = Vector2.ZERO
+		st.content_margin_left = 12
+		st.content_margin_right = 12
+		st.content_margin_top = 0
+		st.content_margin_bottom = 2
+		b.add_theme_stylebox_override("panel", st)
+		b.add_child(UiStyle.label(str(t), 26, GameConfig.COLOR_INK))
+		row.add_child(b)
+	row.visible = not texts.is_empty()
+
+
+## 投票の画面: ラウンド・落とし物・点数・役のいつもの札を隠す(上は「鬼の手下は誰?」の枠だけ)
+var _vote_screen := false
+
+
+func set_vote_screen(on: bool) -> void:
+	_vote_screen = on
+	if _round_pill:
+		_round_pill.get_parent().visible = not on
+	if _badge and on:
+		_badge.visible = false
+
+
+## 上の枠の下のふち(画面の y。枠がなければ 0)。名前のラベルはこれより下に置く
+func vote_panel_bottom() -> float:
+	if _vote_panel == null or not _vote_panel.visible:
+		return 0.0
+	return _vote_panel.get_global_rect().end.y
 
 
 ## 投票の証拠: タップしたキャラが、このラウンドで送った言葉の全部(小さな一覧)。どこかをタップすると閉じる
@@ -1348,31 +1367,51 @@ func show_evidence_list(title: String, lines: Array) -> void:
 	hide_evidence_list()
 	_evidence_list = PanelContainer.new()
 	_evidence_list.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 18, 4)
-	st.set_content_margin_all(16)
+	var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 24, 5)
+	st.shadow_offset = Vector2(6, 8)
+	st.set_content_margin_all(24)
 	_evidence_list.add_theme_stylebox_override("panel", st)
+	_evidence_list.custom_minimum_size = Vector2(520, 0)
 	var col := VBoxContainer.new()
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_theme_constant_override("separation", 6)
+	col.add_theme_constant_override("separation", 10)
 	_evidence_list.add_child(col)
-	var t := UiStyle.label(title, 24, GameConfig.COLOR_INK)
+	var t := UiStyle.label(title, 34, GameConfig.COLOR_INK)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(t)
 	if lines.is_empty():
-		col.add_child(UiStyle.label(tr("このラウンドは何も送っていない"), 20, GameConfig.COLOR_INK.lightened(0.3)))
+		var none := UiStyle.label(tr("このラウンドは何も送っていない"), 28, GameConfig.COLOR_INK.lightened(0.3))
+		none.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(none)
+	# 送った順に、言葉の種類の色(落ちてる=赤・平気=緑・信じて=紫)。多いときは2列
+	var grid := GridContainer.new()
+	grid.columns = 2 if lines.size() > 6 else 1
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 8)
+	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(grid)
 	for line in lines:
 		var c: Color = line["color"]
-		var bst := UiStyle.box(c, false, 10, 2)
-		bst.content_margin_left = 10
-		bst.content_margin_right = 10
+		var bst := UiStyle.box(c, true, 12, 3)
+		bst.shadow_offset = Vector2(2, 3)
+		bst.content_margin_left = 14
+		bst.content_margin_right = 14
+		bst.content_margin_top = 2
+		bst.content_margin_bottom = 4
 		var b := PanelContainer.new()
 		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		b.add_theme_stylebox_override("panel", bst)
-		b.add_child(UiStyle.label(str(line["text"]), 20, text_color_on(c)))
-		col.add_child(b)
-	var hint := UiStyle.label(tr("タップで閉じる"), 16, GameConfig.COLOR_INK.lightened(0.4))
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(hint)
+		b.add_child(UiStyle.label(str(line["text"]), 28 if grid.columns == 1 else 24, text_color_on(c)))
+		grid.add_child(b)
+	# 閉じるボタン(画面のどこをタップしても閉じる。うっかり投票にならないように、閉じるだけ)
+	var close := Button.new()
+	close.text = tr("閉じる")
+	close.custom_minimum_size = Vector2(220, 64)
+	close.focus_mode = Control.FOCUS_NONE
+	close.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	UiStyle.button(close, true, 30)
+	col.add_child(close)
 	_top.add_child(_evidence_list)
 	UiStyle.center(_evidence_list)
 
@@ -1387,7 +1426,8 @@ func is_evidence_list_open() -> bool:
 	return _evidence_list != null and is_instance_valid(_evidence_list)
 
 
-func set_vote_ui(show: bool, voted: int = 0, total: int = 0, hint: String = "", skip: bool = false, skip_ready: bool = false) -> void:
+func set_vote_ui(show: bool, voted: int = 0, total: int = 0, hint: String = "", skip: bool = false, skip_ready: bool = false,
+		count_visible := true) -> void:
 	if _vote_box == null:
 		if not show:
 			return
@@ -1398,48 +1438,64 @@ func set_vote_ui(show: bool, voted: int = 0, total: int = 0, hint: String = "", 
 		return
 	if _skip_button.text != tr("発表へ ▶"):
 		_skip_button.text = tr("発表へ ▶")
+	# 3行目(小さく): 「3/9人 投票済み」と、ひとことの案内
 	var count_text := tr("%d/%d人 投票済み") % [voted, total]
-	var cl := _vote_count.get_child(0) as Label
-	if cl.text != count_text:
-		cl.text = count_text
-	if _vote_hint.text != hint:
-		_vote_hint.text = hint
+	if hint != "":
+		count_text += "  ・  " + hint
+	if _vote_count.text != count_text:
+		_vote_count.text = count_text
+		UiStyle.fit(_vote_count, 20, minf(get_viewport().get_visible_rect().size.x - 120.0, 1100.0), 14)
+	_vote_count.visible = count_visible
 	if _skip_button.disabled == skip_ready:
 		_skip_button.disabled = not skip_ready
 		_skip_button.modulate.a = 1.0 if skip_ready else 0.5
 
 
-func _build_vote_ui() -> void:
-	# 名札より上に出す(上の層)。白い札にまとめて、うしろの名札と重なっても読めるように
+## 投票の画面の上に出す、ただ1つの枠: 「鬼の手下は誰?」(大きく)/ 短いバッジ(落ちた先・お手つき)/ 「3/9人 投票済み」(小さく)。
+## 画面の上のまん中(撮影モードでも同じ枠を使う)
+static func make_vote_frame() -> Dictionary:
 	var panel := PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var st := UiStyle.box(Color(1, 1, 1, 0.92), true, 20, 4)
-	st.content_margin_left = 22
-	st.content_margin_right = 22
-	st.content_margin_top = 4
-	st.content_margin_bottom = 8
+	var st := UiStyle.box(Color(1, 1, 1, 0.94), true, 20, 4)
+	st.content_margin_left = 24
+	st.content_margin_right = 24
+	st.content_margin_top = 2
+	st.content_margin_bottom = 6
 	panel.add_theme_stylebox_override("panel", st)
 	panel.anchor_left = 0.5
 	panel.anchor_right = 0.5
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	panel.offset_top = 104 if (_evidence_pill and _evidence_pill.visible) else 56
+	panel.offset_top = 8
+	var box := VBoxContainer.new()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_theme_constant_override("separation", 4)
+	panel.add_child(box)
+	var title := UiStyle.label(TranslationServer.translate("鬼の手下は誰?"), 42, Color(0.55, 0.2, 0.7))
+	title.add_theme_color_override("font_outline_color", Color.WHITE)
+	title.add_theme_constant_override("outline_size", 12)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(title)
+	var badges := HBoxContainer.new()
+	badges.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badges.alignment = BoxContainer.ALIGNMENT_CENTER
+	badges.add_theme_constant_override("separation", 10)
+	box.add_child(badges)
+	var count := UiStyle.label("", 20, GameConfig.COLOR_INK.lightened(0.25))
+	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(count)
+	return {"panel": panel, "box": box, "title": title, "badges": badges, "count": count}
+
+
+func _build_vote_ui() -> void:
+	var f := make_vote_frame()
+	var panel: PanelContainer = f["panel"]
 	_top.add_child(panel)
-	_vote_box = VBoxContainer.new()
-	_vote_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_vote_box.add_theme_constant_override("separation", 2)
-	panel.add_child(_vote_box)
 	_vote_panel = panel
-	_vote_title = _make_label(40, Color(0.55, 0.2, 0.7))
-	_vote_title.text = tr("鬼の手下は誰?")
-	_vote_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_vote_title.add_theme_constant_override("outline_size", 12)
-	_vote_box.add_child(_vote_title)
-	_vote_count = UiStyle.pill("", 22)
-	_vote_count.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_vote_box.add_child(_vote_count)
-	_vote_hint = _make_label(20, GameConfig.COLOR_INK)
-	_vote_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_vote_box.add_child(_vote_hint)
+	_vote_box = f["box"]
+	_vote_title = f["title"]
+	_vote_badges = f["badges"]
+	_vote_count = f["count"]
+	set_evidence_badges(_badge_texts)
 	_skip_button = Button.new()
 	_skip_button.text = tr("発表へ ▶")
 	_skip_button.custom_minimum_size = Vector2(240, 66)

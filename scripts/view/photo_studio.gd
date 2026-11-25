@@ -151,6 +151,7 @@ func _process(delta: float) -> void:
 		_view._update_key_rings()
 		var ov := _view.get_overlay()
 		if ov and not _saving:
+			ov.set_label_top((_ev_frame["panel"] as Control).get_global_rect().end.y + 6.0)
 			ov.update(_state, _cam)
 	# 夜の教室は、ゲームと同じ夜の明るさ(窓側は月の光)
 	_view.apply_night_light(_state)
@@ -816,7 +817,7 @@ func _on_drag(rel: Vector2) -> void:
 var _vote_mode := "なし"
 var _vote_seed := 0
 var _ev_layer: CanvasLayer
-var _ev_pill: PanelContainer
+var _ev_frame: Dictionary
 
 
 func _apply_vote() -> void:
@@ -826,28 +827,28 @@ func _apply_vote() -> void:
 	if _vote_mode != "証拠":
 		_view.set_key_people([])
 		if ov:
-			ov.set_evidence({})
+			ov.set_vote_evidence(false)
 			ov.visible = false
 		if _ev_layer:
 			_ev_layer.visible = false
 		return
 	_make_evidence()
-	_view.set_key_people(_state.evidence_key_ids())
+	var keys := _state.evidence_key_ids()
+	_view.set_key_people(keys)
 	if ov:
-		ov.set_evidence(HeadOverlay.evidence_bubbles(_state))
+		ov.set_vote_evidence(true, HeadOverlay.evidence_bubbles(_state))
 		ov.visible = true
 	if _ev_layer == null:
+		# ゲームの投票と同じ、上の1つの枠
 		_ev_layer = CanvasLayer.new()
 		_ev_layer.layer = 2
 		add_child(_ev_layer)
-		_ev_pill = UiStyle.pill("", 22)
-		_ev_layer.add_child(_ev_pill)
+		_ev_frame = Hud.make_vote_frame()
+		_ev_layer.add_child(_ev_frame["panel"])
 	_ev_layer.visible = true
-	var l := _ev_pill.get_child(0) as Label
-	l.text = HeadOverlay.evidence_summary(_state)
-	_ev_pill.reset_size()
-	var vp := get_viewport().get_visible_rect().size
-	_ev_pill.position = Vector2((vp.x - _ev_pill.get_combined_minimum_size().x) / 2.0, 20.0)
+	Hud.fill_badges(_ev_frame["badges"], HeadOverlay.evidence_badges(_state))
+	var voters := _state.actors.size() - 1
+	(_ev_frame["count"] as Label).text = tr("%d/%d人 投票済み") % [voters / 2, voters]
 
 
 ## それらしい証拠: 選んだキャラ(座っている人)のうしろに落ちていて、ほかの1人がお手つき。みんながいくつか言葉を送った
