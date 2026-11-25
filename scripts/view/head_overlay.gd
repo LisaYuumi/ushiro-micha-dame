@@ -81,8 +81,22 @@ func build(state: GameState, models: Dictionary, show_personality: bool) -> void
 		p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var tst := _tag_style(TAG_BG)
 		p.add_theme_stylebox_override("panel", tst)
+		# 名札の中身: [👑(1位のときだけ)] 名前 [点数(言葉を送る相手を選んでいるときだけ。小さく)]
+		var hb := HBoxContainer.new()
+		hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hb.add_theme_constant_override("separation", 4)
+		p.add_child(hb)
+		var crown := Control.new()
+		crown.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		crown.custom_minimum_size = Vector2(20, 16)
+		crown.draw.connect(_draw_crown.bind(crown))
+		crown.visible = false
+		hb.add_child(crown)
 		var tl := UiStyle.label(tag_name, FONT_SIZE, Color.WHITE)
-		p.add_child(tl)
+		hb.add_child(tl)
+		var sc := UiStyle.label("", 14, Color("FFE27A"))
+		sc.visible = false
+		hb.add_child(sc)
 		p.visible = false
 		add_child(p)
 		var bubbles: Array[PanelContainer] = []
@@ -101,7 +115,7 @@ func build(state: GameState, models: Dictionary, show_personality: bool) -> void
 			styles.append(st)
 			labels.append(l)
 		_tags[a.id] = {"panel": p, "label": tl, "model": models[a.id], "bubbles": bubbles, "styles": styles, "labels": labels,
-				"name": tag_name, "style": tst}
+				"name": tag_name, "style": tst, "crown": crown, "score": sc}
 	_voted.clear()
 	_revealed.clear()
 	_marker = UiStyle.pill(Locale.t("送る相手") + " ▼", 20, true)
@@ -186,6 +200,40 @@ func _refresh_marks() -> void:
 			UiStyle.set_font_color(l, Color("8EF0B0") if _voted.has(id) else Color.WHITE)
 		if l.text != text:
 			l.text = text
+
+
+## 1位の人(同点なら全員)の名札に、小さな👑をつける(空の配列で消す)
+func set_leaders(ids: Array) -> void:
+	for id in _tags:
+		var c: Control = _tags[id]["crown"]
+		var on: bool = id in ids
+		if c.visible != on:
+			c.visible = on
+
+
+## 言葉を送る相手を選んでいる間だけ、名札の横に今の点数を小さく出す(空の辞書で消す)。scores: id -> 点
+func set_tag_scores(scores: Dictionary) -> void:
+	for id in _tags:
+		var l: Label = _tags[id]["score"]
+		var on: bool = scores.has(id)
+		if on:
+			var text := Locale.t("%d点") % int(scores[id])
+			if l.text != text:
+				l.text = text
+		if l.visible != on:
+			l.visible = on
+
+
+## 小さな王冠(金色・黒いふち)
+func _draw_crown(c: Control) -> void:
+	var w := c.size.x
+	var h := c.size.y
+	var pts := PackedVector2Array([Vector2(1, h - 2), Vector2(2, 3), Vector2(w * 0.3, h * 0.55), Vector2(w * 0.5, 1),
+			Vector2(w * 0.7, h * 0.55), Vector2(w - 2, 3), Vector2(w - 1, h - 2)])
+	c.draw_colored_polygon(pts, Color("FFC83D"))
+	var loop := pts.duplicate()
+	loop.append(pts[0])
+	c.draw_polyline(loop, GameConfig.COLOR_INK, 2.0, true)
 
 
 func send_target() -> int:

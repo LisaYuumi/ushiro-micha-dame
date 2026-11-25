@@ -219,6 +219,16 @@ const VOTE_INTRO_TIME := 2.2
 const VOTE_SKIP_DELAY := 5.0
 ## 投票の前の「振り返り」の演出の長さ(秒)。この間は、全員が投票しても発表に進まない(GameState.vote_recap_hold)
 const VOTE_RECAP_TIME := 7.5
+## 点数を出す場面(あとで調整できるように、それぞれ切りかえられる)。全員の点数を常に出すことはしない
+## - プレイ中: 1位の人(同点なら全員)の名札に小さな👑 / 右上に自分の順位「3位」
+## - ラウンドの合間: 順位と点数の一覧を ROUND_STANDINGS_TIME 秒(タップで閉じる。上がった人↑・下がった人↓)
+## - 言葉を送る相手を選んでいる間: 名札の横に今の点数を小さく
+## (プレイ中に出す順位・点数は、そのラウンドが始まったときの点数。途中の「だました」の点で手下が分からないように)
+const SHOW_LEADER_CROWN := true
+const SHOW_MY_RANK := true
+const SHOW_ROUND_STANDINGS := true
+const ROUND_STANDINGS_TIME := 2.5
+const SHOW_SCORES_WHEN_PICKING := true
 ## 画面には出さないが、投票が始まってこの秒数たったら自動で発表へ(ルーム主がいなくなったときの安全策)
 const VOTE_TIMEOUT := 120.0
 ## 発表の演出の秒数: 票が飛ぶ / ため(ドラムロール) / 手下の発表 / 点数 / ルーム主の「次へ」が出るまでの余韻

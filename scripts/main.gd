@@ -368,7 +368,9 @@ func _refresh_round_inner() -> void:
 	hud.hide_result_card()
 	bots.reset()
 	_missed_result = {}
+	var prev_scores := _round_start_scores.duplicate()
 	_round_start_scores = state.scores.duplicate()
+	_show_round_standings(prev_scores)
 	touch.set_oni_mode(_i_am_oni())
 	_last_sound = ""
 	# 前のラウンドで開いていた「◯◯に送る」は閉じる
@@ -419,7 +421,9 @@ func _physics_process(delta: float) -> void:
 		# 発表のあと、自動で次のラウンドになった: 画面を作り直す
 		if state.round_serial != _seen_serial and not state.match_over:
 			_refresh_round()
-			hud.show_message(tr("ラウンド %d: %s") % [state.round_index + 1, state.item_name()], Color(0.3, 0.3, 0.3), 2.0)
+			# (順位の一覧を出しているときは、次のラウンドのお知らせは一覧の下に書いてある)
+			if not hud.is_standings_open():
+				hud.show_message(tr("ラウンド %d: %s") % [state.round_index + 1, state.item_name()], Color(0.3, 0.3, 0.3), 2.0)
 	if _stamp_target >= 0 and (state.get_actor(_stamp_target) == null or state.get_actor(_stamp_target).role != GameState.Role.SEATED
 			or (state.phase != GameState.Phase.WALKING and state.phase != GameState.Phase.DROPPED)):
 		_close_picker()
@@ -506,6 +510,7 @@ func _physics_process(delta: float) -> void:
 		ov.set_blocked(blocked)
 	# 左上の札(鬼の周回・自分の点数)を毎回更新する(参加者の点数は状態といっしょに届く)
 	_update_help()
+	_update_score_hints()
 	# 重かったときは、何をしていたかをコンソールに出す(調べる用)
 	_perf_phys_us += Time.get_ticks_usec() - t0
 	_perf_phys_n += 1
@@ -967,6 +972,75 @@ func _update_evidence(voting: bool, revealing: bool) -> void:
 		ov.set_vote_evidence(true, HeadOverlay.evidence_bubbles(state), view.vote_item_top(), state.round_otetsuki)
 
 
+# --- 点数は「必要な場面だけ」(GameConfig.SHOW_*)。全員の点数を常に出すことはしない ---
+
+## 順位(同じ点なら同じ順位): id -> 順位
+func _ranks_of(scores: Dictionary) -> Dictionary:
+	var out := {}
+	for a in state.actors:
+		var mine := int(scores.get(a.id, 0))
+		var r := 1
+		for b in state.actors:
+			if int(scores.get(b.id, 0)) > mine:
+				r += 1
+		out[a.id] = r
+	return out
+
+
+## ラウンドの合間: 順位と点数の一覧を少しだけ(前のラウンドから上がった人↑・下がった人↓)。最初のラウンドとチュートリアルでは出さない
+func _show_round_standings(prev_scores: Dictionary) -> void:
+	if not GameConfig.SHOW_ROUND_STANDINGS or state.round_index <= 0 or _tutorial != null or state.match_over:
+		return
+	var now := _ranks_of(state.scores)
+	# (前の点数がみんな0点(最初のラウンドのあと)のときは、↑↓をつけない。みんな同点の1位からの比べになるので)
+	var any_prev := false
+	for v in prev_scores.values():
+		if int(v) != 0:
+			any_prev = true
+	var before := _ranks_of(prev_scores) if any_prev else now
+	var ids := []
+	for a in state.actors:
+		ids.append(a.id)
+	ids.sort_custom(func(x, y): return int(state.scores.get(x, 0)) > int(state.scores.get(y, 0)))
+	var rows := []
+	for id in ids:
+		var a := state.get_actor(id)
+		var move := signi(int(before.get(id, now[id])) - int(now[id]))
+		rows.append({"rank": now[id], "name": tr("あなた") if id == state.local_player_id else Locale.actor_name(a.display_name),
+				"score": int(state.scores.get(id, 0)), "move": move, "me": id == state.local_player_id, "color": a.color})
+	hud.show_standings(tr("ここまでの順位"), rows, tr("次は ラウンド %d: %s") % [state.round_index + 1, state.item_name()],
+			GameConfig.ROUND_STANDINGS_TIME)
+
+
+## プレイ中の点数の手がかり: 1位の人の名札に👑・右上に自分の順位・言葉を送る相手を選んでいる間だけ名札に点数。
+## どれも、そのラウンドが始まったときの点数で出す(途中の「だました」の点で、手下が分からないように)
+func _update_score_hints() -> void:
+	var ov := view.get_overlay()
+	var playing := state.phase != GameState.Phase.RESULT and mode != Mode.LOBBY and _tutorial == null
+	var sc := _round_start_scores
+	var top := 0
+	for a in state.actors:
+		top = maxi(top, int(sc.get(a.id, 0)))
+	var leaders := []
+	if GameConfig.SHOW_LEADER_CROWN and playing and top > 0:
+		for a in state.actors:
+			if int(sc.get(a.id, 0)) == top:
+				leaders.append(a.id)
+	if ov:
+		ov.set_leaders(leaders)
+		var picking := {}
+		if GameConfig.SHOW_SCORES_WHEN_PICKING and _stamp_target >= 0:
+			for a in state.actors:
+				if a.id != state.local_player_id:
+					picking[a.id] = int(sc.get(a.id, 0))
+		ov.set_tag_scores(picking)
+	var rank_text := ""
+	if GameConfig.SHOW_MY_RANK and playing and top > 0:
+		var r := int(_ranks_of(sc).get(state.local_player_id, 0))
+		rank_text = tr("%d位") % r
+	hud.set_my_rank(rank_text)
+
+
 ## 結果カードの1行。delta: このラウンドで増えた分も出すか
 func _score_row_for(id: int, scores: Dictionary, delta: bool) -> Dictionary:
 	var a := state.get_actor(id)
@@ -1063,6 +1137,10 @@ func _close_studio() -> void:
 func _on_tap(pos: Vector2) -> void:
 	var ov := view.get_overlay()
 	if ov == null:
+		return
+	# ラウンドの合間の順位の一覧は、タップで早く閉じる(そのタップはほかに使わない)
+	if hud.is_standings_open():
+		hud.hide_standings()
 		return
 	# 手下を当てる投票: 人(か名札)をタップすると、その人に投票(全員がそろうまで入れ直せる)
 	if state.phase == GameState.Phase.RESULT:

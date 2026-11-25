@@ -1325,11 +1325,110 @@ func set_next_ui(show: bool, host: bool) -> void:
 
 ## 教室のままの投票の表示。show: 投票中か / voted・total: 投票した人数 / hint: 下の小さな案内 /
 ## skip: ルーム主の「発表へ」を出すか / skip_ready: 押せるか(始まって5秒たったか)
+## 自分の順位(右上の⚙の左に小さく「3位」。"" で消す)
+var _rank_pill: PanelContainer
+
+
+func set_my_rank(text: String) -> void:
+	if text == "":
+		if _rank_pill:
+			_rank_pill.visible = false
+		return
+	if _rank_pill == null:
+		_rank_pill = UiStyle.pill("", 20)
+		add_child(_rank_pill)
+	var l := _rank_pill.get_child(0) as Label
+	if l.text != text:
+		l.text = text
+	_rank_pill.visible = not _vote_screen
+	_rank_pill.reset_size()
+	var vp := get_viewport().get_visible_rect().size
+	var sz := _rank_pill.get_combined_minimum_size()
+	# (⚙ボタンの左。画面の上の帯の中)
+	_rank_pill.position = Vector2(vp.x - UiStyle.SAFE - 64.0 - 12.0 - sz.x, 18.0)
+
+
+## ラウンドの合間の順位と点数の一覧(2〜3秒。タップで早く閉じる)。
+## rows: [{"rank", "name", "score", "move": 1(上がった)/-1(下がった)/0, "me", "color"}](順位の順)。sub: 下の小さな一文
+var _standings: PanelContainer
+var _standings_tween: Tween
+
+
+func show_standings(title: String, rows: Array, sub: String, seconds: float) -> void:
+	hide_standings()
+	_standings = PanelContainer.new()
+	_standings.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var st := UiStyle.box(Color(1, 1, 1, 0.95), true, 22, 4)
+	st.set_content_margin_all(16)
+	_standings.add_theme_stylebox_override("panel", st)
+	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_theme_constant_override("separation", 2)
+	_standings.add_child(col)
+	var t := UiStyle.label(title, 28, GameConfig.COLOR_INK)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(t)
+	# 10人でも横画面に入るように、6人より多ければ2列
+	var grid := GridContainer.new()
+	grid.columns = 2 if rows.size() > 6 else 1
+	grid.add_theme_constant_override("h_separation", 28)
+	grid.add_theme_constant_override("v_separation", 0)
+	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(grid)
+	for r in rows:
+		var line := HBoxContainer.new()
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		line.add_theme_constant_override("separation", 8)
+		var ink := Color("D9480F") if r.get("me", false) else GameConfig.COLOR_INK
+		var rk := UiStyle.label(tr("%d位") % int(r["rank"]), 22, ink)
+		rk.custom_minimum_size = Vector2(52, 0)
+		line.add_child(rk)
+		var dot := ColorRect.new()
+		dot.color = r.get("color", Color.WHITE)
+		dot.custom_minimum_size = Vector2(14, 14)
+		dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		line.add_child(dot)
+		var nm := UiStyle.label(str(r["name"]), 22, ink)
+		nm.custom_minimum_size = Vector2(150, 0)
+		line.add_child(nm)
+		var sc := UiStyle.label(tr("%d点") % int(r["score"]), 22, ink)
+		sc.custom_minimum_size = Vector2(56, 0)
+		sc.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		line.add_child(sc)
+		var mv := int(r.get("move", 0))
+		var arrow := UiStyle.label("↑" if mv > 0 else ("↓" if mv < 0 else ""), 18, Color("2E9E5B") if mv > 0 else Color("C92A2A"))
+		arrow.custom_minimum_size = Vector2(16, 0)
+		line.add_child(arrow)
+		grid.add_child(line)
+	if sub != "":
+		var sl := UiStyle.label(sub, 18, GameConfig.COLOR_INK.lightened(0.3))
+		sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(sl)
+	_top.add_child(_standings)
+	UiStyle.center(_standings)
+	_standings_tween = create_tween()
+	_standings_tween.tween_interval(seconds)
+	_standings_tween.tween_property(_standings, "modulate:a", 0.0, 0.3)
+	_standings_tween.tween_callback(hide_standings)
+
+
+func hide_standings() -> void:
+	if _standings_tween and _standings_tween.is_valid():
+		_standings_tween.kill()
+	if _standings and is_instance_valid(_standings):
+		_standings.queue_free()
+	_standings = null
+
+
+func is_standings_open() -> bool:
+	return _standings != null and is_instance_valid(_standings)
+
+
 ## 画面の上の「UI 専用の帯」の下のふち(ラウンド・落とし物・点数・「あなたは鬼の手下」などの札が出ている範囲)。
 ## 名札や言葉の吹き出しは、この帯に入らないように下に押し下げる。投票の間は「鬼の手下は誰?」の枠も帯に入れる
 func top_band_bottom() -> float:
 	var bottom := 0.0
-	for c in [_round_pill.get_parent() if _round_pill else null, _badge, _milk_pill, _vote_panel]:
+	for c in [_round_pill.get_parent() if _round_pill else null, _badge, _milk_pill, _vote_panel, _rank_pill]:
 		var ctl := c as Control
 		if ctl and ctl.is_visible_in_tree():
 			bottom = maxf(bottom, ctl.get_global_rect().end.y)
@@ -1388,6 +1487,8 @@ var _vote_screen := false
 
 func set_vote_screen(on: bool) -> void:
 	_vote_screen = on
+	if _rank_pill and on:
+		_rank_pill.visible = false
 	if _round_pill:
 		_round_pill.get_parent().visible = not on
 	if _badge and on:

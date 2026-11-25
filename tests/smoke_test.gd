@@ -271,6 +271,16 @@ func _check_vote_scene() -> void:
 	_check(not s.voting_open, "振り返り: 演出が終わったら発表へ")
 	v.set_vote_view(false)
 	_check(v._vote_scene.is_empty(), "投票の場面: 投票が終わったら元にもどす")
+	# 点数は必要な場面だけ: 1位の人の名札に👑、言葉を送る相手を選んでいる間だけ点数
+	var ovl := v.get_overlay()
+	var lead: int = int(s.round_lineup[1])
+	ovl.set_leaders([lead])
+	_check((ovl._tags[lead]["crown"] as Control).visible and not (ovl._tags[int(s.round_lineup[2])]["crown"] as Control).visible,
+			"点数: 1位の人の名札にだけ👑")
+	ovl.set_tag_scores({lead: 5})
+	_check((ovl._tags[lead]["score"] as Label).visible, "点数: 送る相手を選んでいる間は、名札の横に点数")
+	ovl.set_tag_scores({})
+	_check(not (ovl._tags[lead]["score"] as Label).visible, "点数: 選び終わったら消す")
 	# カメラの中に入った人は隠す(黒い輪郭線が画面いっぱいに映らないように)
 	s.phase = GameState.Phase.CHASE
 	var cam := v.get_viewport().get_camera_3d()
