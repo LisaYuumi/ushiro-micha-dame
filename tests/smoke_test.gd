@@ -189,11 +189,13 @@ func _check_photo_mode() -> void:
 			st2._pick(func(v: String) -> void: st2._vote_mode = v, "証拠")
 			st2._apply_vote()
 			st2._process(0.05)
-			_check(st2._state.evidence_key_ids().size() == 2 and st2._view._key_rings.size() == 2 and st2._ev_layer.visible,
-					"撮影モード: 投票の証拠を出せる")
+			st2._process(0.05)
+			var sov := st2._view.get_overlay()
+			_check(st2._state.evidence_key_ids().size() == 2 and sov._oops_marks.size() == 1 and sov._item_mark != null and st2._ev_layer.visible,
+					"撮影モード: 投票の証拠(落とし物の▼・お手つきのガーン!)を出せる")
 			st2._vote_mode = "なし"
 			st2._apply_vote()
-			_check(st2._view._key_rings.is_empty(), "撮影モード: 投票の証拠を消せる")
+			_check(sov._oops_marks.is_empty() and sov._item_mark == null, "撮影モード: 投票の証拠を消せる")
 			st2._set_ui_hidden(true)
 			_check(not st2._panel.visible, "撮影モード: UIを消せる")
 		160:
@@ -229,6 +231,9 @@ func _check_vote_scene() -> void:
 	_check(v._handkerchief.visible and item_at.distance_to(seat_p.normalized() * GameConfig.DROP_RADIUS) < 0.01,
 			"投票の場面: 落とし物は落とされた人のうしろ")
 	_check(v._vote_scene[oops]["look"] and not v._vote_scene[dropped]["look"], "投票の場面: お手つきの人は振り返ったまま")
+	_check(absf(v._handkerchief.transform.basis.get_scale().x - WorldView.VOTE_ITEM_SCALE) < 0.01 and v.vote_item_top() != Vector3.INF,
+			"投票の場面: 落とし物は少し大きく、▼を出す位置がわかる")
+	_check((v._actor_nodes[oops] as CharacterModel)._expression == CharacterModel.SHOCK, "投票の場面: お手つきの人はガーン顔のまま")
 	v.set_vote_view(false)
 	_check(v._vote_scene.is_empty(), "投票の場面: 投票が終わったら元にもどす")
 	v.queue_free()

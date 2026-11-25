@@ -909,11 +909,11 @@ func _update_evidence(voting: bool, revealing: bool) -> void:
 	hud.set_vote_screen(voting or revealing)
 	if ov and voting:
 		ov.set_label_top(hud.vote_panel_bottom() + 6.0)
+		ov.set_item_mark(view.vote_item_top())
 	if not voting:
 		if _evidence_on:
 			_evidence_on = false
 			_evidence_sig = ""
-			view.set_key_people([])
 			if ov:
 				ov.set_vote_evidence(false)
 		return
@@ -923,9 +923,8 @@ func _update_evidence(voting: bool, revealing: bool) -> void:
 		return
 	_evidence_on = true
 	_evidence_sig = sig
-	view.set_key_people(keys)
 	if ov:
-		ov.set_vote_evidence(true, HeadOverlay.evidence_bubbles(state))
+		ov.set_vote_evidence(true, HeadOverlay.evidence_bubbles(state), view.vote_item_top(), state.round_otetsuki)
 
 
 ## 結果カードの1行。delta: このラウンドで増えた分も出すか

@@ -336,7 +336,9 @@ func sync(state: GameState, delta: float) -> void:
 				var hug: bool = _beach and _item_index == 3 and a.id == state.chaser_id and state.phase == GameState.Phase.CHASE \
 						and a.slip_left <= 0.0
 				model.set_gesture(str(_cer_gestures.get(a.id, "")) if _cer_mode != "" else ("hug" if hug else ""))
-			_update_expression(state, a, model, delta)
+			# (投票の場面のお手つきの人は、ガーン顔のまま。_apply_vote_scene_actors が決める)
+			if not (_vote_scene.has(a.id) and _vote_scene[a.id]["look"]):
+				_update_expression(state, a, model, delta)
 			_update_milk(state, a, model)
 	# (投票の場面の再現は、名札・足もとの光・カメラより先に)
 	_apply_vote_scene_actors()
@@ -345,7 +347,6 @@ func sync(state: GameState, delta: float) -> void:
 	_update_vote_view(state, delta)
 	_update_ceremony(delta)
 	_update_events(state, delta)
-	_update_key_rings()
 	if _overlay:
 		_overlay.update(state, get_viewport().get_camera_3d())
 	if _blackout:
@@ -2717,11 +2718,14 @@ func _update_vote_view(state: GameState, delta: float) -> void:
 ## 鬼は、落とした席の少し先の、歩く道に立つ。id -> {"pos", "yaw", "look", "stand"}
 var _vote_scene := {}
 var _vote_item_pos := Vector3.INF
+## 投票の場面の落とし物の大きさ(少しだけ大きく)
+const VOTE_ITEM_SCALE := 1.25
 
 
 func _set_vote_scene(state: GameState) -> void:
 	_vote_scene.clear()
 	_vote_item_pos = Vector3.INF
+	_vote_item_top = Vector3.INF
 	if state == null or state.round_lineup.is_empty():
 		return
 	var n: int = state.seat_positions.size()
@@ -2759,6 +2763,9 @@ func _apply_vote_scene_actors() -> void:
 		model.rotation.y = sc["yaw"]
 		model.set_pose("idle" if sc["stand"] else ("floor" if _beach else "sit"))
 		model.set_look(sc["look"])
+		# (お手つきの人は、お手つきのときと同じガーン顔のまま)
+		if sc["look"]:
+			model.set_expression(CharacterModel.SHOCK)
 		model.set_kneel(false)
 		model.set_down(false)
 		model.set_gesture("")
@@ -2776,7 +2783,10 @@ func _apply_vote_scene_item() -> void:
 		if _straps and is_instance_valid(_straps):
 			_straps.visible = false
 		_handkerchief.visible = true
-		_handkerchief.transform = Transform3D(Basis.IDENTITY, _vote_item_pos)
+		# (遠くの席でも分かるように、少しだけ大きく)
+		_handkerchief.transform = Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * VOTE_ITEM_SCALE), _vote_item_pos)
+		if _vote_item_top == Vector3.INF:
+			_vote_item_top = _item_top()
 
 
 ## 投票の画面のカメラ(自分の席の後ろの高いところから、輪を見る。撮影モードでも使う)。
@@ -2850,7 +2860,7 @@ func _fit_vote_camera(state: GameState) -> Transform3D:
 		chests.append(foot)
 		if id in keys:
 			# (頭の上に積む吹き出しの数だけ、上によゆう)
-			var lines: int = (bubbles.get(id, []) as Array).size()
+			var lines: int = (bubbles.get(id, []) as Array).size() + (1 if id in state.round_otetsuki else 0)
 			heads.append(head + Vector3(0, VOTE_CAM_BUBBLE_ROOM * float(lines), 0))
 			key_feet.append(foot)
 	var vp := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(1280, 720)
@@ -2953,52 +2963,25 @@ func _vote_cam_fits(t: Transform3D, heads: Array[Vector3], chests: Array[Vector3
 	return true
 
 
-# --- 投票の証拠: 大事な人(落とされた人・お手つきになった人)の足もとを光らせる ---
-var _key_rings := {}
+# --- 投票の証拠: 落とし物のてっぺんの位置(2D の「▼」の矢印を出すため) ---
+
+## 投票の場面で置いた落とし物のてっぺん(なければ Vector3.INF。置いたあとに1回だけ計算する)
+var _vote_item_top := Vector3.INF
 
 
-func set_key_people(ids: Array) -> void:
-	for id in _key_rings.keys():
-		if not (id in ids):
-			if is_instance_valid(_key_rings[id]):
-				(_key_rings[id] as Node).queue_free()
-			_key_rings.erase(id)
-	for id in ids:
-		if _key_rings.has(id) and is_instance_valid(_key_rings[id]):
-			continue
-		var ring := MeshInstance3D.new()
-		var tm := TorusMesh.new()
-		tm.inner_radius = 0.42
-		tm.outer_radius = 0.56
-		tm.rings = 24
-		tm.ring_segments = 6
-		ring.mesh = tm
-		# (黄色い床・砂浜でも見えるように、白い輪のまわりにオレンジのふち)
-		ring.material_override = _glow_material(Color("FFFBE8"))
-		ring.scale = Vector3(1.0, 0.15, 1.0)
-		var edge := MeshInstance3D.new()
-		var em := TorusMesh.new()
-		em.inner_radius = 0.54
-		em.outer_radius = 0.64
-		em.rings = 24
-		em.ring_segments = 6
-		edge.mesh = em
-		edge.material_override = _glow_material(Color("FF7A1A"))
-		edge.position.y = -0.05
-		ring.add_child(edge)
-		add_child(ring)
-		_key_rings[id] = ring
+func vote_item_top() -> Vector3:
+	return _vote_item_top
 
 
-func _update_key_rings() -> void:
-	for id in _key_rings:
-		var ring := _key_rings[id] as MeshInstance3D
-		var node: Node3D = _actor_nodes.get(id)
-		if ring == null or not is_instance_valid(ring) or node == null:
-			continue
-		ring.position = Vector3(node.position.x, 0.04, node.position.z)
-		var k := 1.0 + 0.08 * sin(_clock * 5.0)
-		ring.scale = Vector3(k, 0.15, k)
+## 落とし物の見た目のてっぺん(撮影モードでも使う)
+func _item_top() -> Vector3:
+	var top := _handkerchief.global_position.y
+	for c in _handkerchief.find_children("*", "VisualInstance3D", true, false):
+		var vi := c as VisualInstance3D
+		if vi.visible:
+			var box := vi.global_transform * vi.get_aabb()
+			top = maxf(top, box.end.y)
+	return Vector3(_handkerchief.global_position.x, top, _handkerchief.global_position.z)
 
 
 # --- 1試合に1回のイベントの見た目(先生の見回り・カモメの貝がら) ---

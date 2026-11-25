@@ -148,9 +148,9 @@ func _process(delta: float) -> void:
 	_apply_item()
 	_apply_wet()
 	if _vote_mode == "証拠":
-		_view._update_key_rings()
 		var ov := _view.get_overlay()
 		if ov and not _saving:
+			ov.set_item_mark(_view._item_top())
 			ov.set_label_top((_ev_frame["panel"] as Control).get_global_rect().end.y + 6.0)
 			ov.update(_state, _cam)
 	# 夜の教室は、ゲームと同じ夜の明るさ(窓側は月の光)
@@ -825,7 +825,6 @@ func _apply_vote() -> void:
 		return
 	var ov := _view.get_overlay()
 	if _vote_mode != "証拠":
-		_view.set_key_people([])
 		if ov:
 			ov.set_vote_evidence(false)
 			ov.visible = false
@@ -837,11 +836,10 @@ func _apply_vote() -> void:
 	_item = "背中の後ろ"
 	for id in _state.round_otetsuki:
 		_poses[id] = "振り向く"
+		_faces[id] = "ガーン"
 	_view._vote_cam_at = -100000
-	var keys := _state.evidence_key_ids()
-	_view.set_key_people(keys)
 	if ov:
-		ov.set_vote_evidence(true, HeadOverlay.evidence_bubbles(_state))
+		ov.set_vote_evidence(true, HeadOverlay.evidence_bubbles(_state), Vector3.INF, _state.round_otetsuki)
 		ov.visible = true
 	if _ev_layer == null:
 		# ゲームの投票と同じ、上の1つの枠

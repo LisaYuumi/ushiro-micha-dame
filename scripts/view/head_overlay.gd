@@ -45,6 +45,10 @@ var _self_id := -1
 var _vote_on := false
 var _evidence := {}
 var _ev_nodes := {}
+## 投票の目印: 落とされた人のうしろの落とし物の上の「▼」(ぴょこぴょこ動く)と、お手つきの人の頭の上の「ガーン!」
+var _item_mark: Label
+var _item_mark_pos := Vector3.INF
+var _oops_marks := {}
 ## 吹き出しを置かない上の帯の高さ(投票の間は、上の「鬼の手下は誰?」の枠の下。main が決める)
 var _label_top := TOP_LIMIT
 
@@ -180,10 +184,14 @@ func send_target() -> int:
 	return _target
 
 
-## 投票の証拠を出す(on = false で消す)。ev: id -> [{"text", "kind"}](大事な人に、大事な時間に届いた言葉)
-func set_vote_evidence(on: bool, ev: Dictionary = {}) -> void:
+## 投票の証拠を出す(on = false で消す)。ev: id -> [{"text", "kind"}](大事な人に届いていた言葉)。
+## item_top: 落とされた落とし物のてっぺん(▼を出す。なければ INF)/ oops: お手つきの人(頭の上に「ガーン!」)
+func set_vote_evidence(on: bool, ev: Dictionary = {}, item_top: Vector3 = Vector3.INF, oops: Array = []) -> void:
 	if not on:
 		ev = {}
+		oops = []
+		item_top = Vector3.INF
+	_set_vote_marks(item_top, oops, on)
 	if _vote_on == on and ev == _evidence:
 		return
 	_vote_on = on
@@ -212,6 +220,52 @@ func set_vote_evidence(on: bool, ev: Dictionary = {}) -> void:
 		_ev_nodes[id] = list
 	if _marker:
 		move_child(_marker, get_child_count() - 1)
+
+
+func _set_vote_marks(item_top: Vector3, oops: Array, on: bool) -> void:
+	_item_mark_pos = item_top
+	if item_top != Vector3.INF and _item_mark == null:
+		_item_mark = UiStyle.label("▼", 46, Color("FFB020"))
+		_item_mark.add_theme_color_override("font_outline_color", GameConfig.COLOR_INK)
+		_item_mark.add_theme_constant_override("outline_size", 12)
+		_item_mark.visible = false
+		add_child(_item_mark)
+	elif item_top == Vector3.INF and _item_mark:
+		_fade_free(_item_mark, on)
+		_item_mark = null
+	for id in _oops_marks.keys():
+		if not (id in oops):
+			_fade_free(_oops_marks[id], on)
+			_oops_marks.erase(id)
+	for id in oops:
+		if _oops_marks.has(int(id)):
+			continue
+		var p := PanelContainer.new()
+		p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		p.add_theme_stylebox_override("panel", _bubble_style(Color("3B5BDB")))
+		var l := UiStyle.label(Locale.t("ガーン!"), 26, Color.WHITE)
+		p.add_child(l)
+		p.visible = false
+		add_child(p)
+		_oops_marks[int(id)] = p
+
+
+## 消すときは、ふっと消える(keep = true なら、すぐ消す)
+func _fade_free(c: Control, instant: bool) -> void:
+	if c == null or not is_instance_valid(c):
+		return
+	if instant or not c.visible:
+		c.queue_free()
+		return
+	var tw := c.create_tween()
+	tw.tween_property(c, "modulate:a", 0.0, 0.35)
+	tw.tween_callback(c.queue_free)
+
+
+## 落とし物の「▼」の位置を変える(投票の間、毎フレーム。落とし物を置いたあとに分かるので)
+func set_item_mark(item_top: Vector3) -> void:
+	if _vote_on and item_top != _item_mark_pos:
+		_set_vote_marks(item_top, _oops_marks.keys(), true)
 
 
 ## 吹き出しを置かない上の帯の高さ(画面の上の枠の下)
@@ -311,6 +365,11 @@ func update(state: GameState, cam: Camera3D) -> void:
 			(n as Control).size = bs
 			w = maxf(w, bs.x)
 			h += bs.y + 2.0
+		# (お手つきの人は、吹き出しの上に「ガーン!」の分も)
+		var mark_h := 0.0
+		if _vote_on and _oops_marks.has(id):
+			mark_h = (_oops_marks[id] as Control).get_combined_minimum_size().y + 4.0
+			h += mark_h
 		var r := Rect2(Vector2(sp.x - w / 2.0, sp.y - h), Vector2(w, h))
 		# (投票の証拠は、頭のすぐ上から離さない。2人がとなり同士のときだけ、横に並べる)
 		if _vote_on:
@@ -327,6 +386,25 @@ func update(state: GameState, cam: Camera3D) -> void:
 			y -= bs.y + 2.0
 			c.position = Vector2(r.get_center().x - bs.x / 2.0, y).floor()
 			c.visible = not _bubbles_hidden or _vote_on
+	# 投票の目印: 落とし物の上の「▼」(上下にぴょこぴょこ)と、お手つきの人の頭の上(吹き出しの上)の「ガーン!」
+	if _item_mark:
+		var show := _item_mark_pos != Vector3.INF and not cam.is_position_behind(_item_mark_pos)
+		_item_mark.visible = show
+		if show:
+			var ip := cam.unproject_position(_item_mark_pos)
+			var ms := _item_mark.get_combined_minimum_size()
+			var bob := absf(sin(Time.get_ticks_msec() / 1000.0 * 5.0)) * 12.0
+			_item_mark.position = Vector2(ip.x - ms.x / 2.0, ip.y - ms.y - 2.0 - bob).floor()
+	for id in _oops_marks:
+		var mk: PanelContainer = _oops_marks[id]
+		if not _head_rects.has(id):
+			mk.visible = false
+			continue
+		var hr: Rect2 = _head_rects[id]
+		var ms2 := mk.get_combined_minimum_size()
+		mk.size = ms2
+		mk.position = Vector2(clampf(hr.get_center().x - ms2.x / 2.0, 4.0, vp.x - ms2.x - 4.0), hr.position.y).floor()
+		mk.visible = true
 	# 「送る相手」「あなたの票」の印: 頭の上の吹き出しのさらに上
 	_marker.visible = _target >= 0 and _head_rects.has(_target)
 	if _marker.visible:
