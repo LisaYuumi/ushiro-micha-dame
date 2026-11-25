@@ -466,20 +466,14 @@ func _physics_process(delta: float) -> void:
 	# 手下を当てる投票(教室のまま)と発表: 少し高いところから全員を映し、名札を出す
 	var voting := showing_result and state.voting_open and not state.match_over
 	var revealing := showing_result and not state.voting_open and state.reveal_left >= 0.0 and not state.match_over
-	view.set_vote_view(voting or revealing)
-	_update_evidence(voting or revealing)
+	view.set_vote_view(voting or revealing, state)
+	_update_evidence(voting, revealing)
 	# 発表が終わったら、ルーム主が「次へ」を押すまで、手下が出た画面のまま待つ
 	var waiting_next := state.can_go_next()
 	if voting:
-		var hint := tr("あやしい人をタップして投票!")
-		if state.is_minion(me.id):
-			hint = tr("あなたは手下。バレないように!")
-		elif _my_vote >= 0:
-			hint = tr("%s に投票した(入れ直せる)") % _short_name(_my_vote)
+		# (上は「鬼の手下は誰?」と「3/8人 投票済み」だけ。手下だけには、投票しない理由のひとこと)
+		var hint := tr("あなたは手下。バレないように!") if state.is_minion(me.id) else ""
 		hud.set_vote_ui(true, state.votes.size(), state.voter_count(), hint, mode != Mode.GUEST, state.can_skip_vote())
-	elif revealing and not waiting_next:
-		# 票が飛ぶ発表の間も、上の枠(見出しと起きたこと)とラベルは出したまま
-		hud.set_vote_ui(true, 0, 0, "", false, false, false)
 	elif waiting_next and _tutorial == null:
 		hud.set_next_ui(true, mode != Mode.GUEST)
 	else:
@@ -907,18 +901,18 @@ var _evidence_on := false
 var _evidence_sig := ""
 
 
-## 投票と発表の間: 上の枠に「このラウンドで起きたこと」、全員の頭のすぐ上に「名前+大事な人へ送った言葉」のラベル、
-## 大事な人の足もとを光らせてラベルを黄色に。いつもの左上の札は隠す。本当かウソかは出さない(プレイヤーが見比べて考える)
-func _update_evidence(on: bool) -> void:
+## 投票と発表の間は、ラウンドの場面を再現する(WorldView.set_vote_view)。いつもの左上の札は隠す。
+## 投票の間: 落とされた人・お手つきの人の足もとを光らせ、頭のすぐ上に「大事な時間」に届いた言葉を出す。
+## 発表(票の矢印)が始まったら、言葉と足もとの光はふっと消す。本当かウソかは出さない(プレイヤーが見比べて考える)
+func _update_evidence(voting: bool, revealing: bool) -> void:
 	var ov := view.get_overlay()
-	hud.set_vote_screen(on)
-	if ov and on:
+	hud.set_vote_screen(voting or revealing)
+	if ov and voting:
 		ov.set_label_top(hud.vote_panel_bottom() + 6.0)
-	if not on:
+	if not voting:
 		if _evidence_on:
 			_evidence_on = false
 			_evidence_sig = ""
-			hud.set_evidence_badges([])
 			view.set_key_people([])
 			if ov:
 				ov.set_vote_evidence(false)
@@ -929,7 +923,6 @@ func _update_evidence(on: bool) -> void:
 		return
 	_evidence_on = true
 	_evidence_sig = sig
-	hud.set_evidence_badges(HeadOverlay.evidence_badges(state))
 	view.set_key_people(keys)
 	if ov:
 		ov.set_vote_evidence(true, HeadOverlay.evidence_bubbles(state))

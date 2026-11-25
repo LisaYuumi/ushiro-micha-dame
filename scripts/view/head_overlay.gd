@@ -122,6 +122,8 @@ static func _bubble_style(bg: Color) -> StyleBoxFlat:
 
 ## 言葉の意味の色: 見ろ系(落ちてる・信じて)は赤、見るな系(平気)は青
 static func kind_color(kind: String) -> Color:
+	if kind == "more":
+		return Color("8A8A8A")
 	return COLOR_DONT if kind == Stamps.SAFE else COLOR_LOOK
 
 
@@ -188,7 +190,14 @@ func set_vote_evidence(on: bool, ev: Dictionary = {}) -> void:
 	_evidence = ev.duplicate(true)
 	for id in _ev_nodes:
 		for n in _ev_nodes[id]:
-			(n as Node).queue_free()
+			# (消すときは、ふっと消える)
+			var c := n as Control
+			if not on and c.visible:
+				var tw := c.create_tween()
+				tw.tween_property(c, "modulate:a", 0.0, 0.35)
+				tw.tween_callback(c.queue_free)
+			else:
+				c.queue_free()
 	_ev_nodes.clear()
 	for id in _evidence:
 		var list := []
@@ -273,6 +282,8 @@ func update(state: GameState, cam: Camera3D) -> void:
 		p.modulate.a = BLOCKED_ALPHA if blocked else 1.0
 		_tag_rects[id] = r
 	# 2) 頭の上: 届いている言葉(プレイ中)または証拠(投票中)を、頭のすぐ上に下から積む
+	# (投票の証拠は、名札はよけない。頭の真上から離さないように、ほかの証拠と⚙だけよける)
+	var ev_placed: Array[Rect2] = [Rect2(Vector2(vp.x - GEAR_SIZE.x, 0), GEAR_SIZE)]
 	for id in order:
 		var nodes: Array = []
 		if _vote_on:
@@ -301,7 +312,12 @@ func update(state: GameState, cam: Camera3D) -> void:
 			w = maxf(w, bs.x)
 			h += bs.y + 2.0
 		var r := Rect2(Vector2(sp.x - w / 2.0, sp.y - h), Vector2(w, h))
-		r = _fit(r, vp, top, placed, h * 0.3 + 6.0, 13)
+		# (投票の証拠は、頭のすぐ上から離さない。2人がとなり同士のときだけ、横に並べる)
+		if _vote_on:
+			r = _fit(r, vp, top, ev_placed, 18.0, 9, 1.05)
+			ev_placed.append(r)
+		else:
+			r = _fit(r, vp, top, placed, h * 0.3 + 6.0, 13, 0.7)
 		placed.append(r)
 		_head_rects[id] = r
 		var y := r.end.y
@@ -343,13 +359,13 @@ func _play_bubbles(state: GameState, id: int) -> Array:
 
 
 ## 札を画面の内側に収め、ほかの札と重ならない近くの場所をさがす(上下に少しずつ、少しだけ左右にも)
-func _fit(base: Rect2, vp: Vector2, top: float, placed: Array[Rect2], step: float, tries: int) -> Rect2:
+func _fit(base: Rect2, vp: Vector2, top: float, placed: Array[Rect2], step: float, tries: int, side := 0.7) -> Rect2:
 	var sz := base.size
 	var best := base
 	var best_cost := INF
 	for k in tries:
 		var dy := step * float((k + 1) / 2) * (-1.0 if k % 2 == 1 else 1.0)
-		for dx in [0.0, -sz.x * 0.35, sz.x * 0.35, -sz.x * 0.7, sz.x * 0.7]:
+		for dx in [0.0, -sz.x * side * 0.5, sz.x * side * 0.5, -sz.x * side, sz.x * side]:
 			var r := base
 			r.position += Vector2(dx, dy)
 			r.position.x = clampf(r.position.x, UiStyle.SAFE, vp.x - UiStyle.SAFE - sz.x)
@@ -417,8 +433,9 @@ func _dist(id: int, cam: Camera3D) -> float:
 
 
 ## 投票の証拠: 大事な人(落とされた人・お手つきの人)の頭の上に、「大事な時間」に届いた言葉を再現する
-## (id -> [{"text": "送った人:言葉", "kind"}]。プレイ中の吹き出しと同じ形・意味の色)。多いときは新しい EVIDENCE_MAX 個
-const EVIDENCE_MAX := 4
+## (id -> [{"text": "送った人:言葉", "kind"}]。プレイ中の吹き出しと同じ形・意味の色)。多いときは新しい EVIDENCE_MAX 個と、
+## いちばん上に灰色の「ほか2件」({"text", "kind": "more"})
+const EVIDENCE_MAX := 5
 
 
 static func evidence_bubbles(state: GameState) -> Dictionary:
@@ -430,22 +447,9 @@ static func evidence_bubbles(state: GameState) -> Dictionary:
 			lines.append({"text": "%s:%s" % [evidence_name(state, int(x["sender"])), stamp_text(state, int(x["sender"]), kind)],
 					"kind": kind})
 		if lines.size() > EVIDENCE_MAX:
+			var more := lines.size() - EVIDENCE_MAX
 			lines = lines.slice(lines.size() - EVIDENCE_MAX)
+			lines.append({"text": TranslationServer.translate("ほか%d件") % more, "kind": "more"})
 		if not lines.is_empty():
 			ev[int(id)] = lines
 	return ev
-
-
-## 上の枠に並べる短いバッジ(2つまで): [[見出し, ひとこと(その時間), 色]]
-static func evidence_badges(state: GameState) -> Array:
-	var out := []
-	if state.round_dropped_on >= 0:
-		out.append([TranslationServer.translate("落ちた先:%s") % evidence_name(state, state.round_dropped_on),
-				TranslationServer.translate("落とされてから届いた言葉"), Color("FFE27A")])
-	if not state.round_otetsuki.is_empty():
-		var names := []
-		for id in state.round_otetsuki:
-			names.append(evidence_name(state, int(id)))
-		out.append([TranslationServer.translate("お手つき:%s") % TranslationServer.translate("、").join(names),
-				TranslationServer.translate("振り向く前%d秒の言葉") % int(GameConfig.EVIDENCE_OTETSUKI_WINDOW), Color("BFE3FF")])
-	return out

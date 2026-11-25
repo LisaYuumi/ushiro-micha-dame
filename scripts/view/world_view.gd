@@ -338,6 +338,8 @@ func sync(state: GameState, delta: float) -> void:
 				model.set_gesture(str(_cer_gestures.get(a.id, "")) if _cer_mode != "" else ("hug" if hug else ""))
 			_update_expression(state, a, model, delta)
 			_update_milk(state, a, model)
+	# (投票の場面の再現は、名札・足もとの光・カメラより先に)
+	_apply_vote_scene_actors()
 	_update_missed_scene(state, delta)
 	_update_seat_camera(state, delta)
 	_update_vote_view(state, delta)
@@ -408,6 +410,7 @@ func sync(state: GameState, delta: float) -> void:
 		tucker.set_tuck(false)
 	_hide_item_if_not_visible_to_me(state)
 	_update_night_item(state, delta, holder != null and _item_head_id < 0)
+	_apply_vote_scene_item()
 	_update_footsteps(state)
 	_update_ambience(delta)
 
@@ -2676,12 +2679,13 @@ var _vote_from := Transform3D.IDENTITY
 var _reveal_faces := {}
 
 
-func set_vote_view(on: bool) -> void:
+func set_vote_view(on: bool, state: GameState = null) -> void:
 	if on == _vote_view:
 		return
 	_vote_view = on
 	_vote_view_t = 0.0
 	_vote_cam_at = -100000
+	_set_vote_scene(state if on else null)
 	if on:
 		var cam := get_viewport().get_camera_3d()
 		_vote_from = cam.global_transform if cam else _seat_cam.global_transform
@@ -2708,6 +2712,73 @@ func _update_vote_view(state: GameState, delta: float) -> void:
 	_top_cam.global_transform = _vote_from.interpolate_with(want, k)
 
 
+## 投票の画面は、ラウンドの場面を再現する(見た目だけ): 全員を自分の席(ラウンドの始めの並び)に戻して座らせ、
+## 落とされた人のうしろに落とし物をそのまま置き、お手つきの人は自分の席で振り返った姿勢のまま。
+## 鬼は、落とした席の少し先の、歩く道に立つ。id -> {"pos", "yaw", "look", "stand"}
+var _vote_scene := {}
+var _vote_item_pos := Vector3.INF
+
+
+func _set_vote_scene(state: GameState) -> void:
+	_vote_scene.clear()
+	_vote_item_pos = Vector3.INF
+	if state == null or state.round_lineup.is_empty():
+		return
+	var n: int = state.seat_positions.size()
+	for seat in mini(state.round_lineup.size(), n):
+		var id: int = int(state.round_lineup[seat])
+		if id < 0 or not _actor_nodes.has(id):
+			continue
+		_vote_scene[id] = {"pos": state.seat_positions[seat], "yaw": state.seat_yaws[seat],
+				"look": id in state.round_otetsuki, "stand": false}
+		if id == state.round_dropped_on:
+			var p: Vector3 = state.seat_positions[seat]
+			_vote_item_pos = Vector3(p.x, 0.0, p.z).normalized() * GameConfig.DROP_RADIUS
+	if _actor_nodes.has(state.oni_id) and not _vote_scene.has(state.oni_id):
+		# 鬼: 落とした席(なければ自分の席の反対側)から、歩く向きに少し進んだところ
+		var ang := PI
+		if _vote_item_pos != Vector3.INF:
+			ang = atan2(_vote_item_pos.x, _vote_item_pos.z)
+		ang += TAU / float(maxi(n, 1)) * 0.6
+		var pos := Vector3(sin(ang), 0.0, cos(ang)) * GameConfig.ONI_WALK_RADIUS
+		_vote_scene[state.oni_id] = {"pos": pos, "yaw": atan2(-cos(ang), sin(ang)), "look": false, "stand": true}
+	# (追いかけっこで転んで倒れたままの人も、起こして座らせる)
+	for id in _vote_scene:
+		var m := _actor_nodes.get(id) as CharacterModel
+		if m:
+			m.stop_ragdoll()
+
+
+func _apply_vote_scene_actors() -> void:
+	for id in _vote_scene:
+		var sc: Dictionary = _vote_scene[id]
+		var model := _actor_nodes.get(id) as CharacterModel
+		if model == null:
+			continue
+		model.position = sc["pos"]
+		model.rotation.y = sc["yaw"]
+		model.set_pose("idle" if sc["stand"] else ("floor" if _beach else "sit"))
+		model.set_look(sc["look"])
+		model.set_kneel(false)
+		model.set_down(false)
+		model.set_gesture("")
+		var blob: MeshInstance3D = _blobs.get(id)
+		if blob:
+			blob.position = Vector3(model.position.x, 0.03, model.position.z)
+
+
+func _apply_vote_scene_item() -> void:
+	if _vote_item_pos != Vector3.INF:
+		# 落とし物は、落とされた人のうしろの床に、落とされたまま
+		if _tucker and is_instance_valid(_tucker):
+			_tucker.set_tuck(false)
+		_tucker = null
+		if _straps and is_instance_valid(_straps):
+			_straps.visible = false
+		_handkerchief.visible = true
+		_handkerchief.transform = Transform3D(Basis.IDENTITY, _vote_item_pos)
+
+
 ## 投票の画面のカメラ(自分の席の後ろの高いところから、輪を見る。撮影モードでも使う)。
 ## 全員の頭と足もと(名札)が画面に入る範囲で、できるだけ近づく。大事な人は頭の上の吹き出しの分も入れ、その人たちがよく見える角度を選ぶ。
 ## 投票の画面になったときに1回だけ計算する(撮影モードは、証拠を作り直したとき)
@@ -2716,8 +2787,8 @@ func _update_vote_view(state: GameState, delta: float) -> void:
 const VOTE_CAM_PITCHES := [0.62, 0.75, 0.88, 1.0]
 ## 画面の上の枠の分、頭を置かない上の帯(px)と、左右のよゆう(px)
 const VOTE_CAM_TOP_PX := 150.0
-## 大事な人の頭の上に、吹き出し(いくつか)を積むための高さ(m)
-const VOTE_CAM_BUBBLE_ROOM := 1.1
+## 大事な人の頭の上に、吹き出しを1つ積むための高さ(m)
+const VOTE_CAM_BUBBLE_ROOM := 0.3
 const VOTE_CAM_SIDE_PX := 110.0
 var _vote_cam_cache := Transform3D.IDENTITY
 var _vote_cam_at := -100000
@@ -2744,24 +2815,44 @@ func _fit_vote_camera(state: GameState) -> Transform3D:
 			p = state.seat_positions[me.seat_index]
 		if Vector2(p.x, p.z).length() > 0.3:
 			base = Vector3(p.x, 0.0, p.z).normalized()
+	var keys := state.evidence_key_ids()
+	# 大事な人がいれば、その人たちの反対側から見る(大事な人が奥に来て、顔と頭の上の吹き出しと、うしろの落とし物が見える)
+	var key_sum := Vector3.ZERO
+	for id in keys:
+		if _vote_scene.has(id):
+			key_sum += _vote_scene[id]["pos"] as Vector3
+		elif _actor_nodes.has(id):
+			key_sum += (_actor_nodes[id] as Node3D).global_position
+	key_sum.y = 0.0
+	if key_sum.length() > 0.5:
+		base = -key_sum.normalized()
+	elif keys.size() >= 2 and _vote_scene.has(keys[0]):
+		# (2人が向かい合わせ: 2人とも横に見える向き)
+		var kp: Vector3 = _vote_scene[keys[0]]["pos"]
+		base = Vector3(kp.z, 0.0, -kp.x).normalized()
 	# 映したい点: 全員の頭の上と足もと(名札)。大事な人(落とされた人・お手つきの人)は、頭の上の吹き出しの分も
 	var heads: Array[Vector3] = []
 	var chests: Array[Vector3] = []
 	var key_feet: Array[Vector3] = []
-	var keys := state.evidence_key_ids()
+	var bubbles := HeadOverlay.evidence_bubbles(state)
 	for id in _actor_nodes:
 		var m := _actor_nodes[id] as CharacterModel
 		if m == null or not is_instance_valid(m):
 			continue
-		# (自分と、自分よりカメラ側(輪の外のうしろ)に立っている人は数えない。その人の札は画面の下のふちに寄せて出る)
-		if id == state.local_player_id or m.global_position.dot(base) > GameConfig.RING_RADIUS * 0.9:
+		# (場面を再現しているときは、再現した位置で数える)
+		var foot: Vector3 = (_vote_scene[id]["pos"] as Vector3) if _vote_scene.has(id) else m.global_position
+		var head: Vector3 = foot + (m.tag_anchor() - m.global_position)
+		# (輪の外のカメラ側に立っている人は数えない。その人の札は画面の下のふちに寄せて出る)
+		if foot.dot(base) > GameConfig.RING_RADIUS * 1.1:
 			continue
-		heads.append(m.tag_anchor())
+		heads.append(head)
 		# (足もとの名札も入るように、足もと)
-		chests.append(m.global_position)
+		chests.append(foot)
 		if id in keys:
-			heads.append(m.tag_anchor() + Vector3(0, VOTE_CAM_BUBBLE_ROOM, 0))
-			key_feet.append(m.global_position)
+			# (頭の上に積む吹き出しの数だけ、上によゆう)
+			var lines: int = (bubbles.get(id, []) as Array).size()
+			heads.append(head + Vector3(0, VOTE_CAM_BUBBLE_ROOM * float(lines), 0))
+			key_feet.append(foot)
 	var vp := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(1280, 720)
 	var aspect := vp.x / maxf(vp.y, 1.0)
 	var tan_v := tan(deg_to_rad(55.0) / 2.0)

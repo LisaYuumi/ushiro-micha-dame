@@ -100,6 +100,8 @@ func _process(delta: float) -> bool:
 		_check_carry()
 	if _frames == 6:
 		_check_heart()
+	if _frames == 7:
+		_check_vote_scene()
 	_check_fall(delta)
 	if _frames == 60:
 		# ボタン操作と同じ命令を送ってみる
@@ -197,6 +199,39 @@ func _check_photo_mode() -> void:
 		160:
 			_main._studio._close()
 			_check(_main._studio == null and _main.view.visible, "撮影モードからもどれる")
+
+
+## 投票の画面は、ラウンドの場面を再現する: 全員が自分の席、落とし物は落とされた人のうしろ、お手つきの人は振り返ったまま
+func _check_vote_scene() -> void:
+	var s := GameState.new()
+	s.start_round(1)
+	var v := WorldView.new()
+	root.add_child(v)
+	v.build(s)
+	var dropped: int = int(s.round_lineup[2])
+	var oops: int = int(s.round_lineup[4])
+	s.round_dropped_on = dropped
+	s.round_otetsuki = [oops]
+	# (お手つきの人は真ん中へ、だれかは輪の外へ動いてしまっている)
+	s.get_actor(oops).position = Vector3.ZERO
+	s.get_actor(int(s.round_lineup[0])).position = Vector3(5, 0, 5)
+	s.phase = GameState.Phase.RESULT
+	v.set_vote_view(true, s)
+	v.sync(s, 0.05)
+	var ok := true
+	for seat in s.round_lineup.size():
+		var m: Node3D = v._actor_nodes[int(s.round_lineup[seat])]
+		if m.position.distance_to(s.seat_positions[seat]) > 0.01:
+			ok = false
+	_check(ok, "投票の場面: 全員が自分の席に戻る")
+	var item_at: Vector3 = v._handkerchief.position
+	var seat_p: Vector3 = s.seat_positions[2]
+	_check(v._handkerchief.visible and item_at.distance_to(seat_p.normalized() * GameConfig.DROP_RADIUS) < 0.01,
+			"投票の場面: 落とし物は落とされた人のうしろ")
+	_check(v._vote_scene[oops]["look"] and not v._vote_scene[dropped]["look"], "投票の場面: お手つきの人は振り返ったまま")
+	v.set_vote_view(false)
+	_check(v._vote_scene.is_empty(), "投票の場面: 投票が終わったら元にもどす")
+	v.queue_free()
 
 
 ## 鬼がうしろに来たときのドキドキ: 心臓の音・足音・画面のふち。離れたら戻る
@@ -2026,8 +2061,12 @@ func _test_vote_evidence() -> void:
 	var bubbles := HeadOverlay.evidence_bubbles(s)
 	_check(bubbles.size() == 2 and bubbles.has(dropped) and bubbles.has(oops) and not bubbles.has(sender), "証拠: 吹き出しは大事な人の頭の上だけ")
 	_check(str((bubbles[oops] as Array)[0]["text"]).find(":") > 0, "証拠: 吹き出しは「送った人:言葉」(プレイ中と同じ)")
-	var badges := HeadOverlay.evidence_badges(s)
-	_check(badges.size() == 2 and str(badges[0][1]) != "" and str(badges[1][1]).find("10") >= 0, "証拠: バッジ2つと、時間のひとこと")
+	# 5つより多いときは、新しい5つと「ほかN件」
+	for k in 4:
+		s.stamp_log.append({"sender": ids[5 + k % 2], "target": dropped, "kind": "safe", "truthful": true, "t": 46.0 + k})
+	var many: Array = HeadOverlay.evidence_bubbles(s)[dropped]
+	_check(many.size() == HeadOverlay.EVIDENCE_MAX + 1 and many[many.size() - 1]["kind"] == "more",
+			"証拠: 最大5つと「ほか%d件」" % (s.evidence_received(dropped).size() - HeadOverlay.EVIDENCE_MAX))
 	_check(HeadOverlay.kind_color("dropped") == HeadOverlay.COLOR_LOOK and HeadOverlay.kind_color("trust") == HeadOverlay.COLOR_LOOK \
 			and HeadOverlay.kind_color("safe") == HeadOverlay.COLOR_DONT, "吹き出しの色: 見ろ系は赤、見るな系は青")
 	# 結果の場面だけ、ゲストに届く。本当かウソかは届かない
@@ -2036,7 +2075,7 @@ func _test_vote_evidence() -> void:
 	_check(guest.round_dropped_on == -1 and guest.stamp_log.is_empty(), "証拠: 結果の場面の前はゲストに届かない")
 	s.phase = GameState.Phase.RESULT
 	guest.apply_snapshot(s.snapshot())
-	_check(guest.evidence_key_ids() == [dropped, oops] and guest.evidence_received(dropped).size() == 3
+	_check(guest.evidence_key_ids() == [dropped, oops] and guest.evidence_received(dropped).size() == s.evidence_received(dropped).size()
 			and guest.evidence_received(oops).size() == 1, "証拠: 結果の場面でゲストにも同じ言葉が届く")
 	var leak := false
 	for st in guest.stamp_log:

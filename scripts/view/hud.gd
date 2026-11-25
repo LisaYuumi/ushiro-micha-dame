@@ -1303,50 +1303,6 @@ func set_next_ui(show: bool, host: bool) -> void:
 
 ## 教室のままの投票の表示。show: 投票中か / voted・total: 投票した人数 / hint: 下の小さな案内 /
 ## skip: ルーム主の「発表へ」を出すか / skip_ready: 押せるか(始まって5秒たったか)
-## 投票の証拠: 「鬼の手下は誰?」のすぐ下に、短いバッジを2つまで並べる(「落ちた先:dog」「お手つき:cat」と、その時間のひとこと。空で消す)
-var _vote_badges: HBoxContainer
-var _badge_texts: Array = []
-
-
-func set_evidence_badges(texts: Array) -> void:
-	_badge_texts = texts.duplicate()
-	if _vote_badges == null:
-		return
-	fill_badges(_vote_badges, texts)
-
-
-## バッジの列を作り直す(撮影モードでも使う)。texts: [[見出し, ひとこと, 地の色]]。絵文字は使わない(フォントにないと□になるので)
-static func fill_badges(row: HBoxContainer, texts: Array) -> void:
-	if row.get_meta("texts", []) == texts:
-		return
-	row.set_meta("texts", texts.duplicate(true))
-	for c in row.get_children():
-		c.queue_free()
-		row.remove_child(c)
-	for t in texts:
-		var b := PanelContainer.new()
-		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var st := UiStyle.box(t[2] as Color, true, 14, 3)
-		st.shadow_offset = Vector2.ZERO
-		st.content_margin_left = 12
-		st.content_margin_right = 12
-		st.content_margin_top = 0
-		st.content_margin_bottom = 3
-		b.add_theme_stylebox_override("panel", st)
-		var col := VBoxContainer.new()
-		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		col.add_theme_constant_override("separation", -4)
-		b.add_child(col)
-		var main_l := UiStyle.label(str(t[0]), 26, GameConfig.COLOR_INK)
-		main_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		col.add_child(main_l)
-		var sub := UiStyle.label("(" + str(t[1]) + ")", 17, GameConfig.COLOR_INK.lightened(0.25))
-		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		col.add_child(sub)
-		row.add_child(b)
-	row.visible = not texts.is_empty()
-
-
 ## 投票の画面: ラウンド・落とし物・点数・役のいつもの札を隠す(上は「鬼の手下は誰?」の枠だけ)
 var _vote_screen := false
 
@@ -1391,7 +1347,7 @@ func set_vote_ui(show: bool, voted: int = 0, total: int = 0, hint: String = "", 
 		_skip_button.modulate.a = 1.0 if skip_ready else 0.5
 
 
-## 投票の画面の上に出す、ただ1つの枠: 「鬼の手下は誰?」(大きく)/ 短いバッジ(落ちた先・お手つき)/ 「3/9人 投票済み」(小さく)。
+## 投票の画面の上に出す、ただ1つの枠: 「鬼の手下は誰?」(大きく)/ 「3/8人 投票済み」(小さく)。
 ## 画面の上のまん中(撮影モードでも同じ枠を使う)
 static func make_vote_frame() -> Dictionary:
 	var panel := PanelContainer.new()
@@ -1415,15 +1371,10 @@ static func make_vote_frame() -> Dictionary:
 	title.add_theme_constant_override("outline_size", 12)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
-	var badges := HBoxContainer.new()
-	badges.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	badges.alignment = BoxContainer.ALIGNMENT_CENTER
-	badges.add_theme_constant_override("separation", 10)
-	box.add_child(badges)
-	var count := UiStyle.label("", 20, GameConfig.COLOR_INK.lightened(0.25))
+	var count := UiStyle.label("", 24, GameConfig.COLOR_INK.lightened(0.2))
 	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(count)
-	return {"panel": panel, "box": box, "title": title, "badges": badges, "count": count}
+	return {"panel": panel, "box": box, "title": title, "count": count}
 
 
 func _build_vote_ui() -> void:
@@ -1433,9 +1384,7 @@ func _build_vote_ui() -> void:
 	_vote_panel = panel
 	_vote_box = f["box"]
 	_vote_title = f["title"]
-	_vote_badges = f["badges"]
 	_vote_count = f["count"]
-	set_evidence_badges(_badge_texts)
 	_skip_button = Button.new()
 	_skip_button.text = tr("発表へ ▶")
 	_skip_button.custom_minimum_size = Vector2(240, 66)

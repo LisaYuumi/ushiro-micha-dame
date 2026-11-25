@@ -833,6 +833,10 @@ func _apply_vote() -> void:
 			_ev_layer.visible = false
 		return
 	_make_evidence()
+	# 場面の再現: 落とし物は落とされた人(選んだキャラ)のうしろ、お手つきの人は振り返った姿勢
+	_item = "背中の後ろ"
+	for id in _state.round_otetsuki:
+		_poses[id] = "振り向く"
 	_view._vote_cam_at = -100000
 	var keys := _state.evidence_key_ids()
 	_view.set_key_people(keys)
@@ -847,7 +851,6 @@ func _apply_vote() -> void:
 		_ev_frame = Hud.make_vote_frame()
 		_ev_layer.add_child(_ev_frame["panel"])
 	_ev_layer.visible = true
-	Hud.fill_badges(_ev_frame["badges"], HeadOverlay.evidence_badges(_state))
 	var voters := _state.actors.size() - 1
 	(_ev_frame["count"] as Label).text = tr("%d/%d人 投票済み") % [voters / 2, voters]
 

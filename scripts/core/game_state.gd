@@ -164,6 +164,8 @@ var round_otetsuki: Array = []
 var round_drop_t := -1.0
 var round_found_t := -1.0
 var round_otetsuki_t := {}
+## ラウンドの始めの席の並び(席の番号 -> その席の人の id)。投票の画面で、全員を自分の席に戻して場面を再現するのに使う
+var round_lineup: Array = []
 ## 夜の教室: 雷で明るい残りの秒数(0 なら暗いまま)
 var lightning_left: float = 0.0
 var blackout: bool = false
@@ -484,6 +486,7 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	_drop_mona = false
 	round_serial += 1
 	_round_start_lineup = seat_ids.duplicate()
+	round_lineup = seat_ids.duplicate()
 	_round_start_oni = oni
 	for a in actors:
 		a.looking_back = false
@@ -1323,6 +1326,7 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"round_otetsuki": round_otetsuki if phase == Phase.RESULT else [],
 		"round_stamps": _public_stamp_log() if phase == Phase.RESULT else [],
 		"round_drop_t": round_drop_t,
+		"round_lineup": round_lineup,
 		"round_found_t": round_found_t,
 		"round_otetsuki_t": round_otetsuki_t if phase == Phase.RESULT else {},
 		"stamp_words": stamp_words,
@@ -1407,6 +1411,7 @@ func apply_snapshot(s: Dictionary) -> void:
 	round_dropped_on = s.get("round_dropped_on", -1)
 	round_otetsuki = s.get("round_otetsuki", [])
 	round_drop_t = s.get("round_drop_t", -1.0)
+	round_lineup = s.get("round_lineup", [])
 	round_found_t = s.get("round_found_t", -1.0)
 	round_otetsuki_t = s.get("round_otetsuki_t", {})
 	# (言葉の記録は結果の場面だけ届く。ほかの場面では、ゲストの記録をそのままにする)

@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(564)
+## 一覧(561)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -356,12 +356,9 @@
 | みんながだまされる中、手下を %d回見抜いた | Saw through the minion while others were fooled: %d |
 | %s ・ %s | %s · %s |
 | 記念写真 | Group Photo |
-| 落ちた先:%s | Dropped on: %s |
-| お手つき:%s | Wrong look: %s |
 |   ・   |   ・   |
 | 、 | ,  |
-| 落とされてから届いた言葉 | messages after the drop |
-| 振り向く前%d秒の言葉 | messages %ds before looking |
+| ほか%d件 | +%d more |
 | 見えない! | Can't see! |
 | バシャッ! | Splash! |
 | 水鉄砲: | Water gun: |
