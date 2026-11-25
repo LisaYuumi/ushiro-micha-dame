@@ -1988,50 +1988,56 @@ func _test_snapshot_round_trip() -> void:
 
 
 func _test_vote_evidence() -> void:
-	# お手つきした人は、このラウンドの大事な人になる
+	# お手つきした人は、このラウンドの大事な人になる(時刻も記録)
 	var s := GameState.new()
 	s.start_round(1)
 	s.set_looking_back(s.local_player_id, true)
-	_check(s.round_otetsuki == [s.local_player_id], "証拠: お手つきした人が記録される")
-	# 大事な人(落とされた人・お手つきの人)に送った言葉だけ。同じ人には最後の1つ。2つまで
+	_check(s.round_otetsuki == [s.local_player_id] and s.round_otetsuki_t.has(s.local_player_id), "証拠: お手つきした人と時刻が記録される")
+	# 大事な時間に届いた言葉だけ
 	var ids := []
 	for a in s.actors:
 		if a.role == GameState.Role.SEATED or a.id == s.local_player_id:
 			ids.append(a.id)
-	var key_a: int = ids[1]
-	var key_b: int = ids[2]
+	var dropped: int = ids[1]
+	var oops: int = ids[2]
 	var sender: int = ids[3]
-	s.round_dropped_on = key_a
-	s.round_otetsuki = [key_b]
+	s.round_dropped_on = dropped
+	s.round_drop_t = 40.0
+	s.round_found_t = 55.0
+	s.round_otetsuki = [oops]
+	s.round_otetsuki_t = {oops: 30.0}
 	s.stamp_log = [
-		{"sender": sender, "target": key_a, "kind": "dropped", "truthful": true},
-		{"sender": sender, "target": ids[4], "kind": "trust", "truthful": false},
-		{"sender": sender, "target": key_b, "kind": "trust", "truthful": false},
-		{"sender": sender, "target": key_a, "kind": "safe", "truthful": false},
-		{"sender": s.oni_id, "target": key_b, "kind": "safe", "truthful": true},
+		{"sender": sender, "target": dropped, "kind": "safe", "truthful": true, "t": 35.0},   # 落とされる前: 出さない
+		{"sender": sender, "target": dropped, "kind": "safe", "truthful": false, "t": 45.0},  # 落とされてから: 出す
+		{"sender": s.oni_id, "target": dropped, "kind": "dropped", "truthful": true, "t": 50.0},
+		{"sender": sender, "target": dropped, "kind": "trust", "truthful": true, "t": 58.0},  # 見つけたあと: 出さない
+		{"sender": sender, "target": oops, "kind": "dropped", "truthful": false, "t": 15.0},  # 振り向く15秒前: 出さない
+		{"sender": sender, "target": oops, "kind": "trust", "truthful": false, "t": 25.0},    # 5秒前: 出す
+		{"sender": sender, "target": ids[4], "kind": "safe", "truthful": true, "t": 45.0},    # 大事な人以外: 出さない
 	]
-	_check(s.evidence_key_ids() == [key_a, key_b], "証拠: 大事な人は落とされた人とお手つきの人")
-	var ev := s.evidence_for(sender)
-	_check(ev.size() == 2 and ev[0]["target"] == key_a and ev[0]["kind"] == "safe" and ev[1]["kind"] == "trust",
-			"証拠: 同じ人に何度も送ったら最後の言葉(%s)" % str(ev))
-	_check(s.evidence_for(s.oni_id).size() == 1, "証拠: 鬼の言葉も出る")
-	_check(s.evidence_for(ids[4]).is_empty(), "証拠: 何も送っていない人は出ない")
-	_check(s.stamps_sent_by(sender).size() == 4, "証拠: タップの一覧はそのラウンドに送った全部")
+	_check(s.evidence_key_ids() == [dropped, oops], "証拠: 大事な人は落とされた人とお手つきの人")
+	var got := s.evidence_received(dropped)
+	_check(got.size() == 2 and got[0]["kind"] == "safe" and got[1]["sender"] == s.oni_id,
+			"証拠: 落とされた人は、落とされてから見つけるまでに届いた言葉だけ(%s)" % str(got))
+	_check(s.evidence_received(oops).size() == 1, "証拠: お手つきの人は、振り向く前%d秒の言葉だけ" % int(GameConfig.EVIDENCE_OTETSUKI_WINDOW))
+	_check(s.evidence_received(ids[4]).is_empty(), "証拠: 大事な人でなければ出ない")
+	s.round_found_t = -1.0
+	_check(s.evidence_received(dropped).size() == 3, "証拠: 見つけなければ、ラウンドの終わりまで")
 	var bubbles := HeadOverlay.evidence_bubbles(s)
-	_check(bubbles.has(sender) and bubbles.has(s.oni_id) and (bubbles[sender] as Array).size() == 2, "証拠: 頭の上の吹き出し(2つまで)")
-	_check(HeadOverlay.evidence_badges(s).size() == 2, "証拠: 上のバッジ(落ちた先・お手つき)")
-	var line: Dictionary = (bubbles[sender] as Array)[0]
-	_check(str(line["text"]).ends_with(Texts.STAMP_EMOJI["safe"]) and line["color"] == HeadOverlay.COLOR_DONT,
-			"証拠: 吹き出しは宛先と絵文字だけ・平気は青(%s)" % line["text"])
-	_check(HeadOverlay.kind_color("dropped") == HeadOverlay.COLOR_LOOK and HeadOverlay.kind_color("trust") == HeadOverlay.COLOR_LOOK,
-			"吹き出しの色: 見ろ系(落ちてる・信じて)は赤")
+	_check(bubbles.size() == 2 and bubbles.has(dropped) and bubbles.has(oops) and not bubbles.has(sender), "証拠: 吹き出しは大事な人の頭の上だけ")
+	_check(str((bubbles[oops] as Array)[0]["text"]).find(":") > 0, "証拠: 吹き出しは「送った人:言葉」(プレイ中と同じ)")
+	var badges := HeadOverlay.evidence_badges(s)
+	_check(badges.size() == 2 and str(badges[0][1]) != "" and str(badges[1][1]).find("10") >= 0, "証拠: バッジ2つと、時間のひとこと")
+	_check(HeadOverlay.kind_color("dropped") == HeadOverlay.COLOR_LOOK and HeadOverlay.kind_color("trust") == HeadOverlay.COLOR_LOOK \
+			and HeadOverlay.kind_color("safe") == HeadOverlay.COLOR_DONT, "吹き出しの色: 見ろ系は赤、見るな系は青")
 	# 結果の場面だけ、ゲストに届く。本当かウソかは届かない
 	var guest := GameState.new()
 	guest.apply_snapshot(s.snapshot())
 	_check(guest.round_dropped_on == -1 and guest.stamp_log.is_empty(), "証拠: 結果の場面の前はゲストに届かない")
 	s.phase = GameState.Phase.RESULT
 	guest.apply_snapshot(s.snapshot())
-	_check(guest.evidence_key_ids() == [key_a, key_b] and guest.evidence_for(sender).size() == 2, "証拠: 結果の場面でゲストにも届く")
+	_check(guest.evidence_key_ids() == [dropped, oops] and guest.evidence_received(dropped).size() == 3
+			and guest.evidence_received(oops).size() == 1, "証拠: 結果の場面でゲストにも同じ言葉が届く")
 	var leak := false
 	for st in guest.stamp_log:
 		if (st as Dictionary).has("truthful"):
@@ -2039,7 +2045,7 @@ func _test_vote_evidence() -> void:
 	_check(not leak, "証拠: 本当かウソかはゲストに届かない")
 	# 次のラウンドで消える
 	s.start_round(2)
-	_check(s.evidence_key_ids().is_empty(), "証拠: 次のラウンドで消える")
+	_check(s.evidence_key_ids().is_empty() and s.round_drop_t < 0.0, "証拠: 次のラウンドで消える")
 
 
 func _test_character_model() -> void:

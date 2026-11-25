@@ -6,13 +6,13 @@ extends CanvasLayer
 ## - 距離に関係なく、画面の上で同じ大きさ。画面の端(⚙ボタンの裏など)からはみ出さないように内側に寄せる
 ## - 重なりそうな札・吹き出しは少しずらす
 ## - スタンプを送る相手を選んでいるときは、その人の頭の上に「送る相手」の印
-## - 投票の間は、頭の上に「証拠」(落とされた人・お手つきの人に送った言葉。「→dog 👍」と宛先と絵文字だけ)
+## - 投票の間は、落とされた人・お手つきの人の頭の上に「証拠」(大事な時間に届いた言葉を、プレイ中と同じ吹き出しで再現)
 ## - 牛乳で前が白いときは名札を隠す(吹き出しは牛乳の上に出したまま)
 ## 見た目だけ。状態は読むだけで変えない(押されたスタンプは main が命令にする)。
 
 const FONT_SIZE := 18
 const BUBBLE_FONT := 20
-const EVIDENCE_FONT := 26
+const EVIDENCE_FONT := 24
 ## 吹き出し・名札を置かない上の帯(左上の札の下から)
 const TOP_LIMIT := 70.0
 ## 送れない相手(8人のときの両どなり・このラウンド送った人)の名札の濃さ
@@ -41,11 +41,10 @@ var _revealed := {}
 ## 全員のキャラ(自分も)
 var _models := {}
 var _self_id := -1
-## 投票の証拠: id -> 吹き出しの配列(送っていない人はなし)と、その画面の範囲(タップで一覧)
+## 投票の証拠: id -> 吹き出しの配列(大事な人だけ)
 var _vote_on := false
 var _evidence := {}
 var _ev_nodes := {}
-var _ev_rects := {}
 ## 吹き出しを置かない上の帯の高さ(投票の間は、上の「鬼の手下は誰?」の枠の下。main が決める)
 var _label_top := TOP_LIMIT
 
@@ -62,7 +61,6 @@ func build(state: GameState, models: Dictionary, show_personality: bool) -> void
 	_vote_on = false
 	_evidence.clear()
 	_ev_nodes.clear()
-	_ev_rects.clear()
 	for a in state.actors:
 		if a.id == state.local_player_id or not models.has(a.id):
 			continue
@@ -180,7 +178,7 @@ func send_target() -> int:
 	return _target
 
 
-## 投票の証拠を出す(on = false で消す)。ev: id -> [{"text", "kind"}](落とされた人・お手つきの人に送った言葉。2つまで)
+## 投票の証拠を出す(on = false で消す)。ev: id -> [{"text", "kind"}](大事な人に、大事な時間に届いた言葉)
 func set_vote_evidence(on: bool, ev: Dictionary = {}) -> void:
 	if not on:
 		ev = {}
@@ -192,7 +190,6 @@ func set_vote_evidence(on: bool, ev: Dictionary = {}) -> void:
 		for n in _ev_nodes[id]:
 			(n as Node).queue_free()
 	_ev_nodes.clear()
-	_ev_rects.clear()
 	for id in _evidence:
 		var list := []
 		for line in _evidence[id]:
@@ -211,14 +208,6 @@ func set_vote_evidence(on: bool, ev: Dictionary = {}) -> void:
 ## 吹き出しを置かない上の帯の高さ(画面の上の枠の下)
 func set_label_top(y: float) -> void:
 	_label_top = maxf(y, 8.0)
-
-
-## 画面のこの位置にある証拠の吹き出しの人(なければ -1)
-func evidence_hit(pos: Vector2) -> int:
-	for id in _ev_rects:
-		if (_ev_rects[id] as Rect2).grow(8.0).has_point(pos):
-			return id
-	return -1
 
 
 ## 牛乳で前が白い間は、名札を隠す(吹き出しは出したまま)
@@ -253,7 +242,6 @@ func update(state: GameState, cam: Camera3D) -> void:
 	var top := _label_top if _vote_on else TOP_LIMIT
 	_tag_rects.clear()
 	_head_rects.clear()
-	_ev_rects.clear()
 	# 手前(カメラに近い)人から置く
 	var order := _models.keys()
 	order.sort_custom(func(x, y): return _dist(x, cam) < _dist(y, cam))
@@ -316,8 +304,6 @@ func update(state: GameState, cam: Camera3D) -> void:
 		r = _fit(r, vp, top, placed, h * 0.3 + 6.0, 13)
 		placed.append(r)
 		_head_rects[id] = r
-		if _vote_on:
-			_ev_rects[id] = r
 		var y := r.end.y
 		for n in nodes:
 			var c := n as Control
@@ -430,41 +416,36 @@ func _dist(id: int, cam: Camera3D) -> float:
 	return cam.global_position.distance_to(m.global_position) if m and is_instance_valid(m) else 999.0
 
 
-## 証拠の1行(投票の画面。宛先と絵文字だけ: 「→dog 👍」)
-static func evidence_line(state: GameState, _sender: int, x: Dictionary) -> Dictionary:
-	var kind := str(x["kind"])
-	return {"text": "→%s %s" % [evidence_name(state, int(x["target"])), Texts.STAMP_EMOJI.get(kind, "")],
-			"kind": kind, "color": kind_color(kind)}
+## 投票の証拠: 大事な人(落とされた人・お手つきの人)の頭の上に、「大事な時間」に届いた言葉を再現する
+## (id -> [{"text": "送った人:言葉", "kind"}]。プレイ中の吹き出しと同じ形・意味の色)。多いときは新しい EVIDENCE_MAX 個
+const EVIDENCE_MAX := 4
 
 
-## 頭の上に出す証拠の吹き出し(id -> 行の配列)。落とされた人・お手つきの人に送った言葉だけ。送っていない人はなし
 static func evidence_bubbles(state: GameState) -> Dictionary:
 	var ev := {}
-	for a in state.actors:
+	for id in state.evidence_key_ids():
 		var lines := []
-		for x in state.evidence_for(a.id):
-			lines.append(evidence_line(state, a.id, x))
+		for x in state.evidence_received(int(id)):
+			var kind := str(x["kind"])
+			lines.append({"text": "%s:%s" % [evidence_name(state, int(x["sender"])), stamp_text(state, int(x["sender"]), kind)],
+					"kind": kind})
+		if lines.size() > EVIDENCE_MAX:
+			lines = lines.slice(lines.size() - EVIDENCE_MAX)
 		if not lines.is_empty():
-			ev[a.id] = lines
+			ev[int(id)] = lines
 	return ev
 
 
-## その人がこのラウンドで送った言葉の全部(タップしたときの一覧。これも宛先と絵文字だけ)
-static func evidence_sent_lines(state: GameState, sender: int) -> Array:
-	var lines := []
-	for x in state.stamps_sent_by(sender):
-		lines.append(evidence_line(state, sender, x))
-	return lines
-
-
-## 上の枠に並べる短いバッジ(「👇 落ちた先:dog」「💦 お手つき:cat」)
+## 上の枠に並べる短いバッジ(2つまで): [[見出し, ひとこと(その時間), 色]]
 static func evidence_badges(state: GameState) -> Array:
 	var out := []
 	if state.round_dropped_on >= 0:
-		out.append("👇 " + TranslationServer.translate("落ちた先:%s") % evidence_name(state, state.round_dropped_on))
+		out.append([TranslationServer.translate("落ちた先:%s") % evidence_name(state, state.round_dropped_on),
+				TranslationServer.translate("落とされてから届いた言葉"), Color("FFE27A")])
 	if not state.round_otetsuki.is_empty():
 		var names := []
 		for id in state.round_otetsuki:
 			names.append(evidence_name(state, int(id)))
-		out.append("💦 " + TranslationServer.translate("お手つき:%s") % TranslationServer.translate("、").join(names))
+		out.append([TranslationServer.translate("お手つき:%s") % TranslationServer.translate("、").join(names),
+				TranslationServer.translate("振り向く前%d秒の言葉") % int(GameConfig.EVIDENCE_OTETSUKI_WINDOW), Color("BFE3FF")])
 	return out

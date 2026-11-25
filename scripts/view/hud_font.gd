@@ -10,8 +10,6 @@ static var _font: Font
 ## 絵文字(Noto Color Emoji から、スタンプで使う 😨👍🥺 だけを切り出したもの。SIL Open Font License。
 ## assets/fonts/OFL-NotoColorEmoji.txt)。どの端末でも同じ絵になるように、日本語フォントの「代わりのフォント」にする
 const EMOJI := "res://assets/fonts/NotoColorEmoji-stamps.ttf"
-## 投票の画面のバッジの絵文字(👇 落ちた先・💦 お手つき。同じ Noto Color Emoji から切り出したもの)
-const EMOJI_BADGES := "res://assets/fonts/NotoColorEmoji-badges.ttf"
 ## 黒板の手書き文字(Yusei Magic。SIL Open Font License。assets/fonts/OFL-YuseiMagic.txt)
 const CHALK := "res://assets/fonts/YuseiMagic-Regular.ttf"
 static var _chalk: Font
@@ -36,7 +34,5 @@ static func get_font() -> Font:
 		if ResourceLoader.exists(EMOJI):
 			var emoji: Font = load(EMOJI)
 			var fb: Array[Font] = [emoji]
-			if ResourceLoader.exists(EMOJI_BADGES):
-				fb.append(load(EMOJI_BADGES))
 			_font.fallbacks = fb
 	return _font

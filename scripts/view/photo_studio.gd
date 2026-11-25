@@ -833,6 +833,7 @@ func _apply_vote() -> void:
 			_ev_layer.visible = false
 		return
 	_make_evidence()
+	_view._vote_cam_at = -100000
 	var keys := _state.evidence_key_ids()
 	_view.set_key_people(keys)
 	if ov:
@@ -864,13 +865,19 @@ func _make_evidence() -> void:
 	var dropped: int = _selected().id if _selected().id in seated else seated[0]
 	var others := seated.filter(func(id): return id != dropped)
 	var oops: int = others[rng.randi() % others.size()]
+	# (時刻: 30秒にお手つき、40秒に落とした。落とされた人は見つけていない)
 	_state.round_dropped_on = dropped
 	_state.round_otetsuki = [oops]
+	_state.round_otetsuki_t = {oops: 30.0}
+	_state.round_drop_t = 40.0
+	_state.round_found_t = -1.0
 	_state.stamp_log.clear()
 	var kinds := ["dropped", "safe", "trust"]
 	for a in _state.actors:
-		for i in rng.randi_range(0, 3):
-			var target: int = [dropped, oops, seated[rng.randi() % seated.size()]][rng.randi() % 3]
+		for i in rng.randi_range(0, 2):
+			var target: int = [dropped, oops][rng.randi() % 2]
 			if target == a.id:
 				continue
-			_state.stamp_log.append({"sender": a.id, "target": target, "kind": kinds[rng.randi() % kinds.size()], "truthful": true})
+			var t := rng.randf_range(41.0, 60.0) if target == dropped else rng.randf_range(21.0, 30.0)
+			_state.stamp_log.append({"sender": a.id, "target": target, "kind": kinds[rng.randi() % kinds.size()], "truthful": true, "t": t})
+	_state.stamp_log.sort_custom(func(x, y): return float(x["t"]) < float(y["t"]))

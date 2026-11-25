@@ -479,9 +479,8 @@ You can still send messages while sitting out"
 お手つき:%s,お手つき:%s,Wrong look: %s
   ・  ,  ・  ,  ・  
 、,、,", "
-%sが送った言葉,%sが送った言葉,Messages from %s
-このラウンドは何も送っていない,このラウンドは何も送っていない,Sent nothing this round
-閉じる,閉じる,Close
+落とされてから届いた言葉,落とされてから届いた言葉,messages after the drop
+振り向く前%d秒の言葉,振り向く前%d秒の言葉,messages %ds before looking
 見えない!,見えない!,Can't see!
 バシャッ!,バシャッ!,Splash!
 水鉄砲:,水鉄砲:,Water gun:

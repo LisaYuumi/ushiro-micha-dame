@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(565)
+## 一覧(564)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -360,9 +360,8 @@
 | お手つき:%s | Wrong look: %s |
 |   ・   |   ・   |
 | 、 | ,  |
-| %sが送った言葉 | Messages from %s |
-| このラウンドは何も送っていない | Sent nothing this round |
-| 閉じる | Close |
+| 落とされてから届いた言葉 | messages after the drop |
+| 振り向く前%d秒の言葉 | messages %ds before looking |
 | 見えない! | Can't see! |
 | バシャッ! | Splash! |
 | 水鉄砲: | Water gun: |

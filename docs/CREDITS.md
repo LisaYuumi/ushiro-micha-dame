@@ -27,7 +27,6 @@
   - 出どころ: npm の @fontsource/noto-color-emoji 5.3.2(元は https://github.com/googlefonts/noto-emoji)
   - ライセンス: SIL Open Font License 1.1(商用利用・同梱できる。フォントだけを売るのは不可)
   - 使い方: スタンプで使う3つの絵文字(U+1F628・U+1F44D・U+1F97A)と、言語ボタンの 🌐(U+1F310)だけを切り出して小さくした(色は SVG のデータを使う)。切り出したものも同じライセンス
-  - 投票の画面のバッジの 👇(U+1F447)・💦(U+1F4A6)も、同じ配布物から切り出した(`assets/fonts/NotoColorEmoji-badges.ttf`)
   - ファイル: `assets/fonts/NotoColorEmoji-stamps.ttf`、ライセンス全文: `assets/fonts/OFL-NotoColorEmoji.txt`
 - **ゲームの音・BGM**(落とし物の音・足音・振り向き・スタンプの声・チャイム・ジングル・BGM・環境音など、`assets/sounds/` の全部)
   - 作者: このプロジェクト。録音や既存の曲・音素材は使っていない。音の並び(チャイム・曲のメロディ)もオリジナル

@@ -1303,7 +1303,7 @@ func set_next_ui(show: bool, host: bool) -> void:
 
 ## 教室のままの投票の表示。show: 投票中か / voted・total: 投票した人数 / hint: 下の小さな案内 /
 ## skip: ルーム主の「発表へ」を出すか / skip_ready: 押せるか(始まって5秒たったか)
-## 投票の証拠: 「鬼の手下は誰?」のすぐ下に、短いバッジを並べる(「👇 落ちた先:dog」「💦 お手つき:cat」。空で消す)
+## 投票の証拠: 「鬼の手下は誰?」のすぐ下に、短いバッジを2つまで並べる(「落ちた先:dog」「お手つき:cat」と、その時間のひとこと。空で消す)
 var _vote_badges: HBoxContainer
 var _badge_texts: Array = []
 
@@ -1315,27 +1315,34 @@ func set_evidence_badges(texts: Array) -> void:
 	fill_badges(_vote_badges, texts)
 
 
-## バッジの列を作り直す(撮影モードでも使う)
+## バッジの列を作り直す(撮影モードでも使う)。texts: [[見出し, ひとこと, 地の色]]。絵文字は使わない(フォントにないと□になるので)
 static func fill_badges(row: HBoxContainer, texts: Array) -> void:
-	var now := []
-	for c in row.get_children():
-		now.append(((c as PanelContainer).get_child(0) as Label).text)
-	if now == texts:
+	if row.get_meta("texts", []) == texts:
 		return
+	row.set_meta("texts", texts.duplicate(true))
 	for c in row.get_children():
 		c.queue_free()
 		row.remove_child(c)
 	for t in texts:
 		var b := PanelContainer.new()
 		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var st := UiStyle.box(Color("FFF1C9"), true, 14, 3)
+		var st := UiStyle.box(t[2] as Color, true, 14, 3)
 		st.shadow_offset = Vector2.ZERO
 		st.content_margin_left = 12
 		st.content_margin_right = 12
 		st.content_margin_top = 0
-		st.content_margin_bottom = 2
+		st.content_margin_bottom = 3
 		b.add_theme_stylebox_override("panel", st)
-		b.add_child(UiStyle.label(str(t), 26, GameConfig.COLOR_INK))
+		var col := VBoxContainer.new()
+		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_theme_constant_override("separation", -4)
+		b.add_child(col)
+		var main_l := UiStyle.label(str(t[0]), 26, GameConfig.COLOR_INK)
+		main_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(main_l)
+		var sub := UiStyle.label("(" + str(t[1]) + ")", 17, GameConfig.COLOR_INK.lightened(0.25))
+		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(sub)
 		row.add_child(b)
 	row.visible = not texts.is_empty()
 
@@ -1357,73 +1364,6 @@ func vote_panel_bottom() -> float:
 	if _vote_panel == null or not _vote_panel.visible:
 		return 0.0
 	return _vote_panel.get_global_rect().end.y
-
-
-## 投票の証拠: タップしたキャラが、このラウンドで送った言葉の全部(小さな一覧)。どこかをタップすると閉じる
-var _evidence_list: PanelContainer
-
-
-func show_evidence_list(title: String, lines: Array) -> void:
-	hide_evidence_list()
-	_evidence_list = PanelContainer.new()
-	_evidence_list.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var st := UiStyle.box(GameConfig.COLOR_PAPER, true, 24, 5)
-	st.shadow_offset = Vector2(6, 8)
-	st.set_content_margin_all(24)
-	_evidence_list.add_theme_stylebox_override("panel", st)
-	_evidence_list.custom_minimum_size = Vector2(520, 0)
-	var col := VBoxContainer.new()
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_theme_constant_override("separation", 10)
-	_evidence_list.add_child(col)
-	var t := UiStyle.label(title, 34, GameConfig.COLOR_INK)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(t)
-	if lines.is_empty():
-		var none := UiStyle.label(tr("このラウンドは何も送っていない"), 28, GameConfig.COLOR_INK.lightened(0.3))
-		none.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		col.add_child(none)
-	# 送った順に、言葉の種類の色(落ちてる=赤・平気=緑・信じて=紫)。多いときは2列
-	var grid := GridContainer.new()
-	grid.columns = 2 if lines.size() > 6 else 1
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 8)
-	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(grid)
-	for line in lines:
-		var c: Color = line["color"]
-		var bst := UiStyle.box(c, true, 12, 3)
-		bst.shadow_offset = Vector2(2, 3)
-		bst.content_margin_left = 14
-		bst.content_margin_right = 14
-		bst.content_margin_top = 2
-		bst.content_margin_bottom = 4
-		var b := PanelContainer.new()
-		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		b.add_theme_stylebox_override("panel", bst)
-		b.add_child(UiStyle.label(str(line["text"]), 28 if grid.columns == 1 else 24, text_color_on(c)))
-		grid.add_child(b)
-	# 閉じるボタン(画面のどこをタップしても閉じる。うっかり投票にならないように、閉じるだけ)
-	var close := Button.new()
-	close.text = tr("閉じる")
-	close.custom_minimum_size = Vector2(220, 64)
-	close.focus_mode = Control.FOCUS_NONE
-	close.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	UiStyle.button(close, true, 30)
-	col.add_child(close)
-	_top.add_child(_evidence_list)
-	UiStyle.center(_evidence_list)
-
-
-func hide_evidence_list() -> void:
-	if _evidence_list and is_instance_valid(_evidence_list):
-		_evidence_list.queue_free()
-	_evidence_list = null
-
-
-func is_evidence_list_open() -> bool:
-	return _evidence_list != null and is_instance_valid(_evidence_list)
 
 
 func set_vote_ui(show: bool, voted: int = 0, total: int = 0, hint: String = "", skip: bool = false, skip_ready: bool = false,

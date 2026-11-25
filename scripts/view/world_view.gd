@@ -2709,21 +2709,24 @@ func _update_vote_view(state: GameState, delta: float) -> void:
 
 
 ## 投票の画面のカメラ(自分の席の後ろの高いところから、輪を見る。撮影モードでも使う)。
-## 全員の頭(とその上のラベル)と胸が画面に入る範囲で、できるだけ近づく(キャラが画面いっぱいに大きく映るように)。
-## 重いので、投票の画面になったときと、そのあと2秒ごとに計算しなおす
+## 全員の頭と足もと(名札)が画面に入る範囲で、できるだけ近づく。大事な人は頭の上の吹き出しの分も入れ、その人たちがよく見える角度を選ぶ。
+## 投票の画面になったときに1回だけ計算する(撮影モードは、証拠を作り直したとき)
 ## 見下ろす角度の候補(ラジアン)。いちばんキャラが大きく(近く)映る角度を選ぶ
 ## (低すぎると、手前の人のラベルが奥の人の顔にかぶるので、ある程度は見下ろす)
 const VOTE_CAM_PITCHES := [0.62, 0.75, 0.88, 1.0]
-## 画面の上の枠とラベルの分、頭を置かない上の帯(px)と、左右のよゆう(px)
-const VOTE_CAM_TOP_PX := 215.0
+## 画面の上の枠の分、頭を置かない上の帯(px)と、左右のよゆう(px)
+const VOTE_CAM_TOP_PX := 150.0
+## 大事な人の頭の上に、吹き出し(いくつか)を積むための高さ(m)
+const VOTE_CAM_BUBBLE_ROOM := 1.1
 const VOTE_CAM_SIDE_PX := 110.0
 var _vote_cam_cache := Transform3D.IDENTITY
 var _vote_cam_at := -100000
 
 
 func vote_camera_transform(state: GameState) -> Transform3D:
+	# (投票の画面に入ったときに1回だけ決める。とちゅうで変えると、発表の間にカメラが動いてしまう)
 	var now := Time.get_ticks_msec()
-	if now - _vote_cam_at < 2000:
+	if _vote_cam_at >= 0:
 		return _vote_cam_cache
 	_vote_cam_at = now
 	_vote_cam_cache = _fit_vote_camera(state)
@@ -2741,9 +2744,11 @@ func _fit_vote_camera(state: GameState) -> Transform3D:
 			p = state.seat_positions[me.seat_index]
 		if Vector2(p.x, p.z).length() > 0.3:
 			base = Vector3(p.x, 0.0, p.z).normalized()
-	# 映したい点: 全員の頭の上(吹き出しの下のふち)と足もと(名札)
+	# 映したい点: 全員の頭の上と足もと(名札)。大事な人(落とされた人・お手つきの人)は、頭の上の吹き出しの分も
 	var heads: Array[Vector3] = []
 	var chests: Array[Vector3] = []
+	var key_feet: Array[Vector3] = []
+	var keys := state.evidence_key_ids()
 	for id in _actor_nodes:
 		var m := _actor_nodes[id] as CharacterModel
 		if m == null or not is_instance_valid(m):
@@ -2754,6 +2759,9 @@ func _fit_vote_camera(state: GameState) -> Transform3D:
 		heads.append(m.tag_anchor())
 		# (足もとの名札も入るように、足もと)
 		chests.append(m.global_position)
+		if id in keys:
+			heads.append(m.tag_anchor() + Vector3(0, VOTE_CAM_BUBBLE_ROOM, 0))
+			key_feet.append(m.global_position)
 	var vp := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(1280, 720)
 	var aspect := vp.x / maxf(vp.y, 1.0)
 	var tan_v := tan(deg_to_rad(55.0) / 2.0)
@@ -2773,12 +2781,13 @@ func _fit_vote_camera(state: GameState) -> Transform3D:
 		if t == Transform3D.IDENTITY:
 			partial = _vote_cam_at_dist(Vector3(0, 0.6, 0), dir, _vote_cam_max_dist(Vector3(0, 0.6, 0), dir))
 			continue
-		# キャラの大きさ = 胸までの近さの平均(近いほど大きく映る)
+		# キャラの大きさ = 近さの平均(近いほど大きく映る)。大事な人がいれば、その人たちがよく見える角度
 		var inv := t.affine_inverse()
+		var pts: Array[Vector3] = key_feet if not key_feet.is_empty() else chests
 		var depth := 0.0
-		for p in chests:
+		for p in pts:
 			depth += -(inv * p).z
-		depth /= maxf(float(chests.size()), 1.0)
+		depth /= maxf(float(pts.size()), 1.0)
 		if depth < best_depth:
 			best_depth = depth
 			best = t

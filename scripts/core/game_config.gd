@@ -273,6 +273,8 @@ const HEART_FALL := 1.6
 const ONI_NEAR_STEP_BOOST_DB := 6.0
 ## 画面のふちを暗くする濃さ(いちばん近いとき)
 const DANGER_VIGNETTE_ALPHA := 0.75
+## 投票の証拠: お手つきの人の頭の上に再現する言葉は、振り向く直前のこの秒数に届いたものだけ
+const EVIDENCE_OTETSUKI_WINDOW := 10.0
 
 # --- 人の鬼の歩き方 ---
 ## スティックを歩く向きと反対に、この割合より倒したら止まる

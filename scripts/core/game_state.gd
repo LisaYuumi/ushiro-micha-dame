@@ -159,6 +159,11 @@ var castle_size := 1.0
 ## 投票の「証拠」: このラウンドで落とされた人と、お手つきになった人(大事な人)
 var round_dropped_on := -1
 var round_otetsuki: Array = []
+## 「大事な時間」を決める時刻(ラウンドの始めからの秒): 落とした時刻・落とされた人が振り向いて見つけた時刻(-1 = 見つけていない)・
+## お手つきした時刻(id -> 秒)。言葉の記録にも送った時刻 "t" を入れる
+var round_drop_t := -1.0
+var round_found_t := -1.0
+var round_otetsuki_t := {}
 ## 夜の教室: 雷で明るい残りの秒数(0 なら暗いまま)
 var lightning_left: float = 0.0
 var blackout: bool = false
@@ -472,6 +477,9 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	_chase_slips = {}
 	round_dropped_on = -1
 	round_otetsuki = []
+	round_drop_t = -1.0
+	round_found_t = -1.0
+	round_otetsuki_t = {}
 	_drop_in_blackout = false
 	_drop_mona = false
 	round_serial += 1
@@ -657,6 +665,8 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 		st["looked"] = true
 	if has_handkerchief_behind(a):
 		events.append({"type": "found", "actor": actor_id})
+		if actor_id == round_dropped_on and round_found_t < 0.0:
+			round_found_t = _round_time
 		_count_found(actor_id)
 		_count_instinct(actor_id)
 		# 本当の「落ちてる!」などで振り向けた: 教えた人に点
@@ -670,6 +680,7 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 		_stat(actor_id, "otetsuki")
 		if not (actor_id in round_otetsuki):
 			round_otetsuki.append(actor_id)
+			round_otetsuki_t[actor_id] = _round_time
 		if shell_seat >= 0 and shell_seat == a.seat_index:
 			# カモメの貝がらにだまされた
 			_stat(actor_id, "gull_fooled")
@@ -910,7 +921,7 @@ func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
 		"scorable": seat_pass_age[target.seat_index] <= GameConfig.STAMP_SCORE_RECENT_PASS,
 	})
 	events.append({"type": "stamp", "sender": sender_id, "target": target_id, "kind": kind})
-	stamp_log.append({"sender": sender_id, "target": target_id, "kind": kind, "truthful": truthful})
+	stamp_log.append({"sender": sender_id, "target": target_id, "kind": kind, "truthful": truthful, "t": _round_time})
 	return true
 
 
@@ -1311,6 +1322,9 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"round_dropped_on": round_dropped_on if phase == Phase.RESULT else -1,
 		"round_otetsuki": round_otetsuki if phase == Phase.RESULT else [],
 		"round_stamps": _public_stamp_log() if phase == Phase.RESULT else [],
+		"round_drop_t": round_drop_t,
+		"round_found_t": round_found_t,
+		"round_otetsuki_t": round_otetsuki_t if phase == Phase.RESULT else {},
 		"stamp_words": stamp_words,
 		"stamp_langs": stamp_langs,
 		"stamp_picks": stamp_picks,
@@ -1392,6 +1406,9 @@ func apply_snapshot(s: Dictionary) -> void:
 	castle_size = s.get("castle_size", 1.0)
 	round_dropped_on = s.get("round_dropped_on", -1)
 	round_otetsuki = s.get("round_otetsuki", [])
+	round_drop_t = s.get("round_drop_t", -1.0)
+	round_found_t = s.get("round_found_t", -1.0)
+	round_otetsuki_t = s.get("round_otetsuki_t", {})
 	# (言葉の記録は結果の場面だけ届く。ほかの場面では、ゲストの記録をそのままにする)
 	if phase == Phase.RESULT and s.has("round_stamps"):
 		stamp_log = s["round_stamps"]
@@ -1500,40 +1517,37 @@ func evidence_key_ids() -> Array:
 	return out
 
 
-## その人が大事な人に送った言葉(大事な人ごとに最後に送ったもの。2つまで)[{"target", "kind"}]
-func evidence_for(actor_id: int) -> Array:
-	var keys := evidence_key_ids()
-	var last := {}
-	var order := []
+## 投票の証拠: その大事な人に「大事な時間」に届いた言葉(届いた順)[{"sender", "kind"}]
+## - 落とされた人: 落とされた瞬間から、その人が振り向いて見つけるか、ラウンドが終わるまで
+##   (落とされる前に届いた言葉は出さない。そのときは本当に何もなかったので、正直な人がウソつきに見えないように)
+## - お手つきの人: 振り向く直前の EVIDENCE_OTETSUKI_WINDOW 秒(10秒)
+func evidence_received(actor_id: int) -> Array:
+	var out := []
 	for st in stamp_log:
-		if int(st["sender"]) != actor_id or not (int(st["target"]) in keys):
+		if int(st["target"]) != actor_id:
 			continue
-		var t := int(st["target"])
-		if not last.has(t):
-			order.append(t)
-		last[t] = st["kind"]
-	var out := []
-	for t in order:
-		if out.size() >= 2:
-			break
-		out.append({"target": t, "kind": last[t]})
+		var t: float = st.get("t", -1.0)
+		if _in_evidence_window(actor_id, t):
+			out.append({"sender": int(st["sender"]), "kind": st["kind"]})
 	return out
 
 
-## その人がこのラウンドで送った言葉の全部(送った順)[{"target", "kind"}]
-func stamps_sent_by(actor_id: int) -> Array:
-	var out := []
-	for st in stamp_log:
-		if int(st["sender"]) == actor_id:
-			out.append({"target": int(st["target"]), "kind": st["kind"]})
-	return out
+func _in_evidence_window(actor_id: int, t: float) -> bool:
+	if actor_id == round_dropped_on and round_drop_t >= 0.0 and t >= round_drop_t - 0.001 \
+			and (round_found_t < 0.0 or t <= round_found_t + 0.001):
+		return true
+	if round_otetsuki_t.has(actor_id):
+		var ot: float = round_otetsuki_t[actor_id]
+		if t <= ot + 0.001 and t >= ot - GameConfig.EVIDENCE_OTETSUKI_WINDOW:
+			return true
+	return false
 
 
 ## 参加者に送ってよい言葉の記録(本当かウソかは消す)
 func _public_stamp_log() -> Array:
 	var out := []
 	for st in stamp_log:
-		out.append({"sender": st["sender"], "target": st["target"], "kind": st["kind"]})
+		out.append({"sender": st["sender"], "target": st["target"], "kind": st["kind"], "t": st.get("t", -1.0)})
 	return out
 
 
@@ -2079,10 +2093,12 @@ func _drop() -> void:
 	if target:
 		_stat(target.id, "dropped_on")
 		round_dropped_on = target.id
+		round_drop_t = _round_time
 	_drop_in_blackout = blackout
 	_drop_mona = is_night() and round_index == Items.NIGHT_MONA_LISA
 	if target and target.looking_back:
 		events.append({"type": "found", "actor": target.id})
+		round_found_t = _round_time
 		_count_found(target.id)
 		_count_instinct(target.id)
 

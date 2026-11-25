@@ -919,7 +919,6 @@ func _update_evidence(on: bool) -> void:
 			_evidence_on = false
 			_evidence_sig = ""
 			hud.set_evidence_badges([])
-			hud.hide_evidence_list()
 			view.set_key_people([])
 			if ov:
 				ov.set_vote_evidence(false)
@@ -934,11 +933,6 @@ func _update_evidence(on: bool) -> void:
 	view.set_key_people(keys)
 	if ov:
 		ov.set_vote_evidence(true, HeadOverlay.evidence_bubbles(state))
-
-
-func _show_evidence_list(id: int) -> void:
-	AudioDirector.click()
-	hud.show_evidence_list(tr("%sが送った言葉") % HeadOverlay.evidence_name(state, id), HeadOverlay.evidence_sent_lines(state, id))
 
 
 ## 結果カードの1行。delta: このラウンドで増えた分も出すか
@@ -1040,15 +1034,6 @@ func _on_tap(pos: Vector2) -> void:
 		return
 	# 手下を当てる投票: 人(か名札)をタップすると、その人に投票(全員がそろうまで入れ直せる)
 	if state.phase == GameState.Phase.RESULT:
-		# 証拠の一覧が開いていたら、閉じるだけ(うっかり投票にならないように)
-		if hud.is_evidence_list_open():
-			hud.hide_evidence_list()
-			return
-		# 証拠の吹き出しをタップ: そのキャラがこのラウンドで送った言葉の全部を一覧で見る
-		var ev_id := ov.evidence_hit(pos)
-		if ev_id >= 0 and _evidence_on:
-			_show_evidence_list(ev_id)
-			return
 		var me_id := state.local_player_id
 		if state.voting_open and state.can_vote(me_id):
 			var vid := ov.tag_hit(pos)
