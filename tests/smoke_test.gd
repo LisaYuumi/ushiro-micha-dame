@@ -2023,15 +2023,23 @@ func _test_snapshot_round_trip() -> void:
 
 
 func _test_vote_evidence() -> void:
-	# お手つきした人は、このラウンドの大事な人になる(時刻も記録)
+	# お手つきした人は、このラウンドの大事な人になる。振り向いた瞬間に届いていた言葉も覚える
 	var s := GameState.new()
 	s.start_round(1)
-	s.set_looking_back(s.local_player_id, true)
-	_check(s.round_otetsuki == [s.local_player_id] and s.round_otetsuki_t.has(s.local_player_id), "証拠: お手つきした人と時刻が記録される")
-	# 大事な時間に届いた言葉だけ
+	var me := s.local_player_id
+	var others := []
+	for a in s.actors:
+		if a.role == GameState.Role.SEATED and a.id != me:
+			others.append(a.id)
+	s.active_stamps[me] = [{"sender": others[0], "kind": "safe", "born_angle": s.oni_angle, "truthful": false,
+			"sender_role": 0, "looked": false, "credited": false, "scorable": false}]
+	s.set_looking_back(me, true)
+	_check(s.round_otetsuki == [me] and (s.round_otetsuki_seen.get(me, []) as Array).size() == 1,
+			"証拠: お手つきした人と、そのとき届いていた言葉が記録される")
+	# 落とされた人: 落とされたあとの言葉の最後の3つ
 	var ids := []
 	for a in s.actors:
-		if a.role == GameState.Role.SEATED or a.id == s.local_player_id:
+		if a.role == GameState.Role.SEATED or a.id == me:
 			ids.append(a.id)
 	var dropped: int = ids[1]
 	var oops: int = ids[2]
@@ -2040,33 +2048,33 @@ func _test_vote_evidence() -> void:
 	s.round_drop_t = 40.0
 	s.round_found_t = 55.0
 	s.round_otetsuki = [oops]
-	s.round_otetsuki_t = {oops: 30.0}
+	s.round_otetsuki_seen = {oops: [{"sender": sender, "kind": "trust"}, {"sender": s.oni_id, "kind": "safe"}]}
 	s.stamp_log = [
 		{"sender": sender, "target": dropped, "kind": "safe", "truthful": true, "t": 35.0},   # 落とされる前: 出さない
-		{"sender": sender, "target": dropped, "kind": "safe", "truthful": false, "t": 45.0},  # 落とされてから: 出す
+		{"sender": sender, "target": dropped, "kind": "safe", "truthful": false, "t": 41.0},  # 落とされてから(4つのうち最初): 出さない
+		{"sender": ids[4], "target": dropped, "kind": "safe", "truthful": false, "t": 45.0},
 		{"sender": s.oni_id, "target": dropped, "kind": "dropped", "truthful": true, "t": 50.0},
+		{"sender": ids[5], "target": dropped, "kind": "trust", "truthful": true, "t": 54.0},
 		{"sender": sender, "target": dropped, "kind": "trust", "truthful": true, "t": 58.0},  # 見つけたあと: 出さない
-		{"sender": sender, "target": oops, "kind": "dropped", "truthful": false, "t": 15.0},  # 振り向く15秒前: 出さない
-		{"sender": sender, "target": oops, "kind": "trust", "truthful": false, "t": 25.0},    # 5秒前: 出す
 		{"sender": sender, "target": ids[4], "kind": "safe", "truthful": true, "t": 45.0},    # 大事な人以外: 出さない
 	]
 	_check(s.evidence_key_ids() == [dropped, oops], "証拠: 大事な人は落とされた人とお手つきの人")
 	var got := s.evidence_received(dropped)
-	_check(got.size() == 2 and got[0]["kind"] == "safe" and got[1]["sender"] == s.oni_id,
-			"証拠: 落とされた人は、落とされてから見つけるまでに届いた言葉だけ(%s)" % str(got))
-	_check(s.evidence_received(oops).size() == 1, "証拠: お手つきの人は、振り向く前%d秒の言葉だけ" % int(GameConfig.EVIDENCE_OTETSUKI_WINDOW))
-	_check(s.evidence_received(ids[4]).is_empty(), "証拠: 大事な人でなければ出ない")
+	_check(got.size() == 3 and got[0]["sender"] == ids[4] and got[2]["sender"] == ids[5],
+			"証拠: 落とされた人は、落とされてから振り向く直前の3つ(%s)" % str(got))
 	s.round_found_t = -1.0
-	_check(s.evidence_received(dropped).size() == 3, "証拠: 見つけなければ、ラウンドの終わりまで")
+	var got2 := s.evidence_received(dropped)
+	_check(got2.size() == 3 and got2[2]["kind"] == "trust" and got2[0]["sender"] == s.oni_id,
+			"証拠: 気づかなかったら、ラウンドが終わる直前の3つ")
+	_check(s.evidence_received(oops).size() == 2, "証拠: お手つきの人は、振り向いたときに届いていた言葉")
+	_check(s.evidence_received(ids[4]).is_empty(), "証拠: 大事な人でなければ出ない")
 	var bubbles := HeadOverlay.evidence_bubbles(s)
 	_check(bubbles.size() == 2 and bubbles.has(dropped) and bubbles.has(oops) and not bubbles.has(sender), "証拠: 吹き出しは大事な人の頭の上だけ")
 	_check(str((bubbles[oops] as Array)[0]["text"]).find(":") > 0, "証拠: 吹き出しは「送った人:言葉」(プレイ中と同じ)")
-	# 5つより多いときは、新しい5つと「ほかN件」
-	for k in 4:
-		s.stamp_log.append({"sender": ids[5 + k % 2], "target": dropped, "kind": "safe", "truthful": true, "t": 46.0 + k})
-	var many: Array = HeadOverlay.evidence_bubbles(s)[dropped]
-	_check(many.size() == HeadOverlay.EVIDENCE_MAX + 1 and many[many.size() - 1]["kind"] == "more",
-			"証拠: 最大5つと「ほか%d件」" % (s.evidence_received(dropped).size() - HeadOverlay.EVIDENCE_MAX))
+	s.round_otetsuki_seen = {oops: []}
+	var none: Array = HeadOverlay.evidence_bubbles(s)[oops]
+	_check(none.size() == 1 and none[0]["kind"] == "none", "証拠: 1つも届いていなければ「だれも教えてくれなかった…」")
+	s.round_otetsuki_seen = {oops: [{"sender": sender, "kind": "trust"}, {"sender": s.oni_id, "kind": "safe"}]}
 	_check(HeadOverlay.kind_color("dropped") == HeadOverlay.COLOR_LOOK and HeadOverlay.kind_color("trust") == HeadOverlay.COLOR_LOOK \
 			and HeadOverlay.kind_color("safe") == HeadOverlay.COLOR_DONT, "吹き出しの色: 見ろ系は赤、見るな系は青")
 	# 結果の場面だけ、ゲストに届く。本当かウソかは届かない
@@ -2076,7 +2084,7 @@ func _test_vote_evidence() -> void:
 	s.phase = GameState.Phase.RESULT
 	guest.apply_snapshot(s.snapshot())
 	_check(guest.evidence_key_ids() == [dropped, oops] and guest.evidence_received(dropped).size() == s.evidence_received(dropped).size()
-			and guest.evidence_received(oops).size() == 1, "証拠: 結果の場面でゲストにも同じ言葉が届く")
+			and guest.evidence_received(oops).size() == 2, "証拠: 結果の場面でゲストにも同じ言葉が届く")
 	var leak := false
 	for st in guest.stamp_log:
 		if (st as Dictionary).has("truthful"):

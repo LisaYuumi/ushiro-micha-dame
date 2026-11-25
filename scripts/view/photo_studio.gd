@@ -871,7 +871,7 @@ func _make_evidence() -> void:
 	# (時刻: 30秒にお手つき、40秒に落とした。落とされた人は見つけていない)
 	_state.round_dropped_on = dropped
 	_state.round_otetsuki = [oops]
-	_state.round_otetsuki_t = {oops: 30.0}
+	_state.round_otetsuki_seen = {}
 	_state.round_drop_t = 40.0
 	_state.round_found_t = -1.0
 	_state.stamp_log.clear()
@@ -884,3 +884,9 @@ func _make_evidence() -> void:
 			var t := rng.randf_range(41.0, 60.0) if target == dropped else rng.randf_range(21.0, 30.0)
 			_state.stamp_log.append({"sender": a.id, "target": target, "kind": kinds[rng.randi() % kinds.size()], "truthful": true, "t": t})
 	_state.stamp_log.sort_custom(func(x, y): return float(x["t"]) < float(y["t"]))
+	# (お手つきの人: 振り向いたときに届いていた言葉 = 最後の3つ)
+	var seen := []
+	for st in _state.stamp_log:
+		if int(st["target"]) == oops:
+			seen.append({"sender": st["sender"], "kind": st["kind"]})
+	_state.round_otetsuki_seen[oops] = seen.slice(maxi(seen.size() - 3, 0))

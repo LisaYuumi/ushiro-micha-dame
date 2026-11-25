@@ -358,7 +358,7 @@
 | 記念写真 | Group Photo |
 |   ・   |   ・   |
 | 、 | ,  |
-| ほか%d件 | +%d more |
+| だれも教えてくれなかった… | Nobody told me... |
 | 見えない! | Can't see! |
 | バシャッ! | Splash! |
 | 水鉄砲: | Water gun: |

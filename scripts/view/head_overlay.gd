@@ -122,7 +122,7 @@ static func _bubble_style(bg: Color) -> StyleBoxFlat:
 
 ## 言葉の意味の色: 見ろ系(落ちてる・信じて)は赤、見るな系(平気)は青
 static func kind_color(kind: String) -> Color:
-	if kind == "more":
+	if kind == "none":
 		return Color("8A8A8A")
 	return COLOR_DONT if kind == Stamps.SAFE else COLOR_LOOK
 
@@ -432,12 +432,9 @@ func _dist(id: int, cam: Camera3D) -> float:
 	return cam.global_position.distance_to(m.global_position) if m and is_instance_valid(m) else 999.0
 
 
-## 投票の証拠: 大事な人(落とされた人・お手つきの人)の頭の上に、「大事な時間」に届いた言葉を再現する
-## (id -> [{"text": "送った人:言葉", "kind"}]。プレイ中の吹き出しと同じ形・意味の色)。多いときは新しい EVIDENCE_MAX 個と、
-## いちばん上に灰色の「ほか2件」({"text", "kind": "more"})
-const EVIDENCE_MAX := 5
-
-
+## 投票の証拠: 大事な人(落とされた人・お手つきの人)の頭の上に、届いていた言葉を再現する
+## (id -> [{"text": "送った人:言葉", "kind"}]。プレイ中の吹き出しと同じ形・意味の色・3つまで)。
+## 1つも届いていなければ、灰色の「だれも教えてくれなかった…」
 static func evidence_bubbles(state: GameState) -> Dictionary:
 	var ev := {}
 	for id in state.evidence_key_ids():
@@ -446,10 +443,7 @@ static func evidence_bubbles(state: GameState) -> Dictionary:
 			var kind := str(x["kind"])
 			lines.append({"text": "%s:%s" % [evidence_name(state, int(x["sender"])), stamp_text(state, int(x["sender"]), kind)],
 					"kind": kind})
-		if lines.size() > EVIDENCE_MAX:
-			var more := lines.size() - EVIDENCE_MAX
-			lines = lines.slice(lines.size() - EVIDENCE_MAX)
-			lines.append({"text": TranslationServer.translate("ほか%d件") % more, "kind": "more"})
-		if not lines.is_empty():
-			ev[int(id)] = lines
+		if lines.is_empty():
+			lines.append({"text": TranslationServer.translate("だれも教えてくれなかった…"), "kind": "none"})
+		ev[int(id)] = lines
 	return ev
