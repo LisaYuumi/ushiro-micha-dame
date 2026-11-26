@@ -331,10 +331,16 @@ func _check_heart() -> void:
 	_check(v._step_player.volume_db > GameConfig.FOOTSTEP_VOLUME_DB + 1.0, "ドキドキ: 鬼の足音が大きくなる")
 	var hud := Hud.new()
 	root.add_child(hud)
-	# 画面のまん中の大きなお知らせは重ならない(役のカードのあとにイベントの名前)
-	hud.show_popup_card("あなたは鬼の手下!", [], Color.PURPLE, "", 3.0)
+	# 画面のまん中の大きなお知らせは重ならない。同じときに来たら、順位 → 役のカード → イベントの名前の順
 	hud.show_event("蜃気楼!", "見えているものが、本物とはかぎらない…", Color.BLUE)
-	_check(hud._popup != null and hud._ann_queue.size() == 1, "お知らせ: 役のカードとイベントの名前は重ならず、順番に出る")
+	hud.show_popup_card("あなたは鬼の手下!", [], Color.PURPLE, "", 3.0)
+	hud.announce_message("ラウンド 2", Color.GRAY, 2.0)
+	hud._run_announcements()
+	_check(hud._message.visible and hud._ann_queue.size() == 2, "お知らせ: まずラウンドのお知らせ(ほかは順番待ち)")
+	hud._ann_until = 0
+	hud._run_announcements()
+	_check(hud._popup != null and is_instance_valid(hud._popup) and hud._ann_queue.size() == 1 and int(hud._ann_queue[0]["prio"]) == 2,
+			"お知らせ: 次に役のカード、イベントの名前はそのあと")
 	hud._ann_until = 0
 	hud._run_announcements()
 	_check(hud._ann_queue.is_empty(), "お知らせ: 前のお知らせが終わったら、次を出す")

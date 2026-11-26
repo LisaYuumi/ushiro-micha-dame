@@ -152,21 +152,30 @@ var _ann_queue: Array = []
 var _ann_until := 0
 
 
-func _announce(fn: Callable, dur: float) -> void:
-	var now := Time.get_ticks_msec()
-	if now >= _ann_until and _ann_queue.is_empty():
-		fn.call()
-		_ann_until = now + int(dur * 1000.0)
-	else:
-		_ann_queue.append({"fn": fn, "dur": dur})
+## prio: 同じときに来たら小さい順(0 = 順位・ラウンドのお知らせ、1 = 役のカード、2 = イベントの名前)。
+## (いつも次のフレームで出す。同じフレームに来たお知らせを、この順にならべるため)
+func _announce(fn: Callable, dur: float, prio: int = 1) -> void:
+	_ann_queue.append({"fn": fn, "dur": dur, "prio": prio, "n": _ann_serial})
+	_ann_serial += 1
+
+
+var _ann_serial := 0
 
 
 func _run_announcements() -> void:
 	if _ann_queue.is_empty() or Time.get_ticks_msec() < _ann_until:
 		return
-	var a: Dictionary = _ann_queue.pop_front()
-	(a["fn"] as Callable).call()
-	_ann_until = Time.get_ticks_msec() + int(float(a["dur"]) * 1000.0)
+	var best := 0
+	for i in _ann_queue.size():
+		var a: Dictionary = _ann_queue[i]
+		var b: Dictionary = _ann_queue[best]
+		if int(a["prio"]) < int(b["prio"]) or (int(a["prio"]) == int(b["prio"]) and int(a["n"]) < int(b["n"])):
+			best = i
+	var pick: Dictionary = _ann_queue[best]
+	_ann_queue.remove_at(best)
+	(pick["fn"] as Callable).call()
+	# (次のお知らせまで、少しだけ間をあける)
+	_ann_until = Time.get_ticks_msec() + int((float(pick["dur"]) + 0.25) * 1000.0)
 
 
 ## 順番待ちのお知らせを全部やめる(ロビーにもどったときなど)
@@ -182,7 +191,7 @@ func clear_announcements() -> void:
 
 ## ラウンドのお知らせ(「ラウンド 2: 上履き」)。ほかの大きなお知らせと重ならないように順番に
 func announce_message(text: String, outline: Color, seconds: float) -> void:
-	_announce(show_message.bind(text, outline, seconds), seconds)
+	_announce(show_message.bind(text, outline, seconds), seconds, 0)
 
 
 func _process(delta: float) -> void:
@@ -314,7 +323,7 @@ func show_result_card(title: String, sub: String, notes: Array, color: Color, ro
 
 ## 役のお知らせカード: 色のふちの白いカードに、大きい見出し・小さい札・ひとこと。seconds 秒で消える
 func show_popup_card(title: String, tags: Array, color: Color, hint: String, seconds: float) -> void:
-	_announce(_show_popup_card.bind(title, tags, color, hint, seconds), seconds + 0.45)
+	_announce(_show_popup_card.bind(title, tags, color, hint, seconds), seconds + 0.45, 1)
 
 
 func _show_popup_card(title: String, tags: Array, color: Color, hint: String, seconds: float) -> void:
@@ -1185,14 +1194,9 @@ func show_banner(text: String, color: Color, seconds: float, font_size: int = 84
 
 
 ## 1試合に1回のイベントの名前を大きく出し、下にひとこと
+## (役のカードと同じ形の、画面のまん中のカード。上の帯の札と並ばないように)
 func show_event(title: String, sub: String, color: Color) -> void:
-	_announce(_show_event.bind(title, sub, color), 2.7)
-
-
-func _show_event(title: String, sub: String, color: Color) -> void:
-	show_banner(title, color, 2.2, 80)
-	if sub != "":
-		show_message(sub, color.darkened(0.2), 2.6)
+	_announce(_show_popup_card.bind(title, [], color, sub, 2.2), 2.65, 2)
 
 
 ## 突風: 砂が舞って画面が見えにくい(alpha = 0 で消す)。砂のすじが流れる
@@ -1517,7 +1521,7 @@ var _standings_tween: Tween
 
 
 func show_standings(title: String, rows: Array, sub: String, seconds: float) -> void:
-	_announce(_show_standings.bind(title, rows, sub, seconds), seconds + 0.35)
+	_announce(_show_standings.bind(title, rows, sub, seconds), seconds + 0.35, 0)
 
 
 func _show_standings(title: String, rows: Array, sub: String, seconds: float) -> void:
