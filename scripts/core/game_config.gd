@@ -271,21 +271,32 @@ const BOT_NOTICE_HEAVY := 0.45
 ## 鬼が自分の後ろのこの距離(メートル)以内に来ると、自分の前の床に影が映る
 const ONI_SHADOW_RANGE := 3.0
 ## 影のいちばん濃いときの濃さ(0〜1)
-const ONI_SHADOW_ALPHA := 0.55
+const ONI_SHADOW_ALPHA := 0.8
 ## 鬼が自分のうしろ(影がのびる距離 ONI_SHADOW_RANGE の中)にいる間の「ドキドキ」(心臓の音「ドク・ドクン」):
 ## 3mあたり = 1分に70回・小さめ → すぐうしろ = 1分に140回・いちばん大きく。鳴っている間は BGM を下げる(半分くらい)
 const HEART_BPM_FAR := 70.0
 const HEART_BPM_NEAR := 140.0
 const HEART_DB_FAR := -9.0
 const HEART_DB_NEAR := 0.0
-const HEART_BGM_DUCK_DB := -6.0
+## 鳴っている間に BGM を下げる量(dB。-14 でほぼ聞こえないくらい)
+const HEART_BGM_DUCK_DB := -14.0
+## 鬼が離れて止まったときの「ふぅ…」の大きさ(dB)/はじめて心臓の音を聞いたときの説明を出す秒数
+const HEART_SIGH_DB := -8.0
+const HEART_HINT_TIME := 2.0
+## 画面のふちの脈打ち: いつもの濃さ(近さ×)・「ドクン」の濃さ・脈が引く速さ(1秒あたり)・
+## 遠いときのふちの広がり(1 = 画面の大きさ。大きいほど暗い部分が外に出て、ふちだけ)・「ドクン」で内側へ締まる量
+const DANGER_BASE_ALPHA := 0.4
+const DANGER_PULSE_ALPHA := 0.75
+const DANGER_PULSE_DECAY := 4.5
+const DANGER_FAR_SCALE := 1.25
+const DANGER_PULSE_SQUEEZE := 0.12
+## 自分の画面の汗のしずく(いちばん近いときの数)
+const HEART_SWEAT_MAX := 4
 ## ドキドキの強さが目標に追いつく速さ(1秒あたり。鬼が離れたら1〜2秒かけて小さくなって止まる)
 const HEART_RISE := 3.0
 const HEART_FALL := 0.7
 ## 鬼がうしろに近いとき、歩く足音を大きくする分(dB。いちばん近いとき)
-const ONI_NEAR_STEP_BOOST_DB := 6.0
-## 画面のふちを暗くする濃さ(いちばん近いとき)
-const DANGER_VIGNETTE_ALPHA := 0.75
+const ONI_NEAR_STEP_BOOST_DB := 10.0
 
 # --- 人の鬼の歩き方 ---
 ## スティックを歩く向きと反対に、この割合より倒したら止まる

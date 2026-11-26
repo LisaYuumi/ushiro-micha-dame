@@ -346,6 +346,25 @@ func _check_heart() -> void:
 	_check(hud._ann_queue.is_empty(), "お知らせ: 前のお知らせが終わったら、次を出す")
 	hud.set_danger(near)
 	_check(hud._danger != null and hud._danger.visible and hud._danger.modulate.a > 0.1, "ドキドキ: 画面のふちが暗くなる")
+	# 心臓の音の1拍ごとに、ふちがキュッと締まる(脈打つ)。少し赤みのある暗さ
+	var calm := hud._danger.modulate.a
+	var calm_size := hud._danger.size
+	hud.heart_pulse(1.0)
+	hud._update_danger()
+	_check(hud._danger.modulate.a > calm + 0.2 and hud._danger.size.x < calm_size.x, "ドキドキ: 「ドクン」でふちが濃く、内側へ締まる")
+	hud._pulse = 0.0
+	if ad:
+		var beats := [0]
+		var stops := [0]
+		ad.heart_beat.connect(func(_k: float) -> void: beats[0] += 1)
+		ad.heart_stopped.connect(func() -> void: stops[0] += 1)
+		ad._heart_wait = 0.0
+		ad.set_heart(0.8)
+		ad._process(0.05)
+		_check(beats[0] >= 1, "ドキドキ: 心臓の音の1拍ごとに、画面のふちへ合図を送る")
+		ad.set_heart(0.0)
+		ad._process(0.05)
+		_check(stops[0] == 1 and not ad._heart_on, "ドキドキ: 鬼が離れたら止まる(「ふぅ…」)")
 	oni.position = me.position - back * 2.0
 	# (鬼が離れたら、1〜2秒かけて小さくなって止まる)
 	for i in 10:

@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(586)
+## 一覧(587)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -331,7 +331,6 @@
 | まだだよ!みんなの言葉を待とう | Not yet! Wait for the messages |
 | スペースキーで振り向いてみよう(いまは何もないよ) | Press Space to look back (nothing's there right now) |
 | 「振り向く」ボタンで振り向いてみよう(いまは何もないよ) | Tap the Look back button (nothing's there right now) |
-| 鬼がうしろを通るよ… | The oni is passing behind you… |
 | でも、ウソをつく「鬼の手下」がまぎれている!<br>だれが何と言ったか、覚えておこう | But a lying "minion" is hiding among them!<br>Remember who said what |
 | じつは本当に落ちてるよ!<br>スペースキーで振り向いて拾おう | It really is behind you!<br>Press Space to look back and grab it |
 | じつは本当に落ちてるよ!<br>「振り向く」ボタンで拾おう | It really is behind you!<br>Tap Look back to grab it |
@@ -360,6 +359,8 @@
 | 、 | ,  |
 | だれも教えてくれなかった… | Nobody told me... |
 | いたずらっ子! | Prankster! |
+| ドクン…うしろを鬼が通っている! | Thump... the oni is right behind you! |
+| 鬼がうしろを通るよ…<br>「ドクン、ドクン」と心臓が鳴ったら、鬼がすぐうしろ! | The oni is passing behind you...<br>When your heart goes thump-thump, the oni is right behind! |
 | 言葉が勝手に書き換えられるかも… | Your words might get swapped... |
 | 蜃気楼! | Mirage! |
 | 見えているものが、本物とはかぎらない… | What you see may not be real... |

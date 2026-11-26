@@ -44,6 +44,8 @@ static var smooth_mode := -1
 static var screen_shake := true
 ## チュートリアル: 0 = まだ聞いていない、1 = 「あとで」かスキップ(もう聞かない)、2 = 最後までやった
 static var tutorial := 0
+## 心臓の音(鬼がうしろにいる合図)の説明を、もう見たか(はじめての1回だけ出す)
+static var heart_hint := false
 static var _loaded := false
 
 
@@ -97,6 +99,7 @@ static func load_saved() -> void:
 	screen_shake = bool(cfg.get_value("profile", "screen_shake", true))
 	bot_names = clean_bot_names(cfg.get_value("profile", "bot_names", []))
 	tutorial = clampi(int(cfg.get_value("profile", "tutorial", 0)), 0, 2)
+	heart_hint = bool(cfg.get_value("profile", "heart_hint", false))
 
 
 ## ボットの名前を、正しい形(9人分の文字。空は使わない)に直す
@@ -134,6 +137,7 @@ static func save() -> void:
 	cfg.set_value("profile", "screen_shake", screen_shake)
 	cfg.set_value("profile", "bot_names", bot_names)
 	cfg.set_value("profile", "tutorial", tutorial)
+	cfg.set_value("profile", "heart_hint", heart_hint)
 	cfg.save(PATH)
 
 

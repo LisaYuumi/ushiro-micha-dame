@@ -60,6 +60,9 @@ func _ready() -> void:
 	# 音: BGM と、場所のない効果音(ボタン・チャイム・ジングルなど)
 	audio = AudioDirector.new()
 	add_child(audio)
+	# 心臓の音に合わせて、画面のふちが脈打つ/はじめて聞いたときだけ意味を説明する
+	audio.heart_beat.connect(func(k: float) -> void: hud.heart_pulse(k))
+	audio.heart_started.connect(_on_heart_started)
 	audio.play_bgm("bgm_lobby")
 	state = GameState.new()
 	cmds = state
@@ -1013,6 +1016,15 @@ func _show_spoiler() -> void:
 
 func _ev_name(id: int) -> String:
 	return HeadOverlay.evidence_name(state, id)
+
+
+## はじめて心臓の音を聞いたときだけ、意味を小さく説明する(端末に覚えておく。2回目からは出さない)
+func _on_heart_started() -> void:
+	if Profile.heart_hint or _tutorial != null:
+		return
+	Profile.heart_hint = true
+	Profile.save()
+	hud.set_caption(tr("ドクン…うしろを鬼が通っている!"), GameConfig.HEART_HINT_TIME)
 
 
 # --- 点数は「必要な場面だけ」(GameConfig.SHOW_*)。全員の点数を常に出すことはしない ---

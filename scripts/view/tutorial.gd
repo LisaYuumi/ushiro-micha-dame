@@ -225,7 +225,7 @@ func _go(step: String) -> void:
 			_say(tr("鬼が自分のうしろを通ったら、\nまわりが言葉で教えてくれるよ"), true)
 		"wait_words":
 			s.oni_pause_left = 0.0
-			_say(tr("鬼がうしろを通るよ…"), false, _point_actor(s.oni_id))
+			_say(tr("鬼がうしろを通るよ…\n「ドクン、ドクン」と心臓が鳴ったら、鬼がすぐうしろ!"), false, _point_actor(s.oni_id))
 		"minion":
 			_say(tr("でも、ウソをつく「鬼の手下」がまぎれている!\nだれが何と言ったか、覚えておこう"), true)
 		"pick":

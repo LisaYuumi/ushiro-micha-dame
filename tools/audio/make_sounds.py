@@ -569,6 +569,18 @@ def prank_laugh():
     return norm(out, 0.6)
 
 
+def sigh():
+    # ほっとした「ふぅ…」: 息の音(のどの奥から口へぬける)が、ゆっくり弱くなる
+    d = 0.8
+    t = t_of(d)
+    breath = noise(d)
+    x = bandpass(breath, 350, 1800) * 0.8 + bandpass(breath, 1800, 3500) * 0.25
+    # 口の形(フォルマント)が「ふ」→「う」へ
+    x = x + voice(glide(190, 150, d), d, [(500, 0.15), (900, 0.08)], breath=0.9) * 0.12
+    e = np.minimum(t / 0.08, 1.0) * np.exp(-t * 3.2)
+    return norm(lowpass(x * e, 3000), 0.6)
+
+
 def heartbeat():
     # 心臓の「ドク・ドクン」(1拍): 1回目は短く軽く、2回目は少し強く。
     # 低い「ドン」(60〜100Hz)に、スマホの小さいスピーカーでも聞こえるよう「トッ」(150〜250Hz)を重ねる。
@@ -1341,6 +1353,7 @@ SOUNDS = {
     "shh": shh, "wind_gust": wind_gust, "gull": gull,
     "water_pyuu": water_pyuu, "zazaa": zazaa, "bashaa": bashaa,
     "heartbeat": heartbeat,
+    "sigh": sigh,
     "prank_erase": prank_erase, "prank_write": prank_write, "prank_laugh": prank_laugh,
 }
 

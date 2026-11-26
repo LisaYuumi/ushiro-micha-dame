@@ -196,6 +196,11 @@ func announce_message(text: String, outline: Color, seconds: float) -> void:
 
 func _process(delta: float) -> void:
 	_run_announcements()
+	# 心臓の音の脈打ち(ふち)と汗
+	if _pulse > 0.0:
+		_pulse = maxf(_pulse - delta * GameConfig.DANGER_PULSE_DECAY, 0.0)
+	_update_danger()
+	_update_sweat(delta)
 	# 牛乳: かかるとすぐ白く、終わるときはゆっくり晴れる
 	var want := 1.0 if _milk_on else 0.0
 	if _milk_a != want or (_milk_on and _milk.visible):
@@ -1231,17 +1236,22 @@ func _draw_gust() -> void:
 		_gust.draw_line(Vector2(x, y), Vector2(x - 120.0, y + 8.0), Color(0.95, 0.85, 0.65, a * 0.9), 4.0, true)
 
 
-## 鬼がうしろに近いとき、画面のふちを少し暗くする(0 で消す)。まん中は透明・ふちが黒の丸いグラデーション
+## 鬼がうしろに近いとき(心臓の音が鳴っている間)、画面のふちが、心臓の音に合わせて脈打つ(0 で消す)。
+## まん中は透明・ふちが少し赤みのある暗さの丸いグラデーション(画面と同じ大きさの絵を1枚だけ。軽く)。
+## 「ドク・ドクン」の1拍ごとに2回キュッと締まる(heart_pulse)。近いほど、ふちが内側まで濃い
 var _danger: TextureRect
+var _danger_level := 0.0
+var _pulse := 0.0
 
 
 func set_danger(level: float) -> void:
+	_danger_level = clampf(level, 0.0, 1.0)
 	if level <= 0.01 and _danger == null:
 		return
 	if _danger == null:
 		var g := Gradient.new()
-		g.offsets = PackedFloat32Array([0.0, 0.34, 1.0])
-		g.colors = PackedColorArray([Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0.05, 0, 0.08, 1)])
+		g.offsets = PackedFloat32Array([0.0, 0.3, 0.58, 0.8])
+		g.colors = PackedColorArray([Color(0.3, 0, 0.04, 0), Color(0.3, 0, 0.04, 0), Color(0.3, 0.0, 0.05, 0.85), Color(0.14, 0, 0.02, 1)])
 		var gt := GradientTexture2D.new()
 		gt.gradient = g
 		gt.fill = GradientTexture2D.FILL_RADIAL
@@ -1256,10 +1266,77 @@ func set_danger(level: float) -> void:
 		_danger.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(_danger)
 		move_child(_danger, 0)
-		# (画面に入れてから全面にする。先にすると、絵の大きさのままの四角になる)
-		_danger.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_danger.visible = level > 0.01
-	_danger.modulate.a = GameConfig.DANGER_VIGNETTE_ALPHA * clampf(level, 0.0, 1.0)
+	_update_danger()
+
+
+## 心臓の音の1拍(AudioDirector.heart_beat): ふちをキュッと締める
+func heart_pulse(strength: float) -> void:
+	if _danger_level > 0.01:
+		_pulse = maxf(_pulse, strength)
+
+
+func _update_danger() -> void:
+	if _danger == null:
+		return
+	var on := _danger_level > 0.01 or _pulse > 0.01
+	_danger.visible = on
+	if not on:
+		return
+	var vp := get_viewport().get_visible_rect().size
+	# 遠いときは絵を大きくして、暗い部分を画面の外へ(ふちだけ)。近いほど・「ドクン」のときほど内側まで
+	var sc := lerpf(GameConfig.DANGER_FAR_SCALE, 1.0, _danger_level) - _pulse * GameConfig.DANGER_PULSE_SQUEEZE
+	var sz := vp * maxf(sc, 0.9)
+	_danger.size = sz
+	_danger.position = (vp - sz) / 2.0
+	_danger.modulate.a = clampf(GameConfig.DANGER_BASE_ALPHA * _danger_level + GameConfig.DANGER_PULSE_ALPHA * _pulse, 0.0, 1.0)
+
+
+# --- 自分の画面の汗のしずく(鬼がうしろに近いとき。自分の画面だけ。近いほど増える。止まったらすっと引く) ---
+var _sweat: Control
+var _sweat_level := 0.0
+var _sweat_t := 0.0
+
+
+func _update_sweat(delta: float) -> void:
+	var want := _danger_level
+	_sweat_level = move_toward(_sweat_level, want, delta * (2.0 if want > _sweat_level else 1.6))
+	if _sweat_level <= 0.01:
+		if _sweat:
+			_sweat.visible = false
+		return
+	if _sweat == null:
+		_sweat = Control.new()
+		_sweat.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_sweat.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_sweat.draw.connect(_draw_sweat)
+		add_child(_sweat)
+		move_child(_sweat, 1)
+	_sweat_t += delta
+	_sweat.visible = true
+	_sweat.modulate.a = clampf(_sweat_level * 1.4, 0.0, 1.0)
+	_sweat.queue_redraw()
+
+
+func _draw_sweat() -> void:
+	var vp := _sweat.get_viewport_rect().size
+	var n := clampi(ceili(_sweat_level * float(GameConfig.HEART_SWEAT_MAX)), 1, GameConfig.HEART_SWEAT_MAX)
+	var ink := GameConfig.COLOR_INK
+	# 画面の上の左右(自分の顔の横のあたり)に、しずくがぽたぽた流れ落ちる
+	for k in n:
+		var side := -1.0 if k % 2 == 0 else 1.0
+		var x := vp.x * 0.5 + side * vp.x * (0.36 + 0.05 * float(k / 2))
+		var cyc := fposmod(_sweat_t * 0.6 + float(k) * 0.37, 1.0)
+		var y := vp.y * (0.2 + 0.12 * float(k / 2)) + cyc * 60.0
+		var r := 18.0
+		var c := Vector2(x, y)
+		var drop := PackedVector2Array([c + Vector2(0, -r * 1.8), c + Vector2(r * 0.8, -r * 0.2), c + Vector2(r * 0.55, r * 0.6),
+				c + Vector2(0, r * 0.85), c + Vector2(-r * 0.55, r * 0.6), c + Vector2(-r * 0.8, -r * 0.2)])
+		var a := 1.0 - cyc * 0.6
+		_sweat.draw_colored_polygon(drop, Color(0.55, 0.82, 1.0, a))
+		var loop := drop.duplicate()
+		loop.append(drop[0])
+		_sweat.draw_polyline(loop, Color(ink, a), 3.0, true)
+		_sweat.draw_circle(c + Vector2(-r * 0.25, 0), r * 0.18, Color(1, 1, 1, a))
 
 
 ## 画面の上のまん中に、役を出す(空文字で消す)。color の地に白い文字

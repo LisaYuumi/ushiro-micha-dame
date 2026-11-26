@@ -1901,8 +1901,9 @@ func _update_oni_shadow(state: GameState) -> void:
 	var toward := atan2(rel.x, rel.z)
 	var side := clampf(rel.dot(right) / maxf(dist, 0.01), -1.0, 1.0)
 	_oni_shadow.rotation.y = lerp_angle(me.yaw, toward, 0.5)
-	var length := 0.85 + 0.35 * near
-	_oni_shadow.scale = Vector3(0.7 + 0.3 * near, 1.0, length)
+	# (近いほど、自分の席にかかるように大きく・長く。はっきり分かるように)
+	var length := 0.95 + 0.6 * near
+	_oni_shadow.scale = Vector3(0.8 + 0.45 * near, 1.0, length)
 	# 自分の前(輪の内側)の床に、頭が前・足もとが自分の側になるように置く
 	_oni_shadow.position = me.position - back * (0.5 + 0.9 * length) + right * side * 0.35 + Vector3(0, 0.03, 0)
 	_oni_shadow_mat.albedo_color = Color(0, 0, 0, GameConfig.ONI_SHADOW_ALPHA * (0.4 + 0.6 * near))

@@ -80,6 +80,15 @@ var _duck := 0.0
 var _heart_test := 0.0
 
 
+## 心臓の音の1拍ごとの合図(画面のふちを、音に合わせて脈打たせる): strength = 「ドク」は小さく、「ドクン」は大きく(近さもかける)
+signal heart_beat(strength: float)
+## 心臓の音が鳴りはじめた(はじめての人に説明するため)/止まった(ほっとした「ふぅ…」のあと)
+signal heart_started
+signal heart_stopped
+var _heart_on := false
+var _heart_peak := 0.0
+
+
 ## 鬼がうしろに近い強さ(0〜1。0 で止まる)
 func set_heart(level: float) -> void:
 	_heart_level = clampf(level, 0.0, 1.0)
@@ -105,7 +114,19 @@ func _process(delta: float) -> void:
 	Sfx.set_bgm_duck(_duck)
 	if level <= 0.01:
 		_heart_wait = 0.0
+		if _heart_on:
+			# 鬼が離れて止まった: ほっとした「ふぅ…」(しっかり鳴っていたときだけ)
+			_heart_on = false
+			if _heart_peak >= 0.2 and _heart_test <= 0.0:
+				play("sigh", GameConfig.HEART_SIGH_DB)
+			_heart_peak = 0.0
+			heart_stopped.emit()
 		return
+	if not _heart_on:
+		_heart_on = true
+		if _heart_test <= 0.0:
+			heart_started.emit()
+	_heart_peak = maxf(_heart_peak, level)
 	if _heart_players.is_empty():
 		for i in 2:
 			var p := Sfx.player_2d(self)
@@ -121,6 +142,10 @@ func _process(delta: float) -> void:
 		p.volume_db = lerpf(GameConfig.HEART_DB_FAR, GameConfig.HEART_DB_NEAR, level) + randf_range(-1.0, 1.0)
 		p.pitch_scale = lerpf(1.0, 1.06, level) * randf_range(0.97, 1.03)
 		p.play()
+		# 画面のふちを「ドク」で小さく、「ドクン」で大きく締める(音の2つ目の打つ時刻に合わせる)
+		var k := lerpf(0.55, 1.0, level)
+		heart_beat.emit(0.5 * k)
+		get_tree().create_timer(0.19 / p.pitch_scale).timeout.connect(func() -> void: heart_beat.emit(k))
 
 
 func current_bgm() -> String:
