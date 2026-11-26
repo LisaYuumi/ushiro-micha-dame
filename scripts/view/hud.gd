@@ -173,6 +173,11 @@ func _run_announcements() -> void:
 func clear_announcements() -> void:
 	_ann_queue.clear()
 	_ann_until = 0
+	# (ロビーにもどったら、蜃気楼のモヤも消す)
+	_haze_amount = 0.0
+	_haze_want = 0.0
+	if _haze:
+		_haze.visible = false
 
 
 ## ラウンドのお知らせ(「ラウンド 2: 上履き」)。ほかの大きなお知らせと重ならないように順番に
@@ -1429,6 +1434,57 @@ func mirage_shimmer(seconds: float) -> void:
 		mat2.set_shader_parameter("amount", sin(v * PI))
 		mat2.set_shader_parameter("t", v * seconds), 0.0, 1.0, seconds)
 	tw.tween_callback(func() -> void: _shimmer.visible = false)
+
+
+## 蜃気楼のあいだずっと: 画面(3D だけ。名札や吹き出しは見やすいまま)に薄い白いかすみと、ゆらゆらしたモヤ。
+## いつからいつまで蜃気楼か分かるように。始まり・終わりは0.6秒でふわっと
+var _haze_layer: CanvasLayer
+var _haze: ColorRect
+var _haze_amount := 0.0
+var _haze_want := 0.0
+const HAZE_SHADER := """
+shader_type canvas_item;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
+uniform float amount = 0.0;
+uniform float t = 0.0;
+void fragment() {
+	vec2 uv = SCREEN_UV;
+	// ゆらゆら(下のほうほど強く。陽炎のように)
+	float low = smoothstep(0.25, 1.0, uv.y);
+	vec2 off = vec2(sin(uv.y * 55.0 + t * 3.2) * 0.0025, cos(uv.x * 38.0 + t * 2.4) * 0.0015) * (0.4 + low) * amount;
+	vec3 c = texture(screen_tex, uv + off).rgb;
+	// 白っぽいかすみ(ゆっくり流れるもやの濃淡)
+	float n = sin(uv.x * 7.0 + t * 0.6) * sin(uv.y * 5.0 - t * 0.45) * 0.5 + 0.5;
+	float n2 = sin(uv.x * 3.1 - t * 0.35 + sin(uv.y * 4.0 + t * 0.5)) * 0.5 + 0.5;
+	float mist = (0.2 + 0.14 * n + 0.12 * n2 + 0.08 * low) * amount;
+	c = mix(c, vec3(1.0, 0.97, 0.9), mist);
+	COLOR = vec4(c, 1.0);
+}
+"""
+
+
+func set_mirage_haze(on: bool) -> void:
+	_haze_want = 1.0 if on else 0.0
+	if _haze_want == 0.0 and _haze == null:
+		return
+	if _haze == null:
+		_haze_layer = CanvasLayer.new()
+		_haze_layer.layer = 0
+		add_child(_haze_layer)
+		_haze = ColorRect.new()
+		_haze.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var sh := Shader.new()
+		sh.code = HAZE_SHADER
+		var mat := ShaderMaterial.new()
+		mat.shader = sh
+		_haze.material = mat
+		_haze_layer.add_child(_haze)
+		_haze.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_haze_amount = move_toward(_haze_amount, _haze_want, get_process_delta_time() / 0.6)
+	_haze.visible = _haze_amount > 0.001
+	var m := _haze.material as ShaderMaterial
+	m.set_shader_parameter("amount", _haze_amount)
+	m.set_shader_parameter("t", Time.get_ticks_msec() / 1000.0)
 
 
 ## 自分の順位(右上の⚙の左に小さく「3位」。"" で消す)

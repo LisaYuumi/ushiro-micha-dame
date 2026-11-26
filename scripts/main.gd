@@ -457,6 +457,9 @@ func _physics_process(delta: float) -> void:
 	if state.gust_left > 0.0 and state.phase != GameState.Phase.RESULT:
 		g = GameConfig.GUST_ALPHA * clampf(minf(state.gust_left, GameConfig.GUST_TIME - state.gust_left) / 0.5, 0.0, 1.0)
 	hud.set_gust(g)
+	# 蜃気楼のあいだずっと、画面に薄いモヤ(いつからいつまでか分かるように)
+	hud.set_mirage_haze(state.mirage_on and not state.mirage_done
+			and (state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED))
 	# いたずらっ子のラウンドの間は、画面のすみにいたずらっ子
 	hud.set_prankster(state.prank_on and (state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED))
 	# 鬼がうしろに近いとき、画面のふちが少し暗くなる(心臓の音と同じ強さ)
