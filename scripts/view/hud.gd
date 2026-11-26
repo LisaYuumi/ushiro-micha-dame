@@ -146,7 +146,42 @@ func _ready() -> void:
 	_build_stamp_display()
 
 
+## 画面のまん中に出す大きなお知らせ(順位の一覧・ラウンドのお知らせ・役のカード・イベントの名前)は、
+## 重ならないように順番待ちにして1つずつ出す: [{"fn": Callable, "dur": 秒}]
+var _ann_queue: Array = []
+var _ann_until := 0
+
+
+func _announce(fn: Callable, dur: float) -> void:
+	var now := Time.get_ticks_msec()
+	if now >= _ann_until and _ann_queue.is_empty():
+		fn.call()
+		_ann_until = now + int(dur * 1000.0)
+	else:
+		_ann_queue.append({"fn": fn, "dur": dur})
+
+
+func _run_announcements() -> void:
+	if _ann_queue.is_empty() or Time.get_ticks_msec() < _ann_until:
+		return
+	var a: Dictionary = _ann_queue.pop_front()
+	(a["fn"] as Callable).call()
+	_ann_until = Time.get_ticks_msec() + int(float(a["dur"]) * 1000.0)
+
+
+## 順番待ちのお知らせを全部やめる(ロビーにもどったときなど)
+func clear_announcements() -> void:
+	_ann_queue.clear()
+	_ann_until = 0
+
+
+## ラウンドのお知らせ(「ラウンド 2: 上履き」)。ほかの大きなお知らせと重ならないように順番に
+func announce_message(text: String, outline: Color, seconds: float) -> void:
+	_announce(show_message.bind(text, outline, seconds), seconds)
+
+
 func _process(delta: float) -> void:
+	_run_announcements()
 	# 牛乳: かかるとすぐ白く、終わるときはゆっくり晴れる
 	var want := 1.0 if _milk_on else 0.0
 	if _milk_a != want or (_milk_on and _milk.visible):
@@ -274,6 +309,10 @@ func show_result_card(title: String, sub: String, notes: Array, color: Color, ro
 
 ## 役のお知らせカード: 色のふちの白いカードに、大きい見出し・小さい札・ひとこと。seconds 秒で消える
 func show_popup_card(title: String, tags: Array, color: Color, hint: String, seconds: float) -> void:
+	_announce(_show_popup_card.bind(title, tags, color, hint, seconds), seconds + 0.45)
+
+
+func _show_popup_card(title: String, tags: Array, color: Color, hint: String, seconds: float) -> void:
 	if _popup:
 		_popup.queue_free()
 	_popup = PanelContainer.new()
@@ -1142,6 +1181,10 @@ func show_banner(text: String, color: Color, seconds: float, font_size: int = 84
 
 ## 1試合に1回のイベントの名前を大きく出し、下にひとこと
 func show_event(title: String, sub: String, color: Color) -> void:
+	_announce(_show_event.bind(title, sub, color), 2.7)
+
+
+func _show_event(title: String, sub: String, color: Color) -> void:
 	show_banner(title, color, 2.2, 80)
 	if sub != "":
 		show_message(sub, color.darkened(0.2), 2.6)
@@ -1418,6 +1461,10 @@ var _standings_tween: Tween
 
 
 func show_standings(title: String, rows: Array, sub: String, seconds: float) -> void:
+	_announce(_show_standings.bind(title, rows, sub, seconds), seconds + 0.35)
+
+
+func _show_standings(title: String, rows: Array, sub: String, seconds: float) -> void:
 	hide_standings()
 	_standings = PanelContainer.new()
 	_standings.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1476,6 +1523,9 @@ func show_standings(title: String, rows: Array, sub: String, seconds: float) -> 
 
 
 func hide_standings() -> void:
+	# (タップで早く閉じたら、次のお知らせをすぐ出す)
+	if _standings and is_instance_valid(_standings):
+		_ann_until = mini(_ann_until, Time.get_ticks_msec())
 	if _standings_tween and _standings_tween.is_valid():
 		_standings_tween.kill()
 	if _standings and is_instance_valid(_standings):

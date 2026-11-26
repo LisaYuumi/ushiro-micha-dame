@@ -151,6 +151,7 @@ func back_to_lobby() -> void:
 	_close_titles()
 	_close_picker()
 	hud.hide_result_card()
+	hud.clear_announcements()
 	hud.hide_message()
 	hud.set_vote_ui(false)
 	hud.set_next_ui(false, false)
@@ -421,9 +422,9 @@ func _physics_process(delta: float) -> void:
 		# 発表のあと、自動で次のラウンドになった: 画面を作り直す
 		if state.round_serial != _seen_serial and not state.match_over:
 			_refresh_round()
-			# (順位の一覧を出しているときは、次のラウンドのお知らせは一覧の下に書いてある)
-			if not hud.is_standings_open():
-				hud.show_message(tr("ラウンド %d: %s") % [state.round_index + 1, state.item_name()], Color(0.3, 0.3, 0.3), 2.0)
+			# (順位の一覧を出すときは、次のラウンドのお知らせは一覧の下に書いてある)
+			if not _standings_this_round:
+				hud.announce_message(tr("ラウンド %d: %s") % [state.round_index + 1, state.item_name()], Color(0.3, 0.3, 0.3), 2.0)
 	if _stamp_target >= 0 and (state.get_actor(_stamp_target) == null or state.get_actor(_stamp_target).role != GameState.Role.SEATED
 			or (state.phase != GameState.Phase.WALKING and state.phase != GameState.Phase.DROPPED)):
 		_close_picker()
@@ -1027,9 +1028,14 @@ func _ranks_of(scores: Dictionary) -> Dictionary:
 
 
 ## ラウンドの合間: 順位と点数の一覧を少しだけ(前のラウンドから上がった人↑・下がった人↓)。最初のラウンドとチュートリアルでは出さない
+var _standings_this_round := false
+
+
 func _show_round_standings(prev_scores: Dictionary) -> void:
+	_standings_this_round = false
 	if not GameConfig.SHOW_ROUND_STANDINGS or state.round_index <= 0 or _tutorial != null or state.match_over:
 		return
+	_standings_this_round = true
 	var now := _ranks_of(state.scores)
 	# (前の点数がみんな0点(最初のラウンドのあと)のときは、↑↓をつけない。みんな同点の1位からの比べになるので)
 	var any_prev := false
