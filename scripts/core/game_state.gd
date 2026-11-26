@@ -154,6 +154,27 @@ var gust_left := 0.0
 var chime_on := false
 var shell_seat := -1
 var _event_angle := INF
+## いたずらっ子!: このラウンドで書き換えが起きるか・残りの回数・書き換えられた人・最後に書き換えたときの鬼の角度・書き換えの記録
+## prank_log: [{"sender", "target", "orig", "flipped"}](投票のあとのネタばらし・称号に使う)
+var prank_on := false
+var prank_left := 0
+var _pranked: Array = []
+var _last_prank_angle := -INF
+var prank_log: Array = []
+## ボットの言い直しの予定 [{"at"(ラウンドの秒), "sender", "target", "kind"}]
+var _bot_fixes: Array = []
+## 蜃気楼!: 起きている間か・本物が見える人(鬼以外から少し。ホストだけが全員分を知る。参加者には自分のことだけ)・
+## ニセの場所の席と、鬼がそこを通る角度(この角度を過ぎたらニセが現れる)・現れたニセの席・始まり/終わりの鬼の角度・
+## 終わった(true になったら、本物が全員に見える。ニセはすっと消える)
+var mirage_on := false
+var mirage_true: Array = []
+var _mirage_plan: Array = []
+var mirage_fakes_shown: Array = []
+var _mirage_end_angle := INF
+var mirage_done := false
+## 蜃気楼のネタばらし用(勝敗が出たあとに全員へ): 本物が見えていた人・ニセの場所の席の人
+var mirage_true_shown: Array = []
+var mirage_fake_people: Array = []
 ## 砂のお城の大きさ(1 = はじめ。抱えて走ると砂がこぼれて小さくなり、転ぶと崩れてもっと小さくなる)
 var castle_size := 1.0
 ## 投票の「証拠」: このラウンドで落とされた人と、お手つきになった人(大事な人)
@@ -542,7 +563,21 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	chime_on = false
 	shell_seat = -1
 	_event_angle = INF
-	if round_index == event_round and not (event_kind in ["blackout", "lightning"]):
+	prank_on = false
+	prank_left = 0
+	_pranked = []
+	_last_prank_angle = -INF
+	prank_log = []
+	_bot_fixes = []
+	mirage_on = false
+	mirage_true = []
+	_mirage_plan = []
+	mirage_fakes_shown = []
+	_mirage_end_angle = INF
+	mirage_done = false
+	mirage_true_shown = []
+	mirage_fake_people = []
+	if round_index == event_round and not (event_kind in ["blackout", "lightning", "mirage"]):
 		_event_angle = oni_angle + TAU * rng.randf_range(GameConfig.BLACKOUT_START_LAPS_MIN, GameConfig.BLACKOUT_START_LAPS_MAX)
 	var step := TAU / seat_count
 	next_seat_crossing = ceilf(oni_angle / step) * step
@@ -554,6 +589,9 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 		_plan_drop()
 		_plan_bot_milk()
 	events.append({"type": "round_start", "round": round_index, "item": item_name()})
+	# 蜃気楼は、落とす前に始める(鬼が歩き出したらすぐ)
+	if round_index == event_round and event_kind == "mirage":
+		_start_mirage()
 	_stat(oni, "oni_rounds")
 	# 座っている人(ボットも)から手下を選ぶ。8人のときは、ときどき2人。本人にだけ知らせる(手下どうしも知らない)
 	var count := 1
@@ -595,6 +633,8 @@ func tick(delta: float) -> void:
 	if (phase == Phase.WALKING or phase == Phase.DROPPED) and oni_angle >= _event_angle:
 		_event_angle = INF
 		_start_event(event_kind)
+	_tick_mirage()
+	_tick_bot_fixes()
 	if is_night() and (phase == Phase.WALKING or phase == Phase.DROPPED) and oni_angle >= _blackout_angle:
 		# 夜の教室は停電の代わりに雷: 一瞬だけ部屋全体が明るくなり、暗い席のうしろも見える
 		_blackout_angle = INF
@@ -674,7 +714,7 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 		_count_instinct(actor_id)
 		# 本当の「落ちてる!」などで振り向けた: 教えた人に点
 		for st in shown:
-			if st["scorable"] and Stamps.says_look(st["kind"]) and st["truthful"] and not st["credited"]:
+			if st["scorable"] and not st.get("prank", false) and Stamps.says_look(st["kind"]) and st["truthful"] and not st["credited"]:
 				st["credited"] = true
 				_award_help(st, actor_id)
 	else:
@@ -714,9 +754,16 @@ func set_looking_back(actor_id: int, value: bool) -> void:
 		})
 		# 嘘の「落ちてる!」などにだまされて振り向いた: 送った人に点
 		for st in shown:
-			if st["scorable"] and Stamps.says_look(st["kind"]) and not st["truthful"] and not st["credited"]:
+			if st["scorable"] and not st.get("prank", false) and Stamps.says_look(st["kind"]) and not st["truthful"] and not st["credited"]:
 				st["credited"] = true
 				_award_deceive(st, actor_id)
+			# いたずらっ子に書き換えられた言葉のせいで振り向いた: 送った人は「いたずらっ子の被害者」
+			if st.get("prank", false) and Stamps.says_look(st["kind"]):
+				_stat(st["sender"], "prank_victim")
+				_set_words(int(st["sender"]), "prank_words", [Texts.stamp(str(st["orig"])), Texts.stamp(str(st["kind"]))])
+			# 蜃気楼を信じた言葉で振り向いた
+			if st.get("mirage", false):
+				_stat(actor_id, "mirage_fooled")
 		# 1回でもお手つきしたら、輪から抜けて真ん中で体育座り(このラウンドは0点)
 		_go_out(a)
 
@@ -900,8 +947,16 @@ func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
 	if sender.stamps_left > 0:
 		sender.stamps_left -= 1
 	sender.stamped_targets.append(target_id)
-	# 本当のことを言ったか(あとで点数に使う)。「信じて!」は「見ろ」の意味として扱う
-	var truthful := Stamps.says_look(kind) == has_handkerchief_behind(target)
+	# 本当のことを言ったか(あとで点数に使う)。「信じて!」は「見ろ」の意味として扱う。
+	# (蜃気楼の間は、送った人に見えていたもので決める。蜃気楼のせいで間違えた言葉はウソにしない)
+	var truthful := Stamps.says_look(kind) == perceived_item_behind(sender_id, target)
+	var mirage_word := mirage_on and not mirage_done and not mirage_sees_real(sender_id) and Stamps.says_look(kind) \
+			and target.seat_index in mirage_fakes_shown
+	if mirage_on and not mirage_done and mirage_sees_real(sender_id) and truthful \
+			and (target.id == round_dropped_on or target.seat_index in mirage_fakes_shown):
+		# 蜃気楼の中で本物が見えていて、本当のことを伝えた
+		_stat(sender_id, "truth_seer")
+		_set_words(sender_id, "truth_words", [_name_of(target_id), Texts.stamp(kind)])
 	if not truthful:
 		lie_counts[sender_id] = int(lie_counts.get(sender_id, 0)) + 1
 		_stat(sender_id, "lies")
@@ -912,10 +967,29 @@ func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
 	_stat(sender_id, "stamps_sent")
 	if truthful:
 		_stat(sender_id, "stamps_true")
+	# いたずらっ子: ときどき、逆の意味の言葉に書き換える(点数は本人が押した言葉で決める)
+	var shown_kind := kind
+	var pranked := _should_prank(sender_id)
+	if pranked:
+		shown_kind = flip_stamp(kind)
+		prank_left -= 1
+		_pranked.append(sender_id)
+		_last_prank_angle = oni_angle
+		prank_log.append({"sender": sender_id, "target": target_id, "orig": kind, "flipped": shown_kind})
+		# (すぐ言い直せるように、同じ相手にもう1回送れる)
+		sender.stamped_targets.erase(target_id)
+		events.append({"type": "pranked", "sender": sender_id, "target": target_id, "orig": kind, "flipped": shown_kind,
+				"private_to": sender_id})
+		if sender.is_bot and rng.randf() < GameConfig.PRANK_BOT_FIX_CHANCE:
+			_bot_fixes.append({"at": _round_time + GameConfig.PRANK_BOT_FIX_DELAY * rng.randf_range(0.8, 1.4),
+					"sender": sender_id, "target": target_id, "kind": kind})
 	if not active_stamps.has(target_id):
 		active_stamps[target_id] = []
 	active_stamps[target_id].append({
-		"kind": kind,
+		"kind": shown_kind,
+		"orig": kind,
+		"prank": pranked,
+		"mirage": mirage_word,
 		"sender": sender_id,
 		# 点数は、送ったときの役で決まる(普通の人/手下/鬼)
 		"sender_role": stamp_role_of(sender_id),
@@ -927,8 +1001,9 @@ func send_stamp(sender_id: int, target_id: int, kind: String) -> bool:
 		# 鬼がついさっき後ろを通った人へのスタンプだけ、点数の対象
 		"scorable": seat_pass_age[target.seat_index] <= GameConfig.STAMP_SCORE_RECENT_PASS,
 	})
-	events.append({"type": "stamp", "sender": sender_id, "target": target_id, "kind": kind})
-	stamp_log.append({"sender": sender_id, "target": target_id, "kind": kind, "truthful": truthful, "t": _round_time})
+	# (ほかの人には、書き換えたあとの言葉を、ふつうの言葉と同じタイミングで届ける)
+	events.append({"type": "stamp", "sender": sender_id, "target": target_id, "kind": shown_kind})
+	stamp_log.append({"sender": sender_id, "target": target_id, "kind": shown_kind, "truthful": truthful, "t": _round_time})
 	return true
 
 
@@ -1310,7 +1385,16 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"chaser": chaser_id,
 		"vacant_seat": vacant_seat,
 		"result": result,
-		"stamps": active_stamps,
+		"stamps": _stamps_for(viewer),
+		# いたずらっ子・蜃気楼(人ごとに見えるものがちがう。だれが本物を見ているかは本人のことだけ)
+		"prank_on": prank_on,
+		"mirage_on": mirage_on,
+		"mirage_done": mirage_done,
+		"mirage_real": mirage_sees_real(viewer) if viewer >= 0 else true,
+		"mirage_fakes": mirage_fakes_shown if viewer < 0 or not mirage_sees_real(viewer) else [],
+		"prank_log": prank_log if phase == Phase.RESULT else [],
+		"mirage_true_shown": mirage_true_shown if phase == Phase.RESULT else [],
+		"mirage_fake_people": mirage_fake_people if phase == Phase.RESULT else [],
 		"round": round_index,
 		"stage": stage,
 		"scores": scores,
@@ -1398,6 +1482,14 @@ func apply_snapshot(s: Dictionary) -> void:
 	vacant_seat = s["vacant_seat"]
 	result = s["result"]
 	active_stamps = s["stamps"]
+	prank_on = s.get("prank_on", false)
+	mirage_on = s.get("mirage_on", false)
+	mirage_done = s.get("mirage_done", false)
+	mirage_true = [local_player_id] if bool(s.get("mirage_real", true)) and mirage_on else []
+	mirage_fakes_shown = s.get("mirage_fakes", [])
+	prank_log = s.get("prank_log", [])
+	mirage_true_shown = s.get("mirage_true_shown", [])
+	mirage_fake_people = s.get("mirage_fake_people", [])
 	round_index = s["round"]
 	stage = Items.clean_stage(str(s.get("stage", "classroom")))
 	scores = s["scores"]
@@ -1476,7 +1568,10 @@ func script_obstacle(actor_id: int, ahead: float, kind: String, clear: bool) -> 
 ## この試合のイベントを決める: ステージに合ったものからランダム(前の試合と同じものは、ほかがあれば選ばない)。
 ## 起きるラウンドは2〜4ラウンド目のどれか。停電と雷は blackout_round のしくみで起きる
 func _choose_event() -> void:
-	var cands: Array = (GameConfig.EVENTS_BY_STAGE.get(stage, GameConfig.EVENTS_BY_STAGE["classroom"]) as Array).duplicate()
+	var cands: Array = (GameConfig.EVENTS_BY_STAGE.get(stage, GameConfig.EVENTS_BY_STAGE["classroom"]) as Array).filter(
+			func(k): return not (k in GameConfig.EVENTS_OFF))
+	if cands.is_empty():
+		cands = ["teacher"]
 	if cands.size() > 1:
 		cands.erase(last_event_kind)
 	event_kind = cands[rng.randi_range(0, cands.size() - 1)]
@@ -1496,6 +1591,14 @@ func _start_event(kind: String) -> void:
 			gust_left = GameConfig.GUST_TIME
 		"chime":
 			chime_on = true
+		"prankster":
+			prank_on = true
+			var players := 0
+			for a in actors:
+				if a.id != oni_id:
+					players += 1
+			prank_left = GameConfig.PRANK_COUNT_SMALL if players <= GameConfig.PRANK_SMALL_MAX_PLAYERS else GameConfig.PRANK_COUNT
+			_last_prank_angle = oni_angle - GameConfig.PRANK_MIN_GAP_LAPS * TAU * 0.5
 		"gull":
 			# だれかのうしろに貝がら(落とし物が置かれる予定の席と、もう落ちている席はさける)
 			var seats := []
@@ -1513,6 +1616,149 @@ func _start_event(kind: String) -> void:
 			return
 	event_log.append({"round": round_index, "kind": kind})
 	events.append(e)
+
+
+## 参加者に送る、頭の上の言葉: 書き換える前の言葉(と書き換えられたこと)は、送った本人にだけ
+func _stamps_for(viewer: int) -> Dictionary:
+	if viewer < 0:
+		return active_stamps
+	var out := {}
+	for id in active_stamps:
+		var list := []
+		for st in active_stamps[id]:
+			var c: Dictionary = (st as Dictionary).duplicate()
+			if int(c["sender"]) != viewer:
+				c["orig"] = c["kind"]
+				c["prank"] = false
+			c.erase("mirage")
+			list.append(c)
+		out[id] = list
+	return out
+
+
+# --- いたずらっ子! ---
+
+## 逆の意味の言葉: 見るな(平気)→ 見ろ(落ちてる)、見ろ(落ちてる・信じて)→ 見るな(平気)
+static func flip_stamp(kind: String) -> String:
+	return Stamps.DROPPED if kind == Stamps.SAFE else Stamps.SAFE
+
+
+## この言葉を書き換えるか: いたずらっ子のラウンドで、回数が残っていて、その人はまだ書き換えられていなくて、
+## 前の書き換えから鬼が少し進んでいる(前半と後半にばらけるように)
+func _should_prank(sender_id: int) -> bool:
+	if not prank_on or prank_left <= 0 or sender_id in _pranked:
+		return false
+	if oni_angle - _last_prank_angle < GameConfig.PRANK_MIN_GAP_LAPS * TAU:
+		return false
+	return rng.randf() < GameConfig.PRANK_CHANCE
+
+
+## ボットの言い直し(書き換えられたら、ときどき同じ相手に本当に送りたかった言葉をもう一度)
+func _tick_bot_fixes() -> void:
+	if _bot_fixes.is_empty():
+		return
+	for f in _bot_fixes.duplicate():
+		if _round_time >= float(f["at"]):
+			_bot_fixes.erase(f)
+			if stamp_block_reason(int(f["sender"]), int(f["target"])) == "":
+				send_stamp(int(f["sender"]), int(f["target"]), str(f["kind"]))
+
+
+## 称号の理由に使う、実際の言葉(最後のものを残す)
+func _set_words(actor_id: int, key: String, words: Array) -> void:
+	if not match_stats.has(actor_id):
+		match_stats[actor_id] = {}
+	match_stats[actor_id][key] = words
+
+
+func _name_of(actor_id: int) -> String:
+	var a := get_actor(actor_id)
+	return a.display_name if a else "?"
+
+
+# --- 蜃気楼! ---
+
+func _start_mirage() -> void:
+	mirage_on = true
+	mirage_done = false
+	_mirage_end_angle = oni_angle + GameConfig.MIRAGE_LAPS * TAU
+	# 本物が見える人(鬼以外からランダム)
+	var others := []
+	for a in actors:
+		if a.id != oni_id and a.role == Role.SEATED:
+			others.append(a.id)
+	var n_true := GameConfig.MIRAGE_TRUE_SMALL if others.size() <= 4 else GameConfig.MIRAGE_TRUE_VIEWERS
+	others.shuffle()
+	mirage_true = others.slice(0, mini(n_true, others.size()))
+	# ニセの場所: 本物が落とされる予定の席とは別の席。鬼がそこを通りすぎた瞬間に現れる(蜃気楼が終わる前のどこか)
+	var team := others.size() - mirage_true.size()
+	var spots := GameConfig.MIRAGE_FAKE_SPOTS_BIG if team >= GameConfig.MIRAGE_TWO_SPOTS_MIN else GameConfig.MIRAGE_FAKE_SPOTS
+	var seats := []
+	for i in _occupied_seats():
+		if i != drop_target_seat:
+			seats.append(i)
+	seats.shuffle()
+	_mirage_plan = []
+	for k in mini(spots, seats.size()):
+		var seat: int = seats[k]
+		var ang := seat_angle(seat)
+		while ang <= oni_angle + 0.05:
+			ang += TAU
+		if ang >= _mirage_end_angle:
+			ang -= TAU
+		if ang <= oni_angle:
+			continue
+		_mirage_plan.append({"seat": seat, "angle": ang})
+	event_log.append({"round": round_index, "kind": "mirage"})
+	events.append({"type": "event", "kind": "mirage"})
+
+
+func _tick_mirage() -> void:
+	if not mirage_on or mirage_done:
+		return
+	if phase != Phase.WALKING and phase != Phase.DROPPED:
+		_end_mirage()
+		return
+	for p in _mirage_plan.duplicate():
+		if oni_angle >= float(p["angle"]):
+			_mirage_plan.erase(p)
+			var seat: int = p["seat"]
+			# (人の鬼が、もうその席に本当に落としていたら、ニセは出さない)
+			if handkerchief_on_floor and seat == drop_target_seat:
+				continue
+			mirage_fakes_shown.append(seat)
+			# 蜃気楼チームには、本物を落としたときとまったく同じ音と見え方(本物が見える人には何も起きない)
+			events.append({"type": "mirage_fake", "seat": seat, "pos": _ring_point(seat_angle(seat), GameConfig.DROP_RADIUS),
+					"weight": item_weight(), "not_for": mirage_true + [oni_id]})
+	if oni_angle >= _mirage_end_angle:
+		_end_mirage()
+
+
+func _end_mirage() -> void:
+	mirage_done = true
+	mirage_true_shown = mirage_true.duplicate()
+	mirage_fake_people = []
+	for seat in mirage_fakes_shown:
+		var a := get_actor_at_seat(int(seat))
+		if a:
+			mirage_fake_people.append(a.id)
+	events.append({"type": "mirage_end"})
+
+
+## 蜃気楼の間、この人には本物が見えるか(鬼と、本物が見える人。蜃気楼でなければ全員)
+func mirage_sees_real(viewer_id: int) -> bool:
+	if not mirage_on or mirage_done:
+		return true
+	return viewer_id == oni_id or viewer_id in mirage_true
+
+
+## この人に、その席のうしろに落とし物が見えているか(見えるはずの席だけ。蜃気楼チームには、本物のかわりにニセ)
+func perceived_item_behind(viewer_id: int, target: Actor) -> bool:
+	if target == null:
+		return false
+	if mirage_sees_real(viewer_id):
+		return has_handkerchief_behind(target)
+	return target.seat_index in mirage_fakes_shown
 
 
 ## 投票の証拠: このラウンドの大事な人(落とされた人・お手つきになった人)
@@ -1640,6 +1886,12 @@ func _end_stamp(target_id: int, st: Dictionary, judge: bool) -> void:
 	events.append({"type": "stamp_end", "target": target_id, "sender": st["sender"]})
 	# 「まだ平気」「ニセかも」(見るな)で、出ている間に振り向かなかった:
 	#   本当は落ちていた → だました / 本当に落ちていない → 教えた(振り向かずにすんだ)
+	# いたずらっ子に書き換えられた言葉は、本人が押した言葉で決める: 本当のことを送っていたら「教えた」(損をしないように)
+	if st.get("prank", false):
+		if judge and st["scorable"] and st["truthful"] and not st["credited"]:
+			st["credited"] = true
+			_award_help(st, target_id)
+		return
 	if judge and not Stamps.says_look(st["kind"]) and st["scorable"] and not st["looked"]:
 		if st["truthful"]:
 			_award_help(st, target_id)
@@ -1990,6 +2242,11 @@ func _finish(winner_id: int, loser_id: int, reason: String) -> void:
 				_stat(loser_id, "skeleton_fail")
 		"missed":
 			_stat(loser_id, "missed")
+			# いたずらっ子に「見るな」に書き換えられた言葉のせいで見逃した: 送った人は「いたずらっ子の被害者」
+			for p in prank_log:
+				if int(p["target"]) == loser_id and not Stamps.says_look(str(p["flipped"])):
+					_stat(int(p["sender"]), "prank_victim")
+					_set_words(int(p["sender"]), "prank_words", [Texts.stamp(str(p["orig"])), Texts.stamp(str(p["flipped"]))])
 			_stat(winner_id, "ninja")
 			if _drop_in_blackout:
 				_stat(loser_id, "blackout_missed")

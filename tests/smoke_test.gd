@@ -596,7 +596,7 @@ func _test_titles() -> void:
 			ok = false
 	_check(ok, "称号: 理由の文は称号ごとに2〜3通り")
 	# すごい称号は金色、それ以外は紫
-	var gold := ["名探偵", "名演技賞", "野生の勘", "韋駄天", "忍者", "フェイクの達人", "逃げ足No.1", "バナナ職人"]
+	var gold := ["名探偵", "名演技賞", "野生の勘", "韋駄天", "忍者", "フェイクの達人", "逃げ足No.1", "バナナ職人", "真実を見た人"]
 	var tone_ok := true
 	for d in Titles.LIST + Titles.EXTRA:
 		if (d["tone"] == "good") != (d["title"] in gold):
@@ -1079,7 +1079,16 @@ func _test_events() -> void:
 	_check(repeats == 0, "イベント: 同じイベントが2試合続けて起きない(%d回)" % repeats)
 	s.stage = "beach"
 	s.start_match(5)
-	_check(s.event_kind in ["gust", "gull"], "イベント: 海辺は突風かカモメ(%s)" % s.event_kind)
+	_check(s.event_kind in ["prankster", "mirage"], "イベント: 海辺はいたずらっ子か蜃気楼(%s)" % s.event_kind)
+	# いまは起こさないイベント(カミナリ・突風・チャイム・カモメ)は、どの舞台でも選ばれない
+	var off_seen := false
+	for st in ["classroom", "night", "beach"]:
+		s.stage = st
+		for m in 10:
+			s.start_match(300 + m)
+			if s.event_kind in GameConfig.EVENTS_OFF:
+				off_seen = true
+	_check(not off_seen, "イベント: カミナリ・突風・チャイム・カモメは起こさない")
 	# 先生の見回り: だれも言葉を送れない
 	s.stage = "classroom"
 	s.start_match(3)
@@ -1109,6 +1118,114 @@ func _test_events() -> void:
 	_check(victim.role == GameState.Role.OUT and int(s.match_stats.get(victim.id, {}).get("gull_fooled", 0)) == 1,
 			"イベント: 貝がらだけならお手つき(カモメにだまされた)")
 	_check(s.event_log.size() >= 1, "イベント: 起きたイベントを記録する")
+
+
+## いたずらっ子!: 送った言葉が逆の意味に書き換わる(同じ人は1回まで・回数まで)。ほかの人には書き換えたあとの言葉だけ
+func _test_prankster() -> void:
+	var s := GameState.new()
+	s.start_match(21)
+	s.take_events()
+	s._start_event("prankster")
+	_check(s.prank_on and s.prank_left == GameConfig.PRANK_COUNT, "いたずらっ子: このラウンドは %d 回書き換える" % GameConfig.PRANK_COUNT)
+	_check(GameState.flip_stamp(Stamps.SAFE) == Stamps.DROPPED and GameState.flip_stamp(Stamps.DROPPED) == Stamps.SAFE
+			and GameState.flip_stamp(Stamps.TRUST) == Stamps.SAFE, "いたずらっ子: 逆の意味の言葉にだけ書き換える")
+	# いろいろな人がいろいろな人に送る(書き換えと書き換えの間は鬼が少し進むように)
+	var pranked_senders := {}
+	var first := {}
+	for round_try in 6:
+		for a in s.actors:
+			for b in s.actors:
+				if s.stamp_block_reason(a.id, b.id) != "":
+					continue
+				s.send_stamp(a.id, b.id, Stamps.SAFE)
+				break
+		s.oni_angle += GameConfig.PRANK_MIN_GAP_LAPS * TAU + 0.01
+		s.active_stamps = {}
+	for p in s.prank_log:
+		pranked_senders[p["sender"]] = int(pranked_senders.get(p["sender"], 0)) + 1
+		if first.is_empty():
+			first = p
+	var twice := false
+	for k in pranked_senders:
+		if int(pranked_senders[k]) > 1:
+			twice = true
+	_check(not s.prank_log.is_empty() and s.prank_log.size() <= GameConfig.PRANK_COUNT and not twice,
+			"いたずらっ子: 書き換えは %d 回まで、同じ人は1回まで(%d 回)" % [GameConfig.PRANK_COUNT, s.prank_log.size()])
+	if not first.is_empty():
+		_check(str(first["flipped"]) == Stamps.DROPPED and str(first["orig"]) == Stamps.SAFE, "いたずらっ子: 「平気」が「落ちてる」に")
+	# ほかの人には、書き換える前の言葉は届かない
+	s.active_stamps = {}
+	s.prank_left = 1
+	s._pranked = []
+	s._last_prank_angle = -INF
+	var x := s.get_actor_at_seat(1)
+	var y := s.get_actor_at_seat(4)
+	x.stamped_targets.clear()
+	var ok_sent := false
+	for k in 40:
+		s.active_stamps = {}
+		x.stamped_targets.clear()
+		s.send_stamp(x.id, y.id, Stamps.SAFE)
+		if not s._pranked.is_empty():
+			ok_sent = true
+			break
+	if ok_sent:
+		_check(not (y.id in x.stamped_targets), "いたずらっ子: 書き換えられたら、同じ相手にすぐ言い直せる")
+		var other := s.get_actor_at_seat(2).id
+		var st_other: Dictionary = (s.snapshot(other)["stamps"][y.id] as Array)[0]
+		var st_self: Dictionary = (s.snapshot(x.id)["stamps"][y.id] as Array)[0]
+		_check(st_other["kind"] == Stamps.DROPPED and not st_other["prank"] and st_other["orig"] == Stamps.DROPPED,
+				"いたずらっ子: ほかの人には、書き換えたあとの言葉だけ(ふつうの言葉と同じ)")
+		_check(st_self["prank"] and st_self["orig"] == Stamps.SAFE, "いたずらっ子: 送った本人だけが、書き換えられたことを知る")
+
+
+## 蜃気楼!(海辺): 本物が見える人は少し。ほかの全員には、鬼がうしろを通ったときに同じ席のうしろにニセが見える
+func _test_mirage() -> void:
+	var s := GameState.new()
+	s.stage = "beach"
+	s.start_match(31)
+	s.event_kind = "mirage"
+	s.event_round = s.round_index
+	s.restart_round()
+	var ev := s.take_events()
+	_check(s.mirage_on and _has(ev, "event"), "蜃気楼: 鬼が歩き出したらすぐ始まる(落とす前)")
+	_check(s.mirage_true.size() == GameConfig.MIRAGE_TRUE_VIEWERS and not (s.oni_id in s.mirage_true), "蜃気楼: 本物が見えるのは鬼以外の %d 人" % GameConfig.MIRAGE_TRUE_VIEWERS)
+	_check(not s._mirage_plan.is_empty() and int(s._mirage_plan[0]["seat"]) != s.drop_target_seat, "蜃気楼: ニセは本物が落とされる席とは別の席")
+	var seat: int = s._mirage_plan[0]["seat"]
+	var fake_ev := {}
+	for k in 4000:
+		s.tick(0.05)
+		for e in s.take_events():
+			if e["type"] == "mirage_fake":
+				fake_ev = e
+		if not fake_ev.is_empty() or s.phase == GameState.Phase.CHASE:
+			break
+	_check(not fake_ev.is_empty() and seat in s.mirage_fakes_shown, "蜃気楼: 鬼がその席のうしろを通ったときにニセが現れる")
+	if fake_ev.is_empty():
+		return
+	_check(s.oni_id in fake_ev["not_for"] and s.mirage_true[0] in fake_ev["not_for"], "蜃気楼: 本物が見える人と鬼には、ニセのお知らせは届かない")
+	var fake_target := s.get_actor_at_seat(seat)
+	var team := -1
+	for a in s.actors:
+		if a.id != s.oni_id and not (a.id in s.mirage_true) and a.id != fake_target.id and a.role == GameState.Role.SEATED:
+			team = a.id
+	_check(s.perceived_item_behind(team, fake_target) and not s.perceived_item_behind(s.mirage_true[0], fake_target),
+			"蜃気楼: 蜃気楼チームにはニセが見えて、本物が見える人には見えない")
+	var snap_team := s.snapshot(team)
+	var snap_true := s.snapshot(s.mirage_true[0])
+	_check(seat in snap_team["mirage_fakes"] and not snap_team["mirage_real"] and snap_true["mirage_fakes"].is_empty() and snap_true["mirage_real"],
+			"蜃気楼: だれがどちらかは本人のことだけ届く")
+	# 蜃気楼のせいで間違えた言葉は、ウソにしない
+	var lies_before := int(s.lie_counts.get(team, 0))
+	if s.stamp_block_reason(team, fake_target.id) == "":
+		s.send_stamp(team, fake_target.id, Stamps.DROPPED)
+		_check(int(s.lie_counts.get(team, 0)) == lies_before, "蜃気楼: ニセを信じた「落ちてる」はウソにならない")
+	# 鬼が1周したら終わる(本物が全員に見える)
+	for k in 4000:
+		s.tick(0.05)
+		if s.mirage_done or s.phase == GameState.Phase.CHASE:
+			break
+	_check(s.mirage_done and s.mirage_sees_real(team), "蜃気楼: 鬼が1周したら終わって、本物が全員に見える")
 
 
 ## 海辺の砂のお城: 抱えて走ると小さくなり、転ぶと崩れてもっと小さくなる。小さいほど少し速い
@@ -1149,6 +1266,8 @@ func _test_blackout() -> void:
 		_check(s0.event_kind in GameConfig.EVENTS_BY_STAGE["classroom"], "教室のイベントは教室のものから(%s)" % s0.event_kind)
 		_check((s0.event_kind == "blackout") == (s0.blackout_round >= 0), "停電のときだけ、停電するラウンドが決まる")
 	_test_events()
+	_test_prankster()
+	_test_mirage()
 	_test_castle()
 	# 停電するラウンドでは、ラウンドの途中でとつぜん停電する。拾って追いかけっこになったら電気がつく
 	var s := GameState.new()

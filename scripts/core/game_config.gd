@@ -394,10 +394,45 @@ const TITLE_DELAY := 3.0
 # --- 1試合に1回のイベント(ラウンド2〜4のどこか。BLACKOUT_ROUND_MIN〜MAX。始まる時は停電と同じ BLACKOUT_START_LAPS_*) ---
 ## ステージごとに起きるイベント(この中からランダム。同じイベントは2試合続けて起きにくい)
 const EVENTS_BY_STAGE := {
-	"classroom": ["blackout", "teacher", "chime"],
-	"night": ["lightning", "teacher"],
-	"beach": ["gust", "gull"],
+	"classroom": ["blackout", "teacher", "prankster"],
+	"night": ["teacher", "prankster", "lightning"],
+	"beach": ["prankster", "mirage", "gust", "gull", "chime"],
 }
+## いまは起こさないイベント(コードは残してある。ここから外すと、また候補になる)。
+## このイベントでしか出ない称号(Titles の "event")も出さない
+const EVENTS_OFF := ["lightning", "gust", "chime", "gull"]
+
+# --- いたずらっ子!(教室・海辺・夜の教室): 送った言葉が、勝手に逆の意味に書き換えられる ---
+## 1ラウンドに書き換える回数(同じ人は1回まで)。座っている人が4人以下のときは PRANK_COUNT_SMALL
+const PRANK_COUNT := 3
+const PRANK_COUNT_SMALL := 2
+const PRANK_SMALL_MAX_PLAYERS := 4
+## 書き換えるかどうかの確率(書き換えられる言葉のうち)と、書き換えと書き換えの間に、鬼がすすむ最低の角度(周の割合)
+const PRANK_CHANCE := 0.45
+const PRANK_MIN_GAP_LAPS := 0.22
+## 送った本人の画面の演出の長さ(秒): 飛んでくる・消す・書く・去る
+const PRANK_FLY_IN := 0.25
+const PRANK_ERASE := 0.35
+const PRANK_WRITE := 0.4
+const PRANK_FLY_OUT := 0.3
+## ボットが書き換えられたら、言い直しを送る確率/言い直すまでの秒数/このラウンドのボットが届いた言葉を信じる確率の倍率
+const PRANK_BOT_FIX_CHANCE := 0.5
+const PRANK_BOT_FIX_DELAY := 1.6
+const PRANK_BOT_TRUST_MULT := 0.75
+
+# --- 蜃気楼!(海辺だけ): 本物が見えるのは少しの人だけ。ほかの全員には、同じ場所にニセの落とし物が見える ---
+## 本物が見える人の数(鬼以外が4人以下なら MIRAGE_TRUE_SMALL)
+const MIRAGE_TRUE_VIEWERS := 2
+const MIRAGE_TRUE_SMALL := 1
+## ニセの場所の数(蜃気楼チームが MIRAGE_TWO_SPOTS_MIN 人以上のときは MIRAGE_FAKE_SPOTS_BIG)
+const MIRAGE_FAKE_SPOTS := 1
+const MIRAGE_FAKE_SPOTS_BIG := 1
+const MIRAGE_TWO_SPOTS_MIN := 6
+## 蜃気楼の長さ(鬼が何周するまで)
+const MIRAGE_LAPS := 1.0
+## 終わったときに、ニセがすっと薄くなる秒数/始まったときに画面のふちがゆらゆらする秒数
+const MIRAGE_FADE := 0.7
+const MIRAGE_SHIMMER := 1.0
 ## 先生の見回り: だれも言葉を送れない時間(秒)
 const TEACHER_TIME := 6.0
 ## 突風: 砂でみんなの画面が見えにくい時間(秒)と、見えにくさ(0〜1)

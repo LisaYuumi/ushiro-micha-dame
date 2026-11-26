@@ -456,6 +456,8 @@ func _physics_process(delta: float) -> void:
 	if state.gust_left > 0.0 and state.phase != GameState.Phase.RESULT:
 		g = GameConfig.GUST_ALPHA * clampf(minf(state.gust_left, GameConfig.GUST_TIME - state.gust_left) / 0.5, 0.0, 1.0)
 	hud.set_gust(g)
+	# いたずらっ子のラウンドの間は、画面のすみにいたずらっ子
+	hud.set_prankster(state.prank_on and (state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED))
 	# 鬼がうしろに近いとき、画面のふちが少し暗くなる(心臓の音と同じ強さ)
 	hud.set_danger(view.oni_near_level())
 	touch.set_milk_state(state.milk_left, _milk_aiming)
@@ -486,6 +488,7 @@ func _physics_process(delta: float) -> void:
 		hud.set_vote_ui(true, state.votes.size(), state.voter_count(), hint, mode != Mode.GUEST, state.can_skip_vote())
 	elif waiting_next and _tutorial == null:
 		hud.set_next_ui(true, mode != Mode.GUEST)
+		_show_spoiler()
 	else:
 		hud.set_vote_ui(false)
 		hud.set_next_ui(false, false)
@@ -669,7 +672,8 @@ func _send_to_guests(events: Array, delta: float) -> void:
 		_snapshot_left = SNAPSHOT_INTERVAL
 	for pid in _peer_actor:
 		var id: int = _peer_actor[pid]
-		var mine := events.filter(func(e: Dictionary) -> bool: return e.get("private_to", id) == id)
+		# (本人だけのお知らせ・蜃気楼のニセ(本物が見える人と鬼には送らない))
+		var mine := events.filter(func(e: Dictionary) -> bool: return e.get("private_to", id) == id and not (id in e.get("not_for", [])))
 		net.send_events(pid, mine)
 		if send_snapshot:
 			net.send_snapshot(pid, state.snapshot(id))
@@ -970,6 +974,41 @@ func _update_evidence(voting: bool, revealing: bool) -> void:
 	_evidence_sig = sig
 	if ov:
 		ov.set_vote_evidence(true, HeadOverlay.evidence_bubbles(state), view.vote_item_top(), state.round_otetsuki)
+
+
+## 投票の発表が終わったら、そのラウンドのイベントのネタばらしを短く(いたずらっ子の書き換え全部・蜃気楼で本物が見えていた人)
+var _spoiler_round := -1
+
+
+func _show_spoiler() -> void:
+	if _spoiler_round == state.round_serial:
+		return
+	_spoiler_round = state.round_serial
+	var lines := []
+	if not state.prank_log.is_empty():
+		var parts := []
+		for p in state.prank_log:
+			var sid := int(p["sender"])
+			parts.append(tr("%sの『%s』→『%s』") % [_ev_name(sid), HeadOverlay.stamp_text(state, sid, str(p["orig"])),
+					HeadOverlay.stamp_text(state, sid, str(p["flipped"]))])
+		lines.append(tr("いたずらっ子のしわざ:%s") % tr("、").join(parts))
+	if not state.mirage_true_shown.is_empty():
+		var seers := []
+		for id in state.mirage_true_shown:
+			seers.append(_ev_name(int(id)))
+		var fakes := []
+		for id in state.mirage_fake_people:
+			fakes.append(_ev_name(int(id)))
+		if fakes.is_empty():
+			lines.append(tr("本物が見えていたのは%sだけ!ほかのみんなには蜃気楼が見えていた") % tr("、").join(seers))
+		else:
+			lines.append(tr("本物が見えていたのは%sだけ!ほかのみんなには%sのうしろに蜃気楼が見えていた") % [tr("、").join(seers), tr("、").join(fakes)])
+	if not lines.is_empty():
+		hud.set_caption("\n".join(lines), 6.0)
+
+
+func _ev_name(id: int) -> String:
+	return HeadOverlay.evidence_name(state, id)
 
 
 # --- 点数は「必要な場面だけ」(GameConfig.SHOW_*)。全員の点数を常に出すことはしない ---
@@ -1312,9 +1351,17 @@ func _send_stamp(kind: String) -> void:
 
 func _show_event(e: Dictionary) -> void:
 	var me := state.local_player_id
-	if e.get("private_to", me) != me:
+	if e.get("private_to", me) != me or me in e.get("not_for", []):
 		return # ほかの人だけが知るお知らせ(ホストの画面でも出さない)
 	match e.get("type"):
+		"pranked":
+			# いたずらっ子に自分の言葉を書き換えられた(本人だけ): 演出が終わったら知らせる
+			var total := GameConfig.PRANK_FLY_IN + GameConfig.PRANK_ERASE + GameConfig.PRANK_WRITE + GameConfig.PRANK_FLY_OUT
+			var text := tr("いたずらっ子が、あなたの『%s』を『%s』に書き換えたよ!(%sに届いた)") % [
+					HeadOverlay.stamp_text(state, me, str(e["orig"])), HeadOverlay.stamp_text(state, me, str(e["flipped"])),
+					_short_name(int(e["target"]))]
+			# (長い文なので、画面の幅に収まる下の字幕で)
+			get_tree().create_timer(total).timeout.connect(func() -> void: hud.set_caption(text, 3.0))
 		"minion":
 			if e["actor"] == me:
 				hud.show_popup_card(tr("あなたは鬼の手下!"), [tr("だまして +1点"), tr("鬼が勝てば +2点")],
@@ -1459,6 +1506,11 @@ func _show_event(e: Dictionary) -> void:
 					hud.show_event(tr("チャイム!"), tr("このラウンドは、鬼が少し速くなる"), Color(0.75, 0.4, 0.2))
 				"gull":
 					hud.show_event(tr("カモメ!"), tr("だれかのうしろに貝がらが…"), Color(0.3, 0.55, 0.8))
+				"prankster":
+					hud.show_event(tr("いたずらっ子!"), tr("言葉が勝手に書き換えられるかも…"), Color(0.95, 0.55, 0.15))
+				"mirage":
+					hud.show_event(tr("蜃気楼!"), tr("見えているものが、本物とはかぎらない…"), Color(0.2, 0.6, 0.85))
+					hud.mirage_shimmer(GameConfig.MIRAGE_SHIMMER)
 		"last_lap":
 			# 鬼が最後の1周に入った合図
 			audio.play("lap", -4.0)

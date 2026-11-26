@@ -100,7 +100,7 @@ const LIST := [
 	{"title": "暗やみパニック賞", "key": "otetsuki_dark", "min": 2, "rule": "top", "tone": "funny", "rarity": 6,
 		"face": "shock", "gesture": "head",
 		"reasons": ["暗やみでお手つき %d回", "暗くてあわてて %d回お手つき"]},
-	{"title": "カミナリの目撃者", "key": "found_lightning", "min": 1, "rule": "any", "tone": "funny", "rarity": 7,
+	{"title": "カミナリの目撃者", "key": "found_lightning", "min": 1, "rule": "any", "tone": "funny", "rarity": 7, "event": "lightning",
 		"face": "win", "gesture": "cheer",
 		"reasons": ["カミナリの光で %d回見つけた", "ピカッと光った瞬間に見つけた(%d回)"]},
 	# 気づかない・のんびり
@@ -161,9 +161,18 @@ const LIST := [
 	{"title": "モナリザに見つめられた人", "key": "mona_missed", "min": 1, "rule": "any", "tone": "funny", "rarity": 9, "stage": "night",
 		"face": "awkward", "gesture": "shrug",
 		"reasons": ["うしろのモナリザに気づかなかった", "モナリザがずっと見ていたのに…"]},
-	{"title": "カモメにだまされた人", "key": "gull_fooled", "min": 1, "rule": "any", "tone": "funny", "rarity": 9, "stage": "beach",
+	{"title": "カモメにだまされた人", "key": "gull_fooled", "min": 1, "rule": "any", "tone": "funny", "rarity": 9, "stage": "beach", "event": "gull",
 		"face": "shock", "gesture": "head",
 		"reasons": ["カモメの貝がらに振り向いて、お手つき", "落とし物だと思ったら、貝がらだった"]},
+	{"title": "いたずらっ子の被害者", "key": "prank_victim", "min": 1, "rule": "any", "tone": "funny", "rarity": 9, "event": "prankster",
+		"words": "prank_words", "face": "shock", "gesture": "head",
+		"reasons": ["「%s」って送ったのに「%s」にされた", "「%s」が「%s」に書き換えられて、相手が大変なことに"]},
+	{"title": "蜃気楼にだまされた人", "key": "mirage_fooled", "min": 1, "rule": "any", "tone": "funny", "rarity": 9, "stage": "beach", "event": "mirage",
+		"face": "shock", "gesture": "head",
+		"reasons": ["蜃気楼を信じた言葉で振り向いて、お手つき", "「落ちてる」と言われて振り向いたら、蜃気楼だった"]},
+	{"title": "真実を見た人", "key": "truth_seer", "min": 1, "rule": "any", "tone": "good", "rarity": 9, "stage": "beach", "event": "mirage",
+		"words": "truth_words", "face": "win", "gesture": "peace",
+		"reasons": ["蜃気楼の中で本物が見えていて、%sに「%s」と伝えた", "みんなが蜃気楼を見ていたのに、本当のことを伝えた"]},
 	{"title": "停電の被害者", "key": "blackout_missed", "min": 1, "rule": "any", "tone": "funny", "rarity": 8,
 		"face": "shock", "gesture": "head",
 		"reasons": ["停電中に落とされて気づかなかった", "まっくらの中で、一周気づかなかった"]},
@@ -275,6 +284,9 @@ static func _candidate(d: Dictionary, relax: bool, stats: Dictionary, ids: Array
 	var st: String = d.get("stage", "")
 	if st != "" and st != stage:
 		return {}
+	# (いまは起こさないイベントだけの称号は出さない)
+	if str(d.get("event", "")) in GameConfig.EVENTS_OFF:
+		return {}
 	var key: String = d["key"]
 	var need := 1 if relax else int(d["min"])
 	var best := 0
@@ -304,7 +316,14 @@ static func _candidate(d: Dictionary, relax: bool, stats: Dictionary, ids: Array
 	if not _passes(d, s2):
 		return {}
 	var reasons: Array = d["reasons"]
-	return {"id": who, "title": d["title"], "reason": reasons[rng.randi_range(0, reasons.size() - 1)],
+	var reason: String = reasons[rng.randi_range(0, reasons.size() - 1)]
+	# 実際の言葉を入れる称号(いたずらっ子・蜃気楼): 言葉がなければ、言葉を使わない理由にする
+	var words: Array = s2.get(str(d.get("words", "")), []) if d.has("words") else []
+	if d.has("words") and words.size() < 2:
+		for r in reasons:
+			if not ("%s" in str(r)):
+				reason = r
+	return {"id": who, "title": d["title"], "reason": reason, "words": words,
 			"n": _value(str(d.get("show", key)), s2), "tone": d["tone"], "face": d["face"], "gesture": d["gesture"],
 			"group": d.get("group", ""), "base": _base(d)}
 
@@ -364,6 +383,9 @@ static func by_actor(awards: Array) -> Dictionary:
 ## 理由の文(今の言語。回数を入れる)
 static func reason_text(t: Dictionary) -> String:
 	var r := Locale.t(str(t.get("reason", "")))
+	var words: Array = t.get("words", [])
+	if "%s" in r and words.size() >= 2:
+		return r % [str(words[0]), str(words[1])]
 	return r % int(t.get("n", 0)) if "%d" in r else r
 
 
@@ -374,7 +396,8 @@ static func title_text(t: Dictionary) -> String:
 
 ## 撮影モード用: それらしい称号を3つ(試合をしていなくても称号の発表と記念写真を撮れるように)
 static func sample(ids: Array, stage: String, rng: RandomNumberGenerator) -> Array:
-	var rows := LIST.filter(func(d): return str(d.get("stage", "")) == "" or d["stage"] == stage)
+	var rows := LIST.filter(func(d): return (str(d.get("stage", "")) == "" or d["stage"] == stage) \
+			and not (str(d.get("event", "")) in GameConfig.EVENTS_OFF) and not d.has("words"))
 	for k in range(rows.size() - 1, 0, -1):
 		var j := rng.randi_range(0, k)
 		var tmp = rows[k]

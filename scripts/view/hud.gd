@@ -694,6 +694,8 @@ func _build_info_pills() -> void:
 ## 画面中央に大きく表示する。seconds 秒で消える(0 なら消さない)。
 func show_message(text: String, outline: Color, seconds: float) -> void:
 	_message.text = text
+	# (長い文でも画面の幅に収まるように、文字を小さくする)
+	_message.add_theme_font_size_override("font_size", UiStyle.fit_size(text, 72, get_viewport().get_visible_rect().size.x - 80.0, 28))
 	_message.add_theme_color_override("font_outline_color", outline)
 	_message.visible = true
 	_message_left = seconds if seconds > 0.0 else INF
@@ -1325,6 +1327,67 @@ func set_next_ui(show: bool, host: bool) -> void:
 
 ## 教室のままの投票の表示。show: 投票中か / voted・total: 投票した人数 / hint: 下の小さな案内 /
 ## skip: ルーム主の「発表へ」を出すか / skip_ready: 押せるか(始まって5秒たったか)
+## いたずらっ子!のラウンドの間、画面のすみ(右上の帯の中)に小さないたずらっ子を出しておく
+var _corner_imp: PrankImp
+
+
+func set_prankster(on: bool) -> void:
+	if not on:
+		if _corner_imp:
+			_corner_imp.visible = false
+		return
+	if _corner_imp == null:
+		_corner_imp = PrankImp.new()
+		_corner_imp.custom_minimum_size = Vector2(54, 54)
+		_corner_imp.size = _corner_imp.custom_minimum_size
+		add_child(_corner_imp)
+	var vp := get_viewport().get_visible_rect().size
+	var rank_w := _rank_pill.size.x + 10.0 if _rank_pill and _rank_pill.visible else 0.0
+	_corner_imp.position = Vector2(vp.x - UiStyle.SAFE - 64.0 - 14.0 - rank_w - 54.0, 10.0 + sin(Time.get_ticks_msec() / 300.0) * 2.0)
+	_corner_imp.visible = not _vote_screen
+
+
+## 蜃気楼!の始まり: 画面のふちが1秒ほど、弱くゆらゆらする(3D の上だけ)
+var _shimmer_layer: CanvasLayer
+var _shimmer: ColorRect
+const SHIMMER_SHADER := """
+shader_type canvas_item;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
+uniform float amount = 0.0;
+uniform float t = 0.0;
+void fragment() {
+	vec2 uv = SCREEN_UV;
+	vec2 d = min(uv, 1.0 - uv);
+	float edge = 1.0 - smoothstep(0.0, 0.18, min(d.x, d.y));
+	vec2 off = vec2(sin(uv.y * 40.0 + t * 9.0), cos(uv.x * 32.0 + t * 7.0)) * 0.006 * edge * amount;
+	COLOR = vec4(texture(screen_tex, uv + off).rgb, 1.0);
+}
+"""
+
+
+func mirage_shimmer(seconds: float) -> void:
+	if _shimmer_layer == null:
+		_shimmer_layer = CanvasLayer.new()
+		_shimmer_layer.layer = 0
+		add_child(_shimmer_layer)
+		_shimmer = ColorRect.new()
+		_shimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var sh := Shader.new()
+		sh.code = SHIMMER_SHADER
+		var mat := ShaderMaterial.new()
+		mat.shader = sh
+		_shimmer.material = mat
+		_shimmer_layer.add_child(_shimmer)
+		_shimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_shimmer.visible = true
+	var mat2 := _shimmer.material as ShaderMaterial
+	var tw := create_tween()
+	tw.tween_method(func(v: float) -> void:
+		mat2.set_shader_parameter("amount", sin(v * PI))
+		mat2.set_shader_parameter("t", v * seconds), 0.0, 1.0, seconds)
+	tw.tween_callback(func() -> void: _shimmer.visible = false)
+
+
 ## 自分の順位(右上の⚙の左に小さく「3位」。"" で消す)
 var _rank_pill: PanelContainer
 
@@ -1467,13 +1530,15 @@ func set_caption(text: String, seconds: float = 0.0) -> void:
 		_top.add_child(_caption)
 	var l := _caption.get_child(0) as Label
 	l.text = text
-	UiStyle.fit(l, 34, get_viewport().get_visible_rect().size.x - 120.0, 20)
+	l.add_theme_font_size_override("font_size", UiStyle.fit_size(text, 34, get_viewport().get_visible_rect().size.x - 120.0, 20))
 	_caption.visible = true
 	_caption.modulate.a = 1.0
 	_caption.reset_size()
 	var vp := get_viewport().get_visible_rect().size
 	var sz := _caption.get_combined_minimum_size()
-	_caption.position = Vector2((vp.x - sz.x) / 2.0, vp.y - sz.y - 40.0)
+	# (「発表へ」「次へ」のボタンが出ているときは、その上に)
+	var lift := 100.0 if _skip_button and _skip_button.visible else 40.0
+	_caption.position = Vector2((vp.x - sz.x) / 2.0, vp.y - sz.y - lift)
 	if seconds > 0.0:
 		_caption_tween = create_tween()
 		_caption_tween.tween_interval(seconds)
@@ -1520,7 +1585,7 @@ func set_vote_ui(show: bool, voted: int = 0, total: int = 0, hint: String = "", 
 		count_text += "  ・  " + hint
 	if _vote_count.text != count_text:
 		_vote_count.text = count_text
-		UiStyle.fit(_vote_count, 20, minf(get_viewport().get_visible_rect().size.x - 120.0, 1100.0), 14)
+		_vote_count.add_theme_font_size_override("font_size", UiStyle.fit_size(count_text, 20, minf(get_viewport().get_visible_rect().size.x - 120.0, 1100.0), 14))
 	_vote_count.visible = count_visible
 	if _skip_button.disabled == skip_ready:
 		_skip_button.disabled = not skip_ready

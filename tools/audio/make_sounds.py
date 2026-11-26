@@ -535,6 +535,40 @@ def zazaa():
     return norm(mix(grains * e, lowpass(noise(d), 400) * e * 0.5), 0.8)
 
 
+def prank_erase():
+    # いたずらっ子の消しゴム「ゴシゴシ」: こする音が4回(行ったり来たり)
+    d = 0.4
+    out = np.zeros(int(d * SR))
+    for k in range(4):
+        ln = 0.085
+        rub = bandpass(noise(ln), 600 + 300 * (k % 2), 2600) * env_ar(ln, 0.012, 0.05)
+        out = out + at(rub, k * 0.095, d)
+    return norm(out, 0.7)
+
+
+def prank_write():
+    # クレヨンで書く「カキカキ」: 短い引っかく音が5回
+    d = 0.45
+    out = np.zeros(int(d * SR))
+    for k in range(5):
+        ln = 0.06
+        scr = bandpass(noise(ln), 1800, 5200) * env_exp(ln, 0.02)
+        tick = click(0.02, 2500, 6000, 0.004) * 0.6
+        out = out + at(mix(scr, tick), k * 0.085, d)
+    return norm(out, 0.65)
+
+
+def prank_laugh():
+    # いたずらっ子の小さな笑い声「にしし」: 高い声で短く3回
+    d = 0.55
+    out = np.zeros(int(d * SR))
+    for k, f0 in enumerate((620, 700, 660)):
+        ln = 0.12
+        v = voice(glide(f0, f0 * 1.08, ln), ln, [(900, 1.0), (2400, 0.6)], breath=0.35) * env_ar(ln, 0.01, 0.07)
+        out = out + at(v, 0.04 + k * 0.15, d)
+    return norm(out, 0.6)
+
+
 def heartbeat():
     # 心臓の「ドク・ドクン」(1拍): 1回目は短く軽く、2回目は少し強く。
     # 低い「ドン」(60〜100Hz)に、スマホの小さいスピーカーでも聞こえるよう「トッ」(150〜250Hz)を重ねる。
@@ -1307,6 +1341,7 @@ SOUNDS = {
     "shh": shh, "wind_gust": wind_gust, "gull": gull,
     "water_pyuu": water_pyuu, "zazaa": zazaa, "bashaa": bashaa,
     "heartbeat": heartbeat,
+    "prank_erase": prank_erase, "prank_write": prank_write, "prank_laugh": prank_laugh,
 }
 
 

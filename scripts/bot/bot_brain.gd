@@ -149,7 +149,9 @@ func _consider_stamps(state: GameState, me: GameState.Actor) -> void:
 		need += 1.0
 	if vote < need - 0.001:
 		return
-	if rng.randf() < GameConfig.BOT_TRUST_CHANCE * p["trust"]:
+	# (いたずらっ子のラウンドは、届いた言葉を少し疑う)
+	var trust_mult := GameConfig.PRANK_BOT_TRUST_MULT if state.prank_on else 1.0
+	if rng.randf() < GameConfig.BOT_TRUST_CHANCE * p["trust"] * trust_mult:
 		# 信じて振り向く。後ろにあれば拾い、なければお手つき
 		state.pick_up(me.id)
 		_look_left[me.id] = GameConfig.BOT_LOOK_TIME
@@ -243,7 +245,8 @@ func _update_stamp(state: GameState, a: GameState.Actor, delta: float) -> void:
 		sees = false
 	if sees:
 		var honest_chance := GameConfig.BOT_NORMAL_HONEST_CHANCE
-		var behind := state.has_handkerchief_behind(target)
+		# (蜃気楼の間は、自分に見えているもの: 本物が見えるボットには本物、蜃気楼チームのボットにはニセ)
+		var behind := state.perceived_item_behind(a.id, target)
 		# カモメの貝がら: 遠くからは落とし物と見分けにくいので、落とし物だと思ってしまうことがある
 		if not behind and state.has_shell_behind(target) and rng.randf() < GameConfig.GULL_BOT_FOOL_CHANCE:
 			behind = true

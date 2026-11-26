@@ -425,6 +425,7 @@ func update(state: GameState, cam: Camera3D) -> void:
 	var can_stamp := me != null and (me.role == GameState.Role.SEATED or me.role == GameState.Role.ONI or me.role == GameState.Role.OUT) \
 			and (state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED)
 	var top := _label_top
+	_imp_used = false
 	_tag_rects.clear()
 	_head_rects.clear()
 	# 手前(カメラに近い)人から置く
@@ -530,6 +531,10 @@ func update(state: GameState, cam: Camera3D) -> void:
 		mk.size = ms2
 		mk.position = Vector2(clampf(hr.get_center().x - ms2.x / 2.0, 4.0, vp.x - ms2.x - 4.0), hr.position.y).floor()
 		mk.visible = true
+	# (いたずらっ子の演出が終わった・言葉が消えたら、いたずらっ子も隠す)
+	if _imp and not _imp_used:
+		_imp.visible = false
+		_imp_laugh.visible = false
 	# 「送る相手」「あなたの票」の印: 頭の上の吹き出しのさらに上
 	_marker.visible = _target >= 0 and _head_rects.has(_target)
 	if _marker.visible:
@@ -551,14 +556,114 @@ func _play_bubbles(state: GameState, id: int) -> Array:
 			b.visible = false
 			continue
 		var st: Dictionary = list[i]
-		var col := kind_color(str(st["kind"]))
-		(t["styles"][i] as StyleBoxFlat).bg_color = col
+		var kind := str(st["kind"])
 		var l: Label = t["labels"][i]
-		var text := "%s:%s" % [sender_name(state, st["sender"]), stamp_text(state, st["sender"], st["kind"])]
+		var who := sender_name(state, st["sender"])
+		# いたずらっ子に書き換えられた自分の言葉: 自分の画面だけ、はじめは押した言葉 → 消しゴムで消して → クレヨンで書き換える
+		var ph := {}
+		if st.get("prank", false) and int(st["sender"]) == state.local_player_id:
+			ph = _prank_phase(id, st, b)
+		var shown := kind
+		if not ph.is_empty() and ph["stage"] in ["fly", "erase"]:
+			shown = str(st["orig"])
+		(t["styles"][i] as StyleBoxFlat).bg_color = kind_color(shown)
+		var text := "%s:%s" % [who, stamp_text(state, st["sender"], shown)]
 		if l.text != text:
 			l.text = text
+		l.visible_ratio = 1.0
+		l.modulate.a = 1.0
+		if not ph.is_empty():
+			match str(ph["stage"]):
+				"erase":
+					# 文字が少しずつかすれて消える
+					l.modulate.a = 1.0 - float(ph["k"])
+				"write":
+					# 一文字ずつ書く(名前のところはそのまま)
+					var head := who.length() + 1
+					l.visible_characters = head + int(float(text.length() - head) * float(ph["k"]))
 		out.append(b)
 	return out
+
+
+# --- いたずらっ子の演出(書き換えられた本人の画面だけ): 飛んでくる → 消しゴムでゴシゴシ → クレヨンでカキカキ → 「にしし」と去る ---
+## 書き換えられた言葉ごとの始まった時刻(ミリ秒)と、鳴らした音
+var _prank_anims := {}
+var _imp: PrankImp
+var _imp_laugh: Label
+var _imp_used := false
+
+
+## その言葉の演出の段階: {"stage": "fly"|"erase"|"write"|"out"|"done", "k": 0〜1}。いたずらっ子も動かす
+func _prank_phase(target_id: int, st: Dictionary, bubble: Control) -> Dictionary:
+	var key := "%d|%d|%s" % [int(st["sender"]), target_id, str(st.get("born_angle", 0.0))]
+	var now := Time.get_ticks_msec()
+	if not _prank_anims.has(key):
+		_prank_anims[key] = {"t0": now, "sounds": {}}
+	var info: Dictionary = _prank_anims[key]
+	var t := float(now - int(info["t0"])) / 1000.0
+	var t1 := GameConfig.PRANK_FLY_IN
+	var t2 := t1 + GameConfig.PRANK_ERASE
+	var t3 := t2 + GameConfig.PRANK_WRITE
+	var t4 := t3 + GameConfig.PRANK_FLY_OUT
+	var out := {"stage": "done", "k": 1.0}
+	if t < t1:
+		out = {"stage": "fly", "k": t / t1}
+	elif t < t2:
+		out = {"stage": "erase", "k": (t - t1) / GameConfig.PRANK_ERASE}
+		_prank_sound(info, "prank_erase")
+	elif t < t3:
+		out = {"stage": "write", "k": (t - t2) / GameConfig.PRANK_WRITE}
+		_prank_sound(info, "prank_write")
+	elif t < t4:
+		out = {"stage": "out", "k": (t - t3) / GameConfig.PRANK_FLY_OUT}
+		_prank_sound(info, "prank_laugh")
+	_move_imp(out, bubble)
+	return out
+
+
+func _prank_sound(info: Dictionary, sound: String) -> void:
+	var played: Dictionary = info["sounds"]
+	if not played.has(sound):
+		played[sound] = true
+		AudioDirector.sfx(sound, -4.0)
+
+
+## いたずらっ子を、画面のすみ → 吹き出しの横 → 画面の外へ
+func _move_imp(ph: Dictionary, bubble: Control) -> void:
+	if _imp == null:
+		_imp = PrankImp.new()
+		add_child(_imp)
+		_imp_laugh = UiStyle.label("にしし", 22, Color("D9480F"))
+		_imp_laugh.add_theme_color_override("font_outline_color", Color.WHITE)
+		_imp_laugh.add_theme_constant_override("outline_size", 8)
+		add_child(_imp_laugh)
+	var vp := get_viewport().get_visible_rect().size
+	var corner := Vector2(vp.x - UiStyle.SAFE - 230.0, 14.0)
+	var spot := bubble.position + Vector2(bubble.size.x - 10.0, -_imp.size.y * 0.55)
+	var k := float(ph["k"])
+	_imp_used = str(ph["stage"]) != "done"
+	_imp_laugh.visible = false
+	match str(ph["stage"]):
+		"fly":
+			_imp.visible = true
+			_imp.tool = "eraser"
+			_imp.position = corner.lerp(spot, k * k * (3.0 - 2.0 * k))
+		"erase":
+			_imp.visible = true
+			_imp.tool = "eraser"
+			_imp.position = spot + Vector2(sin(k * 40.0) * 10.0, 0)
+		"write":
+			_imp.visible = true
+			_imp.tool = "crayon"
+			_imp.position = spot + Vector2(-bubble.size.x * (1.0 - k) * 0.6, cos(k * 30.0) * 3.0)
+		"out":
+			_imp.visible = true
+			_imp.tool = ""
+			_imp.position = spot + Vector2(k * 220.0, -k * 160.0)
+			_imp_laugh.visible = true
+			_imp_laugh.position = spot + Vector2(-10.0, -28.0 - k * 20.0)
+		_:
+			_imp.visible = false
 
 
 ## 札を画面の内側に収め、ほかの札と重ならない近くの場所をさがす(上下に少しずつ、少しだけ左右にも)

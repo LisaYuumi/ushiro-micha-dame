@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(567)
+## 一覧(586)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -359,6 +359,25 @@
 |   ・   |   ・   |
 | 、 | ,  |
 | だれも教えてくれなかった… | Nobody told me... |
+| いたずらっ子! | Prankster! |
+| 言葉が勝手に書き換えられるかも… | Your words might get swapped... |
+| 蜃気楼! | Mirage! |
+| 見えているものが、本物とはかぎらない… | What you see may not be real... |
+| いたずらっ子が、あなたの『%s』を『%s』に書き換えたよ!(%sに届いた) | The prankster changed your "%s" to "%s"! (sent to %s) |
+| にしし | Hee hee |
+| いたずらっ子のしわざ:%s | Prankster's work: %s |
+| %sの『%s』→『%s』 | %s's "%s" → "%s" |
+| 本物が見えていたのは%sだけ!ほかのみんなには%sのうしろに蜃気楼が見えていた | Only %s saw the real thing! Everyone else saw a mirage behind %s |
+| 本物が見えていたのは%sだけ!ほかのみんなには蜃気楼が見えていた | Only %s saw the real thing! Everyone else saw a mirage |
+| いたずらっ子の被害者 | Prank Victim |
+| 「%s」って送ったのに「%s」にされた | Sent "%s" but it became "%s" |
+| 「%s」が「%s」に書き換えられて、相手が大変なことに | "%s" turned into "%s" and caused chaos |
+| 蜃気楼にだまされた人 | Fooled by the Mirage |
+| 蜃気楼を信じた言葉で振り向いて、お手つき | Looked back because of a mirage and missed |
+| 「落ちてる」と言われて振り向いたら、蜃気楼だった | Told "It's there!", but it was a mirage |
+| 真実を見た人 | Saw the Truth |
+| 蜃気楼の中で本物が見えていて、%sに「%s」と伝えた | Saw through the mirage and told %s "%s" |
+| みんなが蜃気楼を見ていたのに、本当のことを伝えた | Told the truth while everyone saw a mirage |
 | 心臓の音を試しに鳴らす | Test the heartbeat sound |
 | ここまでの順位 | Standings so far |
 | 次は ラウンド %d: %s | Next: Round %d - %s |

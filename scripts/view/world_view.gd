@@ -213,6 +213,9 @@ func build(state: GameState) -> void:
 	_reveal_faces.clear()
 	if _vote_view:
 		_vote_view = false
+	_mirage_nodes.clear()
+	_mirage_fade = -1.0
+	_mirage_oni_faded = false
 	# (投票の場面の再現も消す。残すと、次のラウンドでも前のラウンドの席にみんなを置いてしまう)
 	_vote_scene.clear()
 	_vote_item_pos = Vector3.INF
@@ -253,6 +256,9 @@ func build(state: GameState) -> void:
 			# 前は、隠したまま次のラウンドになると、鬼が足音だけして見えなかった)
 			node.visible = true
 			node.set_meta("cam_hid", false)
+			# (蜃気楼で透けさせたまま次のラウンドにならないように)
+			_set_transparency(node, 0.0)
+			node.rotation.z = 0.0
 		else:
 			node = _build_character(a, is_self)
 			node.set_meta("model_key", key)
@@ -365,6 +371,7 @@ func sync(state: GameState, delta: float) -> void:
 	_update_ceremony(delta)
 	_update_events(state, delta)
 	_hide_near_camera(state)
+	_update_mirage(state, delta)
 	if _overlay:
 		_overlay.update(state, get_viewport().get_camera_3d())
 	if _blackout:
@@ -994,6 +1001,11 @@ func _pop(actor_id: int, text: String, color: Color, size: float = 1.0) -> void:
 
 ## GameState からのお知らせに合わせて音などを出す。
 func on_event(e: Dictionary) -> void:
+	# (本人だけのお知らせ・蜃気楼のニセは、ほかの人の画面では何もしない。ホストの画面にも全部届くので)
+	if _room_state and e.get("type") in ["pranked", "mirage_fake"]:
+		var me := _room_state.local_player_id
+		if e.get("private_to", me) != me or me in e.get("not_for", []):
+			return
 	match e.get("type"):
 		"otetsuki":
 			# (音と文字は、すぐあとの「out」で「ガーン!」を出す)
@@ -1077,7 +1089,7 @@ func on_event(e: Dictionary) -> void:
 				# 教室: 黒板消しでポンポンポン(チョークの粉の煙)
 				_pop(e["target"], tr("ポンポン!"), Color.WHITE)
 				_play_actor(e["target"], "eraser_pon", -2.0, -5.0)
-		"dropped", "rustle":
+		"dropped", "rustle", "mirage_fake":
 			# 本物もフェイクも、まったく同じ音(落とし物ごとの音。同じ大きさ・同じゆらぎ)。
 			# 落とした場所から聞こえる(後ろの左右どちらで鳴ったかわかる)。重い物ほど大きく、遠くまで聞こえる
 			var w: float = e.get("weight", 0.0)
@@ -2222,6 +2234,9 @@ func _hide_item_if_not_visible_to_me(state: GameState) -> void:
 	var hidden := state.phase != GameState.Phase.RESULT and state.handkerchief_on_floor and me.role == GameState.Role.SEATED \
 			and state.drop_target_seat != me.seat_index \
 			and not state.sees_behind(me.id, state.drop_target_seat)
+	# 蜃気楼の間、蜃気楼チームには本物は見えない(終わったら全員に見える)
+	if state.handkerchief_on_floor and not state.mirage_sees_real(me.id) and state.phase != GameState.Phase.RESULT:
+		hidden = true
 	var bits := 1 << (HIDDEN_LAYER - 1) if hidden else 1
 	_set_item_layers(_handkerchief, bits)
 
@@ -2999,6 +3014,62 @@ func _vote_cam_fits(t: Transform3D, heads: Array[Vector3], chests: Array[Vector3
 		if absf(nx) > 0.95 or ny < -0.88:
 			return false
 	return true
+
+
+# --- 蜃気楼!(海辺): 蜃気楼チームの画面には、ニセの落とし物(本物とまったく同じ見た目)。鬼はゆらゆら揺らぐ ---
+## 席 -> ニセの落とし物の Node3D / 終わったあと薄くなっていく残り時間
+var _mirage_nodes := {}
+var _mirage_fade := -1.0
+var _mirage_oni_faded := false
+
+
+func _update_mirage(state: GameState, delta: float) -> void:
+	var me := state.get_local_player()
+	var active := state.mirage_on and not state.mirage_done and state.phase != GameState.Phase.RESULT
+	# ニセ: 蜃気楼チームの画面にだけ。現れた席のうしろに、本物と同じ見え方(見えない席のうしろは見えない)
+	if me and active and not state.mirage_sees_real(me.id):
+		_mirage_fade = -1.0
+		for seat in state.mirage_fakes_shown:
+			if not _mirage_nodes.has(seat):
+				var n := _handkerchief.duplicate() as Node3D
+				add_child(n)
+				var p: Vector3 = Vector3(sin(state.seat_angle(seat)), 0.0, cos(state.seat_angle(seat))) * GameConfig.DROP_RADIUS
+				n.transform = Transform3D(Basis.IDENTITY, p)
+				n.visible = true
+				_mirage_nodes[seat] = n
+			var node: Node3D = _mirage_nodes[seat]
+			var can_see: bool = me.role != GameState.Role.SEATED or (me.seat_index != int(seat) and state.sees_behind(me.id, int(seat)))
+			_set_item_layers(node, 1 if can_see else 1 << (HIDDEN_LAYER - 1))
+	elif not _mirage_nodes.is_empty():
+		# 終わったら、すっと薄くなって消える
+		if _mirage_fade < 0.0:
+			_mirage_fade = GameConfig.MIRAGE_FADE
+		_mirage_fade -= delta
+		var a := clampf(_mirage_fade / GameConfig.MIRAGE_FADE, 0.0, 1.0)
+		for seat in _mirage_nodes:
+			_set_transparency(_mirage_nodes[seat] as Node3D, 1.0 - a)
+		if _mirage_fade <= 0.0:
+			for seat in _mirage_nodes:
+				(_mirage_nodes[seat] as Node3D).queue_free()
+			_mirage_nodes.clear()
+	# 鬼: 蜃気楼の間は少し透けて、ゆらゆら揺らぐ(落とす手元が見えないように)
+	var oni := _actor_nodes.get(state.oni_id) as Node3D
+	if oni:
+		if active:
+			oni.position += Vector3(sin(_clock * 7.0) * 0.06, 0.0, cos(_clock * 5.3) * 0.05)
+			oni.rotation.z = sin(_clock * 6.1) * 0.05
+			if not _mirage_oni_faded:
+				_mirage_oni_faded = true
+				_set_transparency(oni, 0.45)
+		elif _mirage_oni_faded:
+			_mirage_oni_faded = false
+			oni.rotation.z = 0.0
+			_set_transparency(oni, 0.0)
+
+
+func _set_transparency(n: Node, t: float) -> void:
+	for c in n.find_children("*", "GeometryInstance3D", true, false):
+		(c as GeometryInstance3D).transparency = t
 
 
 # --- カメラが人や障害物の中に入ったときに、黒い輪郭線(裏返した外側の面)が画面いっぱいに映らないように ---
