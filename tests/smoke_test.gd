@@ -344,16 +344,33 @@ func _check_heart() -> void:
 	hud._ann_until = 0
 	hud._run_announcements()
 	_check(hud._ann_queue.is_empty(), "お知らせ: 前のお知らせが終わったら、次を出す")
-	hud.set_danger(near)
-	hud._update_heart(0.5)
-	_check(hud._heart != null and hud._heart.visible, "ドキドキ: 自分の胸から、アニメっぽいハートが出る")
-	# 心臓の音の1拍ごとに、ハートがボヨンと飛び出す(「ドックン」で大きく)。近いほど遠くまで
-	var rest: Vector2 = hud._heart_shape()[0]
-	hud.heart_pulse(1.0)
-	hud._beat_t = hud.BEAT_TIME * 0.5
-	var out: Vector2 = hud._heart_shape()[0]
-	_check(out.y < rest.y - 50.0, "ドキドキ: 「ドックン」でハートが前に飛び出す(%.0f px)" % (rest.y - out.y))
-	hud._pulse = 0.0
+	# ドキドキのハート: 振り向くボタンの左上の角から、ゴムのように伸びて左上へ飛び出し、ボヨンと引っ込む
+	var bh := ButtonHeart.new()
+	root.add_child(bh)
+	var btn := Rect2(1100, 540, 154, 154)
+	bh.set_root_rect(btn)
+	bh.set_level(near)
+	bh._process(0.5)
+	_check(bh.visible and bh.is_showing(), "ドキドキ: 振り向くボタンの角にハートが出る")
+	var rest_sh := bh.shape()
+	bh.pulse(1.0)
+	bh._process(lerpf(GameConfig.HEART_OUT_FAR, GameConfig.HEART_OUT_NEAR, near))
+	var out_sh := bh.shape()
+	var rc: Vector2 = rest_sh[0]
+	var oc: Vector2 = out_sh[0]
+	_check(oc.x < rc.x - 50.0 and oc.y < rc.y - 50.0 and float(out_sh[1]) > float(rest_sh[1]) * 1.5,
+			"ドキドキ: 「ドックン!」でハートが左上へ大きく飛び出す(%.0f, %.0f px)" % [rc.x - oc.x, rc.y - oc.y])
+	_check(not btn.has_point(oc) and bh.bulge > 0.01, "ドキドキ: ハートはボタンの外へ出て、ボタンも少しふくらむ")
+	var went_in := false
+	for i in 20:
+		bh._process(0.03)
+		went_in = went_in or bh._ext < -0.02
+	_check(went_in and absf(bh._ext) < 0.1, "ドキドキ: 少し行きすぎて(ボタンにめりこんで)から、ボヨンと戻る")
+	bh.set_level(0.0)
+	for i in 10:
+		bh._process(0.1)
+	_check(not bh.visible, "ドキドキ: 鬼が離れたら、ハートはボタンに引っ込んで消える")
+	bh.queue_free()
 	if ad:
 		var beats := [0]
 		var stops := [0]
@@ -400,10 +417,7 @@ func _check_heart() -> void:
 	_check(v.oni_near_level() > 0.0, "ドキドキ: 鬼が離れても、すぐには止まらない(少しずつ小さく)")
 	for i in 50:
 		v.sync(s, 0.05)
-	hud.set_danger(v.oni_near_level())
-	for i in 10:
-		hud._update_heart(0.1)
-	_check(v.oni_near_level() == 0.0 and not hud._heart.visible, "ドキドキ: 鬼が離れたら、ハートは胸にもどって消える")
+	_check(v.oni_near_level() == 0.0, "ドキドキ: 鬼が離れたら、ドキドキは止まる")
 	v.queue_free()
 	hud.queue_free()
 

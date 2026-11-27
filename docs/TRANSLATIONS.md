@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(590)
+## 一覧(591)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -360,7 +360,8 @@
 | だれも教えてくれなかった… | Nobody told me... |
 | いたずらっ子! | Prankster! |
 | ドクン…うしろを鬼が通っている! | Thump... the oni is right behind you! |
-| ドクン! | Thump! |
+| ドック | Ba- |
+| ドックン! | -BUMP! |
 | ふぅ… | Phew... |
 | %sから | From %s |
 | 鬼がうしろを通るよ…<br>「ドクン、ドクン」と心臓が鳴ったら、鬼がすぐうしろ! | The oni is passing behind you...<br>When your heart goes thump-thump, the oni is right behind! |

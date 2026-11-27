@@ -290,14 +290,22 @@ const HEART_BGM_DUCK_DB := -14.0
 ## 鬼が離れて止まったときの「ふぅ…」の大きさ(dB)/はじめて心臓の音を聞いたときの説明を出す秒数
 const HEART_SIGH_DB := -8.0
 const HEART_HINT_TIME := 2.0
-## 飛び出すハート(自分の画面だけ): 遠いとき/すぐうしろのときの大きさ(px)・飛び出す高さ(画面の高さの割合)・
-## 飛び出してから戻る速さ(1秒あたり)・胸の位置(画面の横の割合。振り向くボタンにかからないように左寄り)
-const HEART_SIZE_FAR := 90.0
-const HEART_SIZE_NEAR := 200.0
-const HEART_RISE_FAR := 0.08
-const HEART_RISE_NEAR := 0.45
-const HEART_RETURN := 4.0
-const HEART_POP_X := 0.42
+## 振り向くボタンから飛び出すハート(自分の画面だけ。ButtonHeart)。大きさ・距離は、振り向くボタンの見えているはばに対する倍率。
+## ふだん角にくっついている大きさ / 飛び出しきったときの大きさ(遠いとき → すぐうしろ。すぐうしろはボタンの2〜3倍)
+const HEART_REST_SIZE := 0.42
+const HEART_PEAK_FAR := 0.9
+const HEART_PEAK_NEAR := 2.5
+## 飛び出す距離(ハートの中心まで。遠いとき → すぐうしろ)・向き(度。180=左、270=上、225=左上=画面のまん中のほう)
+const HEART_DIST_FAR := 0.8
+const HEART_DIST_NEAR := 2.3
+const HEART_DIR_DEG := 222.0
+## 飛び出す速さ(飛び出しきるまでの秒数。遠いとき → すぐうしろ)・引っ込むときのバネ(弾む速さ・止まる速さ)
+const HEART_OUT_FAR := 0.13
+const HEART_OUT_NEAR := 0.08
+const HEART_SPRING := 13.0
+const HEART_DAMP := 6.0
+## 拍に合わせて振り向くボタンがふくらむ量(倍率)
+const HEART_BUTTON_BULGE := 0.07
 ## ドキドキの強さが目標に追いつく速さ(1秒あたり。鬼が離れたら1〜2秒かけて小さくなって止まる)
 const HEART_RISE := 3.0
 const HEART_FALL := 0.7

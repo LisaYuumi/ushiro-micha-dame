@@ -61,9 +61,9 @@ func _ready() -> void:
 	audio = AudioDirector.new()
 	add_child(audio)
 	# 心臓の音に合わせて、画面のふちが脈打つ/はじめて聞いたときだけ意味を説明する
-	audio.heart_beat.connect(func(k: float) -> void: hud.heart_pulse(k))
+	audio.heart_beat.connect(func(k: float) -> void: touch.heart.pulse(k))
 	audio.heart_started.connect(_on_heart_started)
-	audio.heart_stopped.connect(func() -> void: hud.heart_relief())
+	audio.heart_stopped.connect(func() -> void: touch.heart.relief())
 	audio.play_bgm("bgm_lobby")
 	state = GameState.new()
 	cmds = state
@@ -466,8 +466,9 @@ func _physics_process(delta: float) -> void:
 			and (state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED))
 	# いたずらっ子のラウンドの間は、画面のすみにいたずらっ子
 	hud.set_prankster(state.prank_on and (state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED))
-	# 鬼がうしろに近いとき、画面のふちが少し暗くなる(心臓の音と同じ強さ)
-	hud.set_danger(view.oni_near_level())
+	# ドキドキ: 鬼がうしろに近いとき、振り向くボタンからハートが飛び出す(心臓の音と同じ強さ)
+	touch.heart.set_level(view.oni_near_level())
+	touch.heart.set_avoid([hud.send_panel_rect(), hud.my_cards_rect()])
 	touch.set_milk_state(state.milk_left, _milk_aiming)
 	var judged := state.phase == GameState.Phase.WALKING or state.phase == GameState.Phase.DROPPED
 	touch.set_looks_left(me.looks_left if judged else -1, judged and me.looking_back)

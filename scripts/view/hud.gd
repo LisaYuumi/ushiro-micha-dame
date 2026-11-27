@@ -192,10 +192,6 @@ func announce_message(text: String, outline: Color, seconds: float) -> void:
 
 func _process(delta: float) -> void:
 	_run_announcements()
-	# 飛び出すハート(拍で飛び出して、もどる)
-	if _pulse > 0.0:
-		_pulse = maxf(_pulse - delta * GameConfig.HEART_RETURN, 0.0)
-	_update_heart(delta)
 	_layout_cards(minf(delta * 10.0, 1.0), delta)
 	# 牛乳: かかるとすぐ白く、終わるときはゆっくり晴れる
 	var want := 1.0 if _milk_on else 0.0
@@ -807,6 +803,17 @@ func show_my_stamps(list: Array) -> void:
 	_shown_keys = keys
 
 
+## 自分に届いた言葉のカードの範囲(まとめて。ドキドキのハートがかからないように)
+func my_cards_rect() -> Rect2:
+	var out := Rect2()
+	for c in _cards.values():
+		var card: Control = c["card"]
+		if is_instance_valid(card) and card.visible:
+			var r := card.get_global_transform() * Rect2(Vector2.ZERO, card.size)
+			out = r if not out.has_area() else out.merge(r)
+	return out.grow(6.0) if out.has_area() else out
+
+
 func _cards_parent() -> Node:
 	if _card_layer == null:
 		_card_layer = CanvasLayer.new()
@@ -1354,165 +1361,6 @@ func _draw_gust() -> void:
 		var y := fposmod(float(i) * 97.0 + sin(float(i)) * 40.0, vp.y)
 		var x := fposmod(float(i) * 173.0 + t * (500.0 + float(i % 7) * 60.0), vp.x + 300.0) - 150.0
 		_gust.draw_line(Vector2(x, y), Vector2(x - 120.0, y + 8.0), Color(0.95, 0.85, 0.65, a * 0.9), 4.0, true)
-
-
-## 鬼がうしろに近いとき(心臓の音が鳴っている間)、自分の胸(画面の下のほう)から、アニメっぽい赤いハートが
-## 「ドック・ドックン」に合わせてボヨンと飛び出して戻る(映画『マスク』のような、笑える演出)。自分の画面だけ。
-## 近いほど大きく・遠くまで(すぐうしろなら画面のまん中近くまでビヨーン)。拍ごとに「ドクン!」の文字。
-## 鬼が離れたら、シュッと胸にもどって消える
-var _danger_level := 0.0
-var _pulse := 0.0
-var _heart: Control
-var _heart_layer: CanvasLayer
-var _heart_vis := 0.0
-var _heart_t := 0.0
-
-
-func set_danger(level: float) -> void:
-	_danger_level = clampf(level, 0.0, 1.0)
-
-
-## 心臓の音の1拍(AudioDirector.heart_beat): ハートを飛び出させ(飛び出して戻る)、「ドクン!」を出す
-var _beat_t := 9.0
-var _beat_amp := 0.0
-const BEAT_TIME := 0.34
-
-
-func heart_pulse(strength: float) -> void:
-	if _danger_level <= 0.01:
-		return
-	_beat_t = 0.0
-	_beat_amp = strength
-	_pulse = maxf(_pulse, strength)
-	if strength >= 0.7:
-		_heart_word()
-
-
-func _update_heart(delta: float) -> void:
-	var want := 1.0 if _danger_level > 0.01 else 0.0
-	# (出るときはポンと、もどるときはシュッと速く)
-	_heart_vis = move_toward(_heart_vis, want, delta * (4.0 if want > 0.0 else 7.0))
-	if _heart_vis <= 0.001:
-		if _heart:
-			_heart.visible = false
-		return
-	if _heart == null:
-		_heart = Control.new()
-		_heart.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_heart.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		_heart.draw.connect(_draw_heart)
-		# (ほかの人の名札・吹き出し(層 1)より手前。ボタンや送るバーとは重ならない位置に出す)
-		_heart_layer = CanvasLayer.new()
-		_heart_layer.layer = 2
-		add_child(_heart_layer)
-		_heart_layer.add_child(_heart)
-	_heart_t += delta
-	_beat_t += delta
-	_heart.visible = true
-	_heart.queue_redraw()
-
-
-## ハートの胸の位置(画面の下。振り向くボタン(右下)と言葉を送るバーにかからないように)
-func _heart_base() -> Vector2:
-	var vp := get_viewport().get_visible_rect().size
-	var bottom := vp.y + 10.0
-	var bar := send_panel_rect()
-	if bar.has_area():
-		bottom = bar.position.y - 6.0
-	return Vector2(vp.x * GameConfig.HEART_POP_X, bottom)
-
-
-## いまのハートのまん中と大きさ(と、つぶれ・のび)
-func _heart_shape() -> Array:
-	var vp := get_viewport().get_visible_rect().size
-	var size := lerpf(GameConfig.HEART_SIZE_FAR, GameConfig.HEART_SIZE_NEAR, _danger_level)
-	var rise := lerpf(GameConfig.HEART_RISE_FAR, GameConfig.HEART_RISE_NEAR, _danger_level) * vp.y
-	var base := _heart_base()
-	# 1拍: 飛び出して(縦にのびる)、もどる(着いたときに横につぶれる)
-	var k := clampf(_beat_t / BEAT_TIME, 0.0, 1.0)
-	var p := sin(k * PI) * _beat_amp
-	var land := sin(clampf((_beat_t - BEAT_TIME) / 0.12, 0.0, 1.0) * PI) * _beat_amp
-	var sx := 1.0 - 0.16 * p + 0.22 * land
-	var sy := 1.0 + 0.3 * p - 0.2 * land
-	var scale := size * (1.0 + 0.4 * p) * _heart_vis
-	var c := base + Vector2(0, -scale * 0.55 - rise * p - 6.0 * sin(_heart_t * 3.0) * _heart_vis)
-	return [c, scale, sx, sy]
-
-
-func _draw_heart() -> void:
-	var sh := _heart_shape()
-	var c: Vector2 = sh[0]
-	var sz: float = sh[1]
-	var sx: float = sh[2]
-	var sy: float = sh[3]
-	if sz < 2.0:
-		return
-	var pts := PackedVector2Array()
-	for k in 40:
-		var t := TAU * float(k) / 40.0
-		var x := 16.0 * pow(sin(t), 3.0)
-		var y := 13.0 * cos(t) - 5.0 * cos(2.0 * t) - 2.0 * cos(3.0 * t) - cos(4.0 * t)
-		pts.append(c + Vector2(x * sx, -y * sy) * (sz / 34.0))
-	var ink := GameConfig.COLOR_INK
-	# 太い輪郭線 → 赤 → 下のほうの濃い赤 → つや
-	var outline := PackedVector2Array()
-	for p in pts:
-		outline.append(c + (p - c) * 1.0)
-	_heart.draw_colored_polygon(pts, Color("E8364A"))
-	var loop := pts.duplicate()
-	loop.append(pts[0])
-	_heart.draw_polyline(loop, ink, maxf(sz * 0.07, 3.0), true)
-	var shade := PackedVector2Array()
-	for p in pts:
-		if p.y > c.y + sz * 0.05:
-			shade.append(p)
-	if shade.size() >= 3:
-		_heart.draw_colored_polygon(shade, Color(0.75, 0.1, 0.2, 0.35))
-	_heart.draw_circle(c + Vector2(-sz * 0.24 * sx, -sz * 0.18 * sy), sz * 0.11, Color(1, 1, 1, 0.85))
-	_heart.draw_circle(c + Vector2(-sz * 0.12 * sx, -sz * 0.27 * sy), sz * 0.05, Color(1, 1, 1, 0.85))
-
-
-## 拍ごとに、ハートの横に「ドクン!」のマンガ文字をポンと出す(近いほど大きく)
-func _heart_word() -> void:
-	var sh := _heart_shape()
-	var c: Vector2 = sh[0]
-	var sz: float = sh[1]
-	var l := UiStyle.label(tr("ドクン!"), int(lerpf(24.0, 44.0, _danger_level)), Color("E8364A"))
-	l.add_theme_color_override("font_outline_color", Color.WHITE)
-	l.add_theme_constant_override("outline_size", 10)
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	(_heart_layer if _heart_layer else self).add_child(l)
-	l.reset_size()
-	var side := 1.0 if randf() < 0.6 else -1.0
-	l.position = c + Vector2(side * (sz * 0.7 + 10.0) - (l.size.x if side < 0.0 else 0.0), -sz * 0.6)
-	l.rotation = side * 0.18
-	l.pivot_offset = l.size / 2.0
-	l.scale = Vector2(0.4, 0.4)
-	var tw := l.create_tween()
-	tw.tween_property(l, "scale", Vector2(1.1, 1.1), 0.08)
-	tw.tween_property(l, "scale", Vector2.ONE, 0.06)
-	tw.tween_interval(0.18)
-	tw.tween_property(l, "modulate:a", 0.0, 0.18)
-	tw.tween_callback(l.queue_free)
-
-## 鬼が離れた(心臓の音が止まった): ハートがシュッと戻って消えるのといっしょに、小さく「ふぅ…」
-func heart_relief() -> void:
-	var base := _heart_base()
-	var l := UiStyle.label(tr("ふぅ…"), 30, GameConfig.COLOR_INK)
-	l.add_theme_color_override("font_outline_color", Color.WHITE)
-	l.add_theme_constant_override("outline_size", 10)
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if _heart_layer == null:
-		return
-	_heart_layer.add_child(l)
-	l.reset_size()
-	l.position = base + Vector2(-l.size.x * 0.5, -l.size.y - 70.0)
-	l.modulate.a = 0.0
-	var tw := l.create_tween()
-	tw.tween_property(l, "modulate:a", 1.0, 0.2)
-	tw.parallel().tween_property(l, "position:y", l.position.y - 30.0, 1.2)
-	tw.tween_property(l, "modulate:a", 0.0, 0.4)
-	tw.tween_callback(l.queue_free)
 
 
 ## 画面の上のまん中に、役を出す(空文字で消す)。color の地に白い文字

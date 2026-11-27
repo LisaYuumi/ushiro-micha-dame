@@ -51,8 +51,16 @@ var _result := false
 var _touch_action := {}
 
 
+## ドキドキのハート(振り向くボタンの左上の角から飛び出す)。ボタンよりうしろに置く(ボタンの絵や文字を隠さない)
+var heart: ButtonHeart
+var _bulge_on := false
+var _look_base_pos := Vector2.ZERO
+
+
 func _ready() -> void:
 	layer = 2
+	heart = ButtonHeart.new()
+	add_child(heart)
 	# 右下: 振り向く(押している間)
 	_look_button = _add_button("", "look_back", Vector2(1, 1), Rect2(-UiStyle.SAFE - 220, -250, 220, 220), 36)
 	_seated_buttons.append(_look_button)
@@ -641,3 +649,22 @@ func _send(action: String, pressed: bool) -> void:
 	ev.action = action
 	ev.pressed = pressed
 	Input.parse_input_event(ev)
+
+
+## ドキドキ: ハートの根もと(振り向くボタン)を毎フレーム渡し、拍に合わせてボタンを少しふくらませる
+func _process(_delta: float) -> void:
+	if heart == null:
+		return
+	var shown := _look_button.is_visible_in_tree()
+	heart.set_root_rect(button_rect(_look_button) if shown else Rect2())
+	var b := heart.bulge if shown else 0.0
+	if b > 0.0005:
+		if not _bulge_on:
+			_bulge_on = true
+			_look_base_pos = _look_button.position
+		_look_button.scale = Vector2.ONE * CORNER_SCALE * (1.0 + b)
+		_look_button.position = _look_base_pos - _look_button.size * CORNER_SCALE * b * 0.5
+	elif _bulge_on:
+		_bulge_on = false
+		_look_button.scale = Vector2.ONE * CORNER_SCALE
+		_look_button.position = _look_base_pos
