@@ -345,13 +345,14 @@ func _check_heart() -> void:
 	hud._run_announcements()
 	_check(hud._ann_queue.is_empty(), "お知らせ: 前のお知らせが終わったら、次を出す")
 	hud.set_danger(near)
-	_check(hud._danger != null and hud._danger.visible and hud._danger.modulate.a > 0.1, "ドキドキ: 画面のふちが暗くなる")
-	# 心臓の音の1拍ごとに、ふちがキュッと締まる(脈打つ)。少し赤みのある暗さ
-	var calm := hud._danger.modulate.a
-	var calm_size := hud._danger.size
+	hud._update_heart(0.5)
+	_check(hud._heart != null and hud._heart.visible, "ドキドキ: 自分の胸から、アニメっぽいハートが出る")
+	# 心臓の音の1拍ごとに、ハートがボヨンと飛び出す(「ドックン」で大きく)。近いほど遠くまで
+	var rest: Vector2 = hud._heart_shape()[0]
 	hud.heart_pulse(1.0)
-	hud._update_danger()
-	_check(hud._danger.modulate.a > calm + 0.2 and hud._danger.size.x < calm_size.x, "ドキドキ: 「ドクン」でふちが濃く、内側へ締まる")
+	hud._beat_t = hud.BEAT_TIME * 0.5
+	var out: Vector2 = hud._heart_shape()[0]
+	_check(out.y < rest.y - 50.0, "ドキドキ: 「ドックン」でハートが前に飛び出す(%.0f px)" % (rest.y - out.y))
 	hud._pulse = 0.0
 	if ad:
 		var beats := [0]
@@ -361,10 +362,37 @@ func _check_heart() -> void:
 		ad._heart_wait = 0.0
 		ad.set_heart(0.8)
 		ad._process(0.05)
-		_check(beats[0] >= 1, "ドキドキ: 心臓の音の1拍ごとに、画面のふちへ合図を送る")
+		_check(beats[0] >= 1, "ドキドキ: 心臓の音の1拍ごとに、ハートへ合図を送る")
 		ad.set_heart(0.0)
 		ad._process(0.05)
 		_check(stops[0] == 1 and not ad._heart_on, "ドキドキ: 鬼が離れたら止まる(「ふぅ…」)")
+	# 自分に届いた言葉: まず紙飛行機が飛んできて、ポンと開いてカード(ふちは送った人の色・「〇〇から」)。新しいものがいちばん大きい
+	hud.show_my_stamps([
+		{"kind": "dropped", "text": "落ちてる", "sender": "A", "sender_id": 1, "sender_color": Color.RED, "from": Vector2(100, 100)},
+		{"kind": "safe", "text": "平気", "sender": "B", "sender_id": 2, "sender_color": Color.GREEN, "from": Vector2(300, 100)}])
+	var c_old: Dictionary = hud._cards["1|dropped"]
+	var c_new: Dictionary = hud._cards["2|safe"]
+	_check(c_new["plane"] != null and not (c_new["card"] as Control).visible, "届いた言葉: はじめは紙飛行機(カードはまだ出ない)")
+	hud._open_card(c_old)
+	hud._open_card(c_new)
+	for i in 4:
+		hud._layout_cards(1.0, 0.1)
+	var st_new := (c_new["card"] as PanelContainer).get_theme_stylebox("panel") as StyleBoxFlat
+	_check((c_new["card"] as Control).visible and st_new.border_color == Color.GREEN and (c_new["from"] as Label).text.contains("B"),
+			"届いた言葉: 開いたカードのふちは送った人の色で「Bから」")
+	_check((c_new["card"] as Control).scale.x > (c_old["card"] as Control).scale.x + 0.1
+			and (c_new["card"] as Control).position.y > (c_old["card"] as Control).position.y,
+			"届いた言葉: いちばん新しいものが下で大きく、古いものは上で小さい")
+	hud.show_my_stamps([])
+	_check(hud._cards.is_empty(), "届いた言葉: 消えたらカードも消える")
+	# いたずらっ子のネタばらしの場面の間は、次のラウンドに進まない
+	var gs := GameState.new()
+	gs.phase = GameState.Phase.RESULT
+	gs.reveal_left = 0.0
+	var could := gs.can_go_next()
+	gs.prank_reveal_on = true
+	_check(could and not gs.can_go_next(), "いたずらっ子のネタばらし: 場面の間は「次へ」を出さない")
+	gs.free() if not (gs is RefCounted) else null
 	oni.position = me.position - back * 2.0
 	# (鬼が離れたら、1〜2秒かけて小さくなって止まる)
 	for i in 10:
@@ -373,7 +401,9 @@ func _check_heart() -> void:
 	for i in 50:
 		v.sync(s, 0.05)
 	hud.set_danger(v.oni_near_level())
-	_check(v.oni_near_level() == 0.0 and not hud._danger.visible, "ドキドキ: 鬼が離れたら元に戻る")
+	for i in 10:
+		hud._update_heart(0.1)
+	_check(v.oni_near_level() == 0.0 and not hud._heart.visible, "ドキドキ: 鬼が離れたら、ハートは胸にもどって消える")
 	v.queue_free()
 	hud.queue_free()
 

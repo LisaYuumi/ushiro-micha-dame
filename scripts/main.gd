@@ -63,6 +63,7 @@ func _ready() -> void:
 	# 心臓の音に合わせて、画面のふちが脈打つ/はじめて聞いたときだけ意味を説明する
 	audio.heart_beat.connect(func(k: float) -> void: hud.heart_pulse(k))
 	audio.heart_started.connect(_on_heart_started)
+	audio.heart_stopped.connect(func() -> void: hud.heart_relief())
 	audio.play_bgm("bgm_lobby")
 	state = GameState.new()
 	cmds = state
@@ -484,6 +485,7 @@ func _physics_process(delta: float) -> void:
 	view.set_vote_view(voting or revealing, state)
 	_update_evidence(voting, revealing)
 	_update_recap(voting)
+	_update_prank_reveal()
 	# 発表が終わったら、ルーム主が「次へ」を押すまで、手下が出た画面のまま待つ
 	var waiting_next := state.can_go_next()
 	if voting and _recap_running():
@@ -692,6 +694,25 @@ func _flashed(me: GameState.Actor) -> bool:
 	return state.is_night() and state.is_milked(me)
 
 
+## 人の色(キャラクターの色)
+func _actor_color(id: int) -> Color:
+	var a := state.get_actor(id)
+	return a.color if a else Color.WHITE
+
+
+## 人の頭のあたりの、画面の上の位置(カメラのうしろにいるときは、画面の下のはし)
+func _actor_screen_pos(id: int) -> Vector2:
+	var vp := get_viewport().get_visible_rect().size
+	var cam := get_viewport().get_camera_3d()
+	if cam == null or state.get_actor(id) == null:
+		return Vector2(vp.x * 0.5, vp.y * 0.3)
+	var p := view.actor_point(id, 1.2)
+	var sp := cam.unproject_position(p)
+	if cam.is_position_behind(p):
+		sp = Vector2(vp.x - sp.x, vp.y + 40.0)
+	return Vector2(clampf(sp.x, 0.0, vp.x), clampf(sp.y, -40.0, vp.y + 40.0))
+
+
 func _update_my_stamps() -> void:
 	var list := []
 	var me := state.get_local_player()
@@ -704,7 +725,9 @@ func _update_my_stamps() -> void:
 			"kind": st["kind"],
 			"text": HeadOverlay.stamp_text(state, st["sender"], st["kind"]),
 			"sender": HeadOverlay.sender_name(state, st["sender"]),
-			"color": HeadOverlay.kind_color(str(st["kind"])),
+			"sender_id": int(st["sender"]),
+			"sender_color": _actor_color(int(st["sender"])),
+			"from": _actor_screen_pos(int(st["sender"])),
 		})
 	hud.show_my_stamps(list)
 
@@ -724,6 +747,11 @@ func _on_skip_vote() -> void:
 	if state.voting_open:
 		state.skip_vote()
 	elif state.can_go_next():
+		# いたずらっ子のラウンドで書き換えがあったら、順位の前にネタばらしの場面(終わったら次のラウンドへ)
+		if not state.prank_log.is_empty() and _prank_reveal_round != state.round_serial and _tutorial == null:
+			_prank_reveal_round = state.round_serial
+			state.prank_reveal_on = true
+			return
 		_on_restart_pressed()
 
 
@@ -842,8 +870,9 @@ func _on_restart_pressed() -> void:
 	elif state.phase == GameState.Phase.RESULT:
 		if state.next_round():
 			_refresh_round()
-			var msg := tr("ラウンド %d: %s") % [state.round_index + 1, state.item_name()]
-			hud.show_message(msg, Color(0.3, 0.3, 0.3), 2.0)
+			# (順位の一覧を出すときは、次のラウンドのお知らせは一覧の下に書いてある)
+			if not _standings_this_round:
+				hud.announce_message(tr("ラウンド %d: %s") % [state.round_index + 1, state.item_name()], Color(0.3, 0.3, 0.3), 2.0)
 		else:
 			_show_match_result()
 	else:
@@ -953,6 +982,35 @@ func _update_recap(voting: bool) -> void:
 		state.vote_recap_hold = _recap.total_time()
 
 
+# --- いたずらっ子のネタばらし(PrankReveal)。「次へ」のあと、順位の一覧の前に、みんなの画面で ---
+var _prank_reveal: PrankReveal
+var _prank_reveal_round := -1
+
+
+func _update_prank_reveal() -> void:
+	var want := state.prank_reveal_on and state.phase == GameState.Phase.RESULT
+	if not want:
+		if _prank_reveal and is_instance_valid(_prank_reveal):
+			_prank_reveal.queue_free()
+		_prank_reveal = null
+		return
+	if _prank_reveal != null:
+		return
+	_prank_reveal = PrankReveal.new()
+	add_child(_prank_reveal)
+	_prank_reveal.setup(state, view, hud)
+	_prank_reveal.finished.connect(_on_prank_reveal_done)
+
+
+## ネタばらしが終わった(タップ・スキップでも): ルールを動かす人は次のラウンドへ(参加者はそれを待つ)
+func _on_prank_reveal_done() -> void:
+	if mode == Mode.GUEST or not state.prank_reveal_on:
+		return
+	state.prank_reveal_on = false
+	if state.phase == GameState.Phase.RESULT and not state.match_over:
+		_on_restart_pressed()
+
+
 # --- 投票の証拠: このラウンドで「だれが、大事な人に、何と言ったか」 ---
 var _evidence_on := false
 var _evidence_sig := ""
@@ -983,7 +1041,7 @@ func _update_evidence(voting: bool, revealing: bool) -> void:
 		ov.set_vote_evidence(true, HeadOverlay.evidence_bubbles(state), view.vote_item_top(), state.round_otetsuki)
 
 
-## 投票の発表が終わったら、そのラウンドのイベントのネタばらしを短く(いたずらっ子の書き換え全部・蜃気楼で本物が見えていた人)
+## 投票の発表が終わったら、蜃気楼のネタばらしを短く(本物が見えていた人)。いたずらっ子は「次へ」のあとの場面(PrankReveal)で
 var _spoiler_round := -1
 
 
@@ -992,13 +1050,6 @@ func _show_spoiler() -> void:
 		return
 	_spoiler_round = state.round_serial
 	var lines := []
-	if not state.prank_log.is_empty():
-		var parts := []
-		for p in state.prank_log:
-			var sid := int(p["sender"])
-			parts.append(tr("%sの『%s』→『%s』") % [_ev_name(sid), HeadOverlay.stamp_text(state, sid, str(p["orig"])),
-					HeadOverlay.stamp_text(state, sid, str(p["flipped"]))])
-		lines.append(tr("いたずらっ子のしわざ:%s") % tr("、").join(parts))
 	if not state.mirage_true_shown.is_empty():
 		var seers := []
 		for id in state.mirage_true_shown:

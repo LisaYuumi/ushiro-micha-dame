@@ -139,6 +139,13 @@ const ONI_CAM_LOOK_HEIGHT := 1.5
 # --- スタンプ ---
 ## 1人に同時に表示されるスタンプの数(早い者勝ち。空きができたら次が届く)
 const STAMP_SLOTS := 3
+## 自分に届いた言葉: 送った人の席から紙飛行機が飛んでくる時間(秒)・紙飛行機の大きさ
+const STAMP_PLANE_TIME := 0.4
+const STAMP_PLANE_SIZE := 46.0
+## 開いたカード: 言葉の文字の大きさ・ふち(送った人の色)の太さ・画面の下からの高さ(スティックの上)
+const STAMP_CARD_FONT := 40
+const STAMP_CARD_BORDER := 8
+const STAMP_CARD_BOTTOM := 262.0
 ## 届いたスタンプは、鬼がこの周数だけ歩いたら消える(0.5 = 半周)
 const STAMP_EXPIRE_LAPS := 0.5
 ## 1人が1ラウンドに送れる数。-1 = 何回でも送れる(同じ相手には1ラウンド1回まで)
@@ -283,15 +290,14 @@ const HEART_BGM_DUCK_DB := -14.0
 ## 鬼が離れて止まったときの「ふぅ…」の大きさ(dB)/はじめて心臓の音を聞いたときの説明を出す秒数
 const HEART_SIGH_DB := -8.0
 const HEART_HINT_TIME := 2.0
-## 画面のふちの脈打ち: いつもの濃さ(近さ×)・「ドクン」の濃さ・脈が引く速さ(1秒あたり)・
-## 遠いときのふちの広がり(1 = 画面の大きさ。大きいほど暗い部分が外に出て、ふちだけ)・「ドクン」で内側へ締まる量
-const DANGER_BASE_ALPHA := 0.4
-const DANGER_PULSE_ALPHA := 0.75
-const DANGER_PULSE_DECAY := 4.5
-const DANGER_FAR_SCALE := 1.25
-const DANGER_PULSE_SQUEEZE := 0.12
-## 自分の画面の汗のしずく(いちばん近いときの数)
-const HEART_SWEAT_MAX := 4
+## 飛び出すハート(自分の画面だけ): 遠いとき/すぐうしろのときの大きさ(px)・飛び出す高さ(画面の高さの割合)・
+## 飛び出してから戻る速さ(1秒あたり)・胸の位置(画面の横の割合。振り向くボタンにかからないように左寄り)
+const HEART_SIZE_FAR := 90.0
+const HEART_SIZE_NEAR := 200.0
+const HEART_RISE_FAR := 0.08
+const HEART_RISE_NEAR := 0.45
+const HEART_RETURN := 4.0
+const HEART_POP_X := 0.42
 ## ドキドキの強さが目標に追いつく速さ(1秒あたり。鬼が離れたら1〜2秒かけて小さくなって止まる)
 const HEART_RISE := 3.0
 const HEART_FALL := 0.7
@@ -430,6 +436,9 @@ const PRANK_FLY_OUT := 0.3
 const PRANK_BOT_FIX_CHANCE := 0.5
 const PRANK_BOT_FIX_DELAY := 1.6
 const PRANK_BOT_TRUST_MULT := 0.75
+## いたずらっ子のネタばらし(投票の結果のあと「次へ」で): 書き換え1つあたりの秒数・吹き出しの文字の大きさ
+const PRANK_REVEAL_ITEM_TIME := 1.5
+const PRANK_REVEAL_FONT := 64
 
 # --- 蜃気楼!(海辺だけ): 本物が見えるのは少しの人だけ。ほかの全員には、同じ場所にニセの落とし物が見える ---
 ## 本物が見える人の数(鬼以外が4人以下なら MIRAGE_TRUE_SMALL)

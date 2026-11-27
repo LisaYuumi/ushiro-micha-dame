@@ -161,6 +161,8 @@ var prank_left := 0
 var _pranked: Array = []
 var _last_prank_angle := -INF
 var prank_log: Array = []
+## ネタばらしの場面(いたずらっ子のしわざ!)を見せている間(ルールを動かす人が「次へ」で始め、終わったら次のラウンドへ)
+var prank_reveal_on := false
 ## ボットの言い直しの予定 [{"at"(ラウンドの秒), "sender", "target", "kind"}]
 var _bot_fixes: Array = []
 ## 蜃気楼!: 起きている間か・本物が見える人(鬼以外から少し。ホストだけが全員分を知る。参加者には自分のことだけ)・
@@ -568,6 +570,7 @@ func _begin_round(seat_ids: Array, oni: int) -> void:
 	_pranked = []
 	_last_prank_angle = -INF
 	prank_log = []
+	prank_reveal_on = false
 	_bot_fixes = []
 	mirage_on = false
 	mirage_true = []
@@ -1393,6 +1396,7 @@ func snapshot(viewer: int = -1) -> Dictionary:
 		"mirage_real": mirage_sees_real(viewer) if viewer >= 0 else true,
 		"mirage_fakes": mirage_fakes_shown if viewer < 0 or not mirage_sees_real(viewer) else [],
 		"prank_log": prank_log if phase == Phase.RESULT else [],
+		"prank_reveal_on": prank_reveal_on,
 		"mirage_true_shown": mirage_true_shown if phase == Phase.RESULT else [],
 		"mirage_fake_people": mirage_fake_people if phase == Phase.RESULT else [],
 		"round": round_index,
@@ -1488,6 +1492,7 @@ func apply_snapshot(s: Dictionary) -> void:
 	mirage_true = [local_player_id] if bool(s.get("mirage_real", true)) and mirage_on else []
 	mirage_fakes_shown = s.get("mirage_fakes", [])
 	prank_log = s.get("prank_log", [])
+	prank_reveal_on = bool(s.get("prank_reveal_on", false))
 	mirage_true_shown = s.get("mirage_true_shown", [])
 	mirage_fake_people = s.get("mirage_fake_people", [])
 	round_index = s["round"]
@@ -2091,7 +2096,8 @@ func _tick_vote(delta: float) -> void:
 
 ## 発表の演出が終わって、ルーム主の「次へ」を待っているか
 func can_go_next() -> bool:
-	return phase == Phase.RESULT and not match_over and not voting_open and vote_wait <= 0.0 and reveal_left == 0.0
+	return phase == Phase.RESULT and not match_over and not voting_open and vote_wait <= 0.0 and reveal_left == 0.0 \
+			and not prank_reveal_on
 
 
 ## 発表の演出の長さ(この間は「次へ」を出さない)

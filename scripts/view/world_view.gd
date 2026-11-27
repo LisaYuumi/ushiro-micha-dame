@@ -1895,7 +1895,9 @@ func _update_oni_shadow(state: GameState) -> void:
 		_oni_shadow.visible = false
 		return
 	var near := 1.0 - dist / GameConfig.ONI_SHADOW_RANGE
-	_oni_near = near
+	# ドキドキの強さ: 鬼がいちばん近づける距離(歩く道は席の少し外側)で 1 になるように
+	var closest := GameConfig.ONI_WALK_RADIUS - GameConfig.RING_RADIUS
+	_oni_near = clampf((GameConfig.ONI_SHADOW_RANGE - dist) / maxf(GameConfig.ONI_SHADOW_RANGE - closest, 0.1), 0.0, 1.0)
 	_oni_shadow.visible = true
 	# 鬼から自分の前へのびる向き(板の +Z が鬼の側、頭は前)
 	var toward := atan2(rel.x, rel.z)

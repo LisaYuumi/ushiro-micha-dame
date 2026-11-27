@@ -9,11 +9,7 @@ var _help: Label
 var _message: Label
 var _message_left := 0.0
 ## 自分に届いたスタンプ(左下の「あなたへ」の箱に、送り主つきで3つまで積む)
-var _my_box: PanelContainer
 ## (送った人の色の吹き出しに「名前:言葉」)
-var _slots: Array[PanelContainer] = []
-var _slot_styles: Array[StyleBoxFlat] = []
-var _slot_labels: Array[Label] = []
 ## スタンプを送るときの、下のまん中の「◯◯に送る」と3つの言葉のボタン
 var _send_panel: PanelContainer
 var _send_title: Label
@@ -196,11 +192,11 @@ func announce_message(text: String, outline: Color, seconds: float) -> void:
 
 func _process(delta: float) -> void:
 	_run_announcements()
-	# 心臓の音の脈打ち(ふち)と汗
+	# 飛び出すハート(拍で飛び出して、もどる)
 	if _pulse > 0.0:
-		_pulse = maxf(_pulse - delta * GameConfig.DANGER_PULSE_DECAY, 0.0)
-	_update_danger()
-	_update_sweat(delta)
+		_pulse = maxf(_pulse - delta * GameConfig.HEART_RETURN, 0.0)
+	_update_heart(delta)
+	_layout_cards(minf(delta * 10.0, 1.0), delta)
 	# 牛乳: かかるとすぐ白く、終わるときはゆっくり晴れる
 	var want := 1.0 if _milk_on else 0.0
 	if _milk_a != want or (_milk_on and _milk.visible):
@@ -767,36 +763,160 @@ func hide_message() -> void:
 
 ## 自分に届いているスタンプを並べる。list: [{"kind", "sender", "color"}](届いた順。色は言葉の意味: 見ろ系=赤・見るな系=青)。
 ## 送った人の色の吹き出しに「名前:言葉」
+## 自分に届いた言葉(list: [{"kind","text","sender"(名前),"sender_id","sender_color","from"(画面の位置)}]、届いた順)。
+## 送った人の席から小さな紙飛行機が飛んできて(STAMP_PLANE_TIME 秒)、ポンと開いてカードになる。
+## カードは画面の下の左(振り向くボタン・送るバーにかからない)。新しいものがいちばん下で大きく、
+## 古いものは上に小さく薄く(最大 STAMP_SLOTS 個)。ふちは送った人のキャラクターの色、上に小さく「〇〇から」
+var _cards := {} # key -> {"card": PanelContainer, "text": Label, "from": Label, "plane": Control, "open": bool}
+var _card_keys: Array = [] # 届いた順(古い → 新しい)
+var _card_layer: CanvasLayer # (ほかの人の名札・吹き出し(層 1)より手前)
+
+
 func show_my_stamps(list: Array) -> void:
 	var keys := []
-	for i in _slots.size():
-		var box := _slots[i]
-		if i >= list.size():
-			box.visible = false
-			continue
+	for st in list:
+		keys.append("%s|%s" % [st.get("sender_id", st["sender"]), st["kind"]])
+	# 消えたもの: ふっと消す
+	for k in _cards.keys():
+		if not (k in keys):
+			var c: Dictionary = _cards[k]
+			_cards.erase(k)
+			if c["plane"] and is_instance_valid(c["plane"]):
+				c["plane"].queue_free()
+			var card: Control = c["card"]
+			var tw := card.create_tween()
+			tw.tween_property(card, "modulate:a", 0.0, 0.25)
+			tw.tween_callback(card.queue_free)
+	for i in list.size():
 		var st: Dictionary = list[i]
-		var key := "%s|%s" % [st["sender"], st["kind"]]
-		keys.append(key)
-		var col: Color = st["color"]
-		UiStyle.set_bg(_slot_styles[i], col)
-		_slot_labels[i].text = "%s:%s" % [st["sender"], st.get("text", Texts.stamp(st["kind"]))]
-		UiStyle.set_font_color(_slot_labels[i], text_color_on(col))
-		box.visible = true
-		if not (key in _shown_keys):
-			# 新しく届いた: ポンと大きくなってから元の大きさへ
-			box.pivot_offset = Vector2(0, 28) # 左の端からポンと出る
-			box.scale = Vector2(0.3, 0.3)
-			var tw := create_tween()
-			tw.tween_property(box, "scale", Vector2(1.12, 1.12), 0.12)
-			tw.tween_property(box, "scale", Vector2.ONE, 0.1)
-	# 届いた分だけ出す(1つもなければ箱ごと消す)
-	_my_box.visible = not list.is_empty()
+		var key: String = keys[i]
+		var col: Color = st.get("sender_color", Color.WHITE)
+		var txt: String = str(st.get("text", Texts.stamp(st["kind"])))
+		if _cards.has(key):
+			var c: Dictionary = _cards[key]
+			(c["text"] as Label).text = txt
+			continue
+		_cards[key] = _make_card(st, txt, col)
+	_card_keys = keys
+	_layout_cards(1.0, 0.0)
 	# 出ていたスタンプが全部消えたら、ふちの光も消す
 	# (参加者の画面では、届いたお知らせが状態より先に来ることがあるので「全部消えたとき」だけ)
 	if list.is_empty() and not _shown_keys.is_empty():
 		for r in _frame:
 			r.visible = false
 	_shown_keys = keys
+
+
+func _cards_parent() -> Node:
+	if _card_layer == null:
+		_card_layer = CanvasLayer.new()
+		_card_layer.layer = 2
+		add_child(_card_layer)
+	return _card_layer
+
+
+func _make_card(st: Dictionary, txt: String, col: Color) -> Dictionary:
+	var style := UiStyle.box(Color.WHITE, true, 20, GameConfig.STAMP_CARD_BORDER)
+	style.border_color = col
+	style.content_margin_left = 18
+	style.content_margin_right = 18
+	style.content_margin_top = 6
+	style.content_margin_bottom = 10
+	var card := PanelContainer.new()
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_theme_stylebox_override("panel", style)
+	var box := VBoxContainer.new()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_theme_constant_override("separation", 0)
+	card.add_child(box)
+	var from := UiStyle.label(tr("%sから") % str(st["sender"]), 22, GameConfig.COLOR_INK)
+	box.add_child(from)
+	# 言葉は意味の色(見ろ系=赤、見るな系=青)
+	var l := UiStyle.label(txt, GameConfig.STAMP_CARD_FONT, HeadOverlay.kind_color(str(st["kind"])))
+	l.add_theme_constant_override("outline_size", 0)
+	box.add_child(l)
+	_cards_parent().add_child(card)
+	card.reset_size()
+	card.visible = false
+	var d := {"card": card, "text": l, "from": from, "plane": null, "open": false}
+	# 紙飛行機: 送った人の席(画面の位置)から、カードの場所へ
+	var vp := get_viewport().get_visible_rect().size if get_viewport() else Vector2(1280, 720)
+	var start: Vector2 = st.get("from", Vector2(vp.x * 0.5, vp.y * 0.35))
+	var plane := PaperPlane.new()
+	plane.color = col
+	_cards_parent().add_child(plane)
+	plane.position = start
+	d["plane"] = plane
+	var tw := plane.create_tween()
+	tw.tween_method(_fly_plane.bind(d, start), 0.0, 1.0, GameConfig.STAMP_PLANE_TIME)
+	tw.tween_callback(_open_card.bind(d))
+	return d
+
+
+## 紙飛行機の1こま(少し弧をえがいて、進む向きを向く)
+func _fly_plane(k: float, d: Dictionary, start: Vector2) -> void:
+	var plane: Control = d["plane"]
+	if plane == null or not is_instance_valid(plane):
+		return
+	var card: Control = d["card"]
+	var goal := card.position + Vector2(card.size.x * 0.5, card.size.y * 0.5)
+	var p := start.lerp(goal, k) + Vector2(0, -90.0 * sin(k * PI))
+	var dir := p - plane.position
+	if dir.length() > 0.5:
+		plane.rotation = dir.angle()
+	plane.position = p
+
+
+## 紙飛行機がポンと開いて、カードになる
+func _open_card(d: Dictionary) -> void:
+	if d["plane"] and is_instance_valid(d["plane"]):
+		d["plane"].queue_free()
+	d["plane"] = null
+	var card: Control = d["card"]
+	if not is_instance_valid(card):
+		return
+	d["open"] = true
+	d["pop"] = 0.0
+	card.visible = true
+	_layout_cards(0.0, 0.0)
+	AudioDirector.sfx("vote_pon", -6.0, 1.15)
+
+
+## カードの並び: いちばん新しいものが下で大きく、古いものほど上で小さく薄く
+func _layout_cards(blend: float, delta: float) -> void:
+	if _card_keys.is_empty():
+		return
+	var vp := get_viewport().get_visible_rect().size
+	var bottom := vp.y - GameConfig.STAMP_CARD_BOTTOM
+	var sp := send_panel_rect()
+	if sp.size != Vector2.ZERO and sp.position.y < bottom + 4.0 and sp.position.x < UiStyle.SAFE + 380.0:
+		bottom = sp.position.y - 10.0
+	var y := bottom
+	var n := _card_keys.size()
+	for idx in range(n - 1, -1, -1):
+		var c = _cards.get(_card_keys[idx])
+		if c == null:
+			continue
+		var card: Control = c["card"]
+		var age := n - 1 - idx # 0 = いちばん新しい
+		var sc := 1.0 if age == 0 else (0.8 if age == 1 else 0.68)
+		var a := 1.0 if age == 0 else (0.75 if age == 1 else 0.5)
+		var h := card.size.y * sc
+		var want := Vector2(UiStyle.SAFE, y - h)
+		card.pivot_offset = Vector2(0, card.size.y * 0.5)
+		# ポンと開く: 小さく → 少し大きく → ふつう
+		var m := 1.0
+		if c.get("pop", -1.0) >= 0.0:
+			var k: float = c["pop"]
+			m = lerpf(0.2, 1.15, k / 0.12) if k < 0.12 else lerpf(1.15, 1.0, clampf((k - 0.12) / 0.1, 0.0, 1.0))
+			c["pop"] = k + delta if k < 0.22 else -1.0
+		var cur_sc := card.scale.x / maxf(c.get("m", 1.0), 0.01)
+		cur_sc = lerpf(cur_sc, sc, blend) if c["open"] else sc
+		c["m"] = m
+		card.scale = Vector2.ONE * cur_sc * m
+		card.position = card.position.lerp(want, blend) if c["open"] else want
+		card.modulate.a = lerpf(card.modulate.a, a, blend) if c["open"] else a
+		y -= h + 8.0
 
 
 ## 地の色の上で読みやすい文字の色(明るい地なら黒、暗い地なら白)
@@ -1236,107 +1356,163 @@ func _draw_gust() -> void:
 		_gust.draw_line(Vector2(x, y), Vector2(x - 120.0, y + 8.0), Color(0.95, 0.85, 0.65, a * 0.9), 4.0, true)
 
 
-## 鬼がうしろに近いとき(心臓の音が鳴っている間)、画面のふちが、心臓の音に合わせて脈打つ(0 で消す)。
-## まん中は透明・ふちが少し赤みのある暗さの丸いグラデーション(画面と同じ大きさの絵を1枚だけ。軽く)。
-## 「ドク・ドクン」の1拍ごとに2回キュッと締まる(heart_pulse)。近いほど、ふちが内側まで濃い
-var _danger: TextureRect
+## 鬼がうしろに近いとき(心臓の音が鳴っている間)、自分の胸(画面の下のほう)から、アニメっぽい赤いハートが
+## 「ドック・ドックン」に合わせてボヨンと飛び出して戻る(映画『マスク』のような、笑える演出)。自分の画面だけ。
+## 近いほど大きく・遠くまで(すぐうしろなら画面のまん中近くまでビヨーン)。拍ごとに「ドクン!」の文字。
+## 鬼が離れたら、シュッと胸にもどって消える
 var _danger_level := 0.0
 var _pulse := 0.0
+var _heart: Control
+var _heart_layer: CanvasLayer
+var _heart_vis := 0.0
+var _heart_t := 0.0
 
 
 func set_danger(level: float) -> void:
 	_danger_level = clampf(level, 0.0, 1.0)
-	if level <= 0.01 and _danger == null:
-		return
-	if _danger == null:
-		var g := Gradient.new()
-		g.offsets = PackedFloat32Array([0.0, 0.3, 0.58, 0.8])
-		g.colors = PackedColorArray([Color(0.3, 0, 0.04, 0), Color(0.3, 0, 0.04, 0), Color(0.3, 0.0, 0.05, 0.85), Color(0.14, 0, 0.02, 1)])
-		var gt := GradientTexture2D.new()
-		gt.gradient = g
-		gt.fill = GradientTexture2D.FILL_RADIAL
-		gt.fill_from = Vector2(0.5, 0.5)
-		gt.fill_to = Vector2(1.0, 1.0)
-		gt.width = 128
-		gt.height = 128
-		_danger = TextureRect.new()
-		_danger.texture = gt
-		_danger.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		_danger.stretch_mode = TextureRect.STRETCH_SCALE
-		_danger.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(_danger)
-		move_child(_danger, 0)
-	_update_danger()
 
 
-## 心臓の音の1拍(AudioDirector.heart_beat): ふちをキュッと締める
+## 心臓の音の1拍(AudioDirector.heart_beat): ハートを飛び出させ(飛び出して戻る)、「ドクン!」を出す
+var _beat_t := 9.0
+var _beat_amp := 0.0
+const BEAT_TIME := 0.34
+
+
 func heart_pulse(strength: float) -> void:
-	if _danger_level > 0.01:
-		_pulse = maxf(_pulse, strength)
+	if _danger_level <= 0.01:
+		return
+	_beat_t = 0.0
+	_beat_amp = strength
+	_pulse = maxf(_pulse, strength)
+	if strength >= 0.7:
+		_heart_word()
 
 
-func _update_danger() -> void:
-	if _danger == null:
+func _update_heart(delta: float) -> void:
+	var want := 1.0 if _danger_level > 0.01 else 0.0
+	# (出るときはポンと、もどるときはシュッと速く)
+	_heart_vis = move_toward(_heart_vis, want, delta * (4.0 if want > 0.0 else 7.0))
+	if _heart_vis <= 0.001:
+		if _heart:
+			_heart.visible = false
 		return
-	var on := _danger_level > 0.01 or _pulse > 0.01
-	_danger.visible = on
-	if not on:
-		return
+	if _heart == null:
+		_heart = Control.new()
+		_heart.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_heart.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_heart.draw.connect(_draw_heart)
+		# (ほかの人の名札・吹き出し(層 1)より手前。ボタンや送るバーとは重ならない位置に出す)
+		_heart_layer = CanvasLayer.new()
+		_heart_layer.layer = 2
+		add_child(_heart_layer)
+		_heart_layer.add_child(_heart)
+	_heart_t += delta
+	_beat_t += delta
+	_heart.visible = true
+	_heart.queue_redraw()
+
+
+## ハートの胸の位置(画面の下。振り向くボタン(右下)と言葉を送るバーにかからないように)
+func _heart_base() -> Vector2:
 	var vp := get_viewport().get_visible_rect().size
-	# 遠いときは絵を大きくして、暗い部分を画面の外へ(ふちだけ)。近いほど・「ドクン」のときほど内側まで
-	var sc := lerpf(GameConfig.DANGER_FAR_SCALE, 1.0, _danger_level) - _pulse * GameConfig.DANGER_PULSE_SQUEEZE
-	var sz := vp * maxf(sc, 0.9)
-	_danger.size = sz
-	_danger.position = (vp - sz) / 2.0
-	_danger.modulate.a = clampf(GameConfig.DANGER_BASE_ALPHA * _danger_level + GameConfig.DANGER_PULSE_ALPHA * _pulse, 0.0, 1.0)
+	var bottom := vp.y + 10.0
+	var bar := send_panel_rect()
+	if bar.has_area():
+		bottom = bar.position.y - 6.0
+	return Vector2(vp.x * GameConfig.HEART_POP_X, bottom)
 
 
-# --- 自分の画面の汗のしずく(鬼がうしろに近いとき。自分の画面だけ。近いほど増える。止まったらすっと引く) ---
-var _sweat: Control
-var _sweat_level := 0.0
-var _sweat_t := 0.0
+## いまのハートのまん中と大きさ(と、つぶれ・のび)
+func _heart_shape() -> Array:
+	var vp := get_viewport().get_visible_rect().size
+	var size := lerpf(GameConfig.HEART_SIZE_FAR, GameConfig.HEART_SIZE_NEAR, _danger_level)
+	var rise := lerpf(GameConfig.HEART_RISE_FAR, GameConfig.HEART_RISE_NEAR, _danger_level) * vp.y
+	var base := _heart_base()
+	# 1拍: 飛び出して(縦にのびる)、もどる(着いたときに横につぶれる)
+	var k := clampf(_beat_t / BEAT_TIME, 0.0, 1.0)
+	var p := sin(k * PI) * _beat_amp
+	var land := sin(clampf((_beat_t - BEAT_TIME) / 0.12, 0.0, 1.0) * PI) * _beat_amp
+	var sx := 1.0 - 0.16 * p + 0.22 * land
+	var sy := 1.0 + 0.3 * p - 0.2 * land
+	var scale := size * (1.0 + 0.4 * p) * _heart_vis
+	var c := base + Vector2(0, -scale * 0.55 - rise * p - 6.0 * sin(_heart_t * 3.0) * _heart_vis)
+	return [c, scale, sx, sy]
 
 
-func _update_sweat(delta: float) -> void:
-	var want := _danger_level
-	_sweat_level = move_toward(_sweat_level, want, delta * (2.0 if want > _sweat_level else 1.6))
-	if _sweat_level <= 0.01:
-		if _sweat:
-			_sweat.visible = false
+func _draw_heart() -> void:
+	var sh := _heart_shape()
+	var c: Vector2 = sh[0]
+	var sz: float = sh[1]
+	var sx: float = sh[2]
+	var sy: float = sh[3]
+	if sz < 2.0:
 		return
-	if _sweat == null:
-		_sweat = Control.new()
-		_sweat.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_sweat.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		_sweat.draw.connect(_draw_sweat)
-		add_child(_sweat)
-		move_child(_sweat, 1)
-	_sweat_t += delta
-	_sweat.visible = true
-	_sweat.modulate.a = clampf(_sweat_level * 1.4, 0.0, 1.0)
-	_sweat.queue_redraw()
-
-
-func _draw_sweat() -> void:
-	var vp := _sweat.get_viewport_rect().size
-	var n := clampi(ceili(_sweat_level * float(GameConfig.HEART_SWEAT_MAX)), 1, GameConfig.HEART_SWEAT_MAX)
+	var pts := PackedVector2Array()
+	for k in 40:
+		var t := TAU * float(k) / 40.0
+		var x := 16.0 * pow(sin(t), 3.0)
+		var y := 13.0 * cos(t) - 5.0 * cos(2.0 * t) - 2.0 * cos(3.0 * t) - cos(4.0 * t)
+		pts.append(c + Vector2(x * sx, -y * sy) * (sz / 34.0))
 	var ink := GameConfig.COLOR_INK
-	# 画面の上の左右(自分の顔の横のあたり)に、しずくがぽたぽた流れ落ちる
-	for k in n:
-		var side := -1.0 if k % 2 == 0 else 1.0
-		var x := vp.x * 0.5 + side * vp.x * (0.36 + 0.05 * float(k / 2))
-		var cyc := fposmod(_sweat_t * 0.6 + float(k) * 0.37, 1.0)
-		var y := vp.y * (0.2 + 0.12 * float(k / 2)) + cyc * 60.0
-		var r := 18.0
-		var c := Vector2(x, y)
-		var drop := PackedVector2Array([c + Vector2(0, -r * 1.8), c + Vector2(r * 0.8, -r * 0.2), c + Vector2(r * 0.55, r * 0.6),
-				c + Vector2(0, r * 0.85), c + Vector2(-r * 0.55, r * 0.6), c + Vector2(-r * 0.8, -r * 0.2)])
-		var a := 1.0 - cyc * 0.6
-		_sweat.draw_colored_polygon(drop, Color(0.55, 0.82, 1.0, a))
-		var loop := drop.duplicate()
-		loop.append(drop[0])
-		_sweat.draw_polyline(loop, Color(ink, a), 3.0, true)
-		_sweat.draw_circle(c + Vector2(-r * 0.25, 0), r * 0.18, Color(1, 1, 1, a))
+	# 太い輪郭線 → 赤 → 下のほうの濃い赤 → つや
+	var outline := PackedVector2Array()
+	for p in pts:
+		outline.append(c + (p - c) * 1.0)
+	_heart.draw_colored_polygon(pts, Color("E8364A"))
+	var loop := pts.duplicate()
+	loop.append(pts[0])
+	_heart.draw_polyline(loop, ink, maxf(sz * 0.07, 3.0), true)
+	var shade := PackedVector2Array()
+	for p in pts:
+		if p.y > c.y + sz * 0.05:
+			shade.append(p)
+	if shade.size() >= 3:
+		_heart.draw_colored_polygon(shade, Color(0.75, 0.1, 0.2, 0.35))
+	_heart.draw_circle(c + Vector2(-sz * 0.24 * sx, -sz * 0.18 * sy), sz * 0.11, Color(1, 1, 1, 0.85))
+	_heart.draw_circle(c + Vector2(-sz * 0.12 * sx, -sz * 0.27 * sy), sz * 0.05, Color(1, 1, 1, 0.85))
+
+
+## 拍ごとに、ハートの横に「ドクン!」のマンガ文字をポンと出す(近いほど大きく)
+func _heart_word() -> void:
+	var sh := _heart_shape()
+	var c: Vector2 = sh[0]
+	var sz: float = sh[1]
+	var l := UiStyle.label(tr("ドクン!"), int(lerpf(24.0, 44.0, _danger_level)), Color("E8364A"))
+	l.add_theme_color_override("font_outline_color", Color.WHITE)
+	l.add_theme_constant_override("outline_size", 10)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	(_heart_layer if _heart_layer else self).add_child(l)
+	l.reset_size()
+	var side := 1.0 if randf() < 0.6 else -1.0
+	l.position = c + Vector2(side * (sz * 0.7 + 10.0) - (l.size.x if side < 0.0 else 0.0), -sz * 0.6)
+	l.rotation = side * 0.18
+	l.pivot_offset = l.size / 2.0
+	l.scale = Vector2(0.4, 0.4)
+	var tw := l.create_tween()
+	tw.tween_property(l, "scale", Vector2(1.1, 1.1), 0.08)
+	tw.tween_property(l, "scale", Vector2.ONE, 0.06)
+	tw.tween_interval(0.18)
+	tw.tween_property(l, "modulate:a", 0.0, 0.18)
+	tw.tween_callback(l.queue_free)
+
+## 鬼が離れた(心臓の音が止まった): ハートがシュッと戻って消えるのといっしょに、小さく「ふぅ…」
+func heart_relief() -> void:
+	var base := _heart_base()
+	var l := UiStyle.label(tr("ふぅ…"), 30, GameConfig.COLOR_INK)
+	l.add_theme_color_override("font_outline_color", Color.WHITE)
+	l.add_theme_constant_override("outline_size", 10)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if _heart_layer == null:
+		return
+	_heart_layer.add_child(l)
+	l.reset_size()
+	l.position = base + Vector2(-l.size.x * 0.5, -l.size.y - 70.0)
+	l.modulate.a = 0.0
+	var tw := l.create_tween()
+	tw.tween_property(l, "modulate:a", 1.0, 0.2)
+	tw.parallel().tween_property(l, "position:y", l.position.y - 30.0, 1.2)
+	tw.tween_property(l, "modulate:a", 0.0, 0.4)
+	tw.tween_callback(l.queue_free)
 
 
 ## 画面の上のまん中に、役を出す(空文字で消す)。color の地に白い文字
@@ -1372,48 +1548,6 @@ func _build_stamp_display() -> void:
 				r.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
 				r.offset_left = -FRAME_WIDTH
 		_frame.append(r)
-
-	# 自分あてのスタンプは、左下(スティックの上)の「あなたへ」の箱に、届いた順に上から積む。
-	# ほかの人あてのスタンプは 3D の頭の上に出るので、場所で区別できる
-	_my_box = PanelContainer.new()
-	_my_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_my_box.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
-	add_child(_my_box)
-	_my_box.anchor_left = 0.0
-	_my_box.anchor_right = 0.0
-	_my_box.anchor_top = 1.0
-	_my_box.anchor_bottom = 1.0
-	_my_box.offset_left = UiStyle.SAFE
-	_my_box.offset_right = UiStyle.SAFE + 340
-	# 下の端をスティックのすぐ上に固定して、届いた数だけ上にのびる
-	_my_box.offset_top = -262
-	_my_box.offset_bottom = -262
-	_my_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_my_box.visible = false
-
-	var col := VBoxContainer.new()
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_theme_constant_override("separation", 10)
-	_my_box.add_child(col)
-
-	for i in GameConfig.STAMP_SLOTS:
-		# 送った人の色の吹き出し(黒いふち・左下にしっぽ)に「名前:言葉」
-		var style := UiStyle.box(Color.WHITE, true, 18, 4)
-		style.content_margin_left = 16
-		style.content_margin_right = 16
-		style.content_margin_top = 6
-		style.content_margin_bottom = 8
-		var slot := PanelContainer.new()
-		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		slot.add_theme_stylebox_override("panel", style)
-		slot.visible = false
-		slot.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-		col.add_child(slot)
-		var l := UiStyle.label("", 26, GameConfig.COLOR_INK)
-		slot.add_child(l)
-		_slots.append(slot)
-		_slot_styles.append(style)
-		_slot_labels.append(l)
 
 	_build_send_panel()
 

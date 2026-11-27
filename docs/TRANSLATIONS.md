@@ -17,7 +17,7 @@
 
 訳さないもの: 人の名前の例(あおい)、書道の字の飾り(友・夢・花)、絵文字。
 
-## 一覧(587)
+## 一覧(590)
 
 | キー(日本語の元の文) | 英語 |
 |---|---|
@@ -360,14 +360,17 @@
 | だれも教えてくれなかった… | Nobody told me... |
 | いたずらっ子! | Prankster! |
 | ドクン…うしろを鬼が通っている! | Thump... the oni is right behind you! |
+| ドクン! | Thump! |
+| ふぅ… | Phew... |
+| %sから | From %s |
 | 鬼がうしろを通るよ…<br>「ドクン、ドクン」と心臓が鳴ったら、鬼がすぐうしろ! | The oni is passing behind you...<br>When your heart goes thump-thump, the oni is right behind! |
 | 言葉が勝手に書き換えられるかも… | Your words might get swapped... |
 | 蜃気楼! | Mirage! |
 | 見えているものが、本物とはかぎらない… | What you see may not be real... |
 | いたずらっ子が、あなたの『%s』を『%s』に書き換えたよ!(%sに届いた) | The prankster changed your "%s" to "%s"! (sent to %s) |
 | にしし | Hee hee |
-| いたずらっ子のしわざ:%s | Prankster's work: %s |
-| %sの『%s』→『%s』 | %s's "%s" → "%s" |
+| いたずらっ子のしわざ! | The Prankster did it! |
+| → %sに届いた | → reached %s |
 | 本物が見えていたのは%sだけ!ほかのみんなには%sのうしろに蜃気楼が見えていた | Only %s saw the real thing! Everyone else saw a mirage behind %s |
 | 本物が見えていたのは%sだけ!ほかのみんなには蜃気楼が見えていた | Only %s saw the real thing! Everyone else saw a mirage |
 | いたずらっ子の被害者 | Prank Victim |

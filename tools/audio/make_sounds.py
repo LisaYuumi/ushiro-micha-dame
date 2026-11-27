@@ -582,26 +582,28 @@ def sigh():
 
 
 def heartbeat():
-    # 心臓の「ドク・ドクン」(1拍): 1回目は短く軽く、2回目は少し強く。
-    # 低い「ドン」(60〜100Hz)に、スマホの小さいスピーカーでも聞こえるよう「トッ」(150〜250Hz)を重ねる。
-    # 音のはじまりはくっきり(2ミリ秒で立ち上がる)。最後に軽く歪ませて、小さい音量でも聞こえやすくする
+    # アニメっぽい弾む心臓の音「ドック・ドックン」(1拍): ボヨンと少しバネのような、かわいい音。
+    # 1つ目は小さく短く、2つ目は大きく。音の高さが一度上がってから下がる(ボヨン)+ 小さくふるえる(バネ)
     d = 0.5
 
-    def beat(f0, f1, length, tau, tick_f, tick_amp, amp):
+    def boing(f0, f_peak, f1, length, amp):
         t = t_of(length)
-        att = np.minimum(t / 0.002, 1.0)
-        body = tone(glide(f0, f1, length, 0.6), length) * att * np.exp(-t / tau)
-        tick = tone(glide(tick_f * 1.2, tick_f, length, 0.5), length) * att * np.exp(-t / 0.03) * tick_amp
-        # (スマホの小さいスピーカー用に、もう少し高い倍音も少し)
-        tick += tone(glide(tick_f * 2.2, tick_f * 1.8, length, 0.5), length) * att * np.exp(-t / 0.016) * tick_amp * 0.35
-        click = bandpass(noise(length), 300, 1200) * att * np.exp(-t / 0.004) * 0.12
-        return (body + tick + click) * amp
+        n = len(t)
+        up = int(n * 0.18)
+        f = np.concatenate([np.linspace(f0, f_peak, up), np.linspace(f_peak, f1, n - up)])
+        f = f * (1.0 + 0.06 * np.sin(2 * np.pi * 22 * t) * np.exp(-t / 0.08))
+        att = np.minimum(t / 0.003, 1.0)
+        body = tone(f, length) * att * np.exp(-t / (length * 0.38))
+        # スマホでも聞こえるように、倍音を少し
+        body = body + tone(f * 2.0, length) * att * np.exp(-t / (length * 0.2)) * 0.35
+        thump = tone(glide(120, 70, length, 0.5), length) * att * np.exp(-t / 0.03) * 0.5
+        return (body + thump) * amp
 
-    lub = beat(95, 62, 0.14, 0.04, 180, 0.9, 0.62)
-    dub = beat(100, 58, 0.22, 0.065, 210, 1.0, 1.0)
-    x = mix(at(lub, 0.0, d), at(dub, 0.19, d))
-    x = np.tanh(x * 2.2) / np.tanh(2.2)
-    return norm(x, 0.97)
+    dok = boing(170, 260, 150, 0.14, 0.6)
+    dokun = boing(150, 280, 120, 0.24, 1.0)
+    x = mix(at(dok, 0.0, d), at(dokun, 0.19, d))
+    x = np.tanh(x * 1.6) / np.tanh(1.6)
+    return norm(x, 0.95)
 
 
 def bgm_ending():
